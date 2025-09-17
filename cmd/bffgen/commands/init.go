@@ -375,7 +375,11 @@ require (
 func runCommandInDir(dir string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("command failed: %v, output: %s", err, string(output))
+	}
+	return nil
 }
 
 // runCommand runs a command in the current directory
