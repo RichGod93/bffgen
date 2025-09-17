@@ -382,9 +382,3 @@ func runCommandInDir(dir string, name string, args ...string) error {
 	return nil
 }
 
-// runCommand runs a command in the current directory
-func runCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = "."
-	return cmd.Run()
-}
