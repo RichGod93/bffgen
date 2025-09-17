@@ -62,6 +62,9 @@ func generate() error {
 	fmt.Println("   - cmd/server/main.go (server entry point)")
 	fmt.Println()
 	fmt.Println("🚀 Run 'go run main.go' to start your BFF server")
+	fmt.Println()
+	fmt.Println("📮 Generate Postman collection: bffgen postman")
+	fmt.Println("   This creates a ready-to-import collection for testing your BFF endpoints")
 
 	return nil
 }

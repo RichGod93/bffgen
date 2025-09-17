@@ -5,13 +5,15 @@ It enables teams to aggregate backend endpoints and expose them in a frontend-fr
 
 ---
 
-## 🚀 Features (MVP)
+## 🚀 Features (Current)
 
-- **`init`** → scaffold a new BFF project with chi router and config file.
-- **`add-route`** → interactively add backend endpoints to your BFF.
-- **`add-template`** → use predefined templates (auth, ecommerce, content).
-- **`generate`** → generate Go code for routes from config.
-- **`dev`** → run a local BFF server with proxying.
+- **`init`** → scaffold a new BFF project with chi router and config file
+- **`add-route`** → interactively add backend endpoints to your BFF
+- **`add-template`** → use predefined templates (auth, ecommerce, content)
+- **`add-aggregator`** → create data aggregation endpoints
+- **`generate`** → generate Go code for routes from config
+- **`postman`** → generate Postman collection for API testing
+- **`dev`** → run a local BFF server with proxying
 
 ---
 
@@ -88,23 +90,63 @@ settings:
   retries: 3
 ```
 
-### Run the BFF Server
+### Generate Code and Test
 
 ```bash
+# Generate Go code from configuration
+bffgen generate
+
+# Generate Postman collection for testing
+bffgen postman
+
+# Run the BFF server
 bffgen dev
 ```
 
 Output:
 
 ```
-🚀 BFF server starting on :8080
-📋 Aggregated routes:
-   GET  /api/users/:id  → http://localhost:4000/api/users/:id
-   POST /api/users      → http://localhost:4000/api/users
-   GET  /api/orders     → http://localhost:5000/api/orders
+🔧 Generating Go code from bff.config.yaml
+✅ Code generation completed!
+📁 Updated files:
+   - main.go (with proxy routes)
+   - cmd/server/main.go (server entry point)
 
-🌐 Server running at http://localhost:8080
-💡 Health check: http://localhost:8080/health
+🚀 Run 'go run main.go' to start your BFF server
+
+📮 Generate Postman collection: bffgen postman
+   This creates a ready-to-import collection for testing your BFF endpoints
+```
+
+Postman Collection Generation:
+
+```
+📮 Generating Postman collection from bff.config.yaml
+
+🔍 Step 1: Checking for BFF configuration...
+✅ Found bff.config.yaml
+🔍 Step 2: Loading and validating configuration...
+✅ Configuration loaded successfully
+🔍 Step 3: Validating service configurations...
+✅ All service configurations are valid
+🔍 Step 4: Generating Postman collection...
+✅ Postman collection generated successfully!
+📁 Created file: bff-postman-collection.json
+
+📋 Collection Summary:
+   • auth service: 5 endpoints
+   • Total: 5 endpoints across 1 services
+   • BFF server port: 8080
+
+🚀 Next Steps:
+   1. Import 'bff-postman-collection.json' into Postman
+   2. Start your BFF server: go run main.go
+   3. Test your endpoints using the collection
+
+💡 Pro Tips:
+   • Use the 'baseUrl' variable to switch between environments
+   • The collection includes a health check endpoint
+   • All endpoints are pre-configured with proper headers
 ```
 
 ### Add Templates
@@ -172,29 +214,55 @@ settings:
 
 ---
 
-## 🛤 Roadmap
+## 🛤 Development Status
 
-### Phase 1 (Current)
+### ✅ Completed Features
+
+- **Core CLI Framework** - Cobra-based command structure
+- **Project Initialization** - `bffgen init` with chi router setup
+- **Configuration Management** - YAML-based service configuration
+- **Template System** - Pre-built templates (auth, ecommerce, content)
+- **Route Management** - Interactive route addition and validation
+- **Code Generation** - Automatic Go code generation from config
+- **Postman Integration** - Collection generation for API testing
+- **Development Server** - Local BFF server with proxy functionality
+- **Error Handling** - Comprehensive validation and user-friendly error messages
+
+### 🔄 Current Development Stage
+
+**Phase 1 Complete** - Core BFF functionality is production-ready
 
 - ✅ Basic CLI scaffolding
-- ✅ YAML configuration
+- ✅ YAML configuration with validation
 - ✅ HTTP proxy functionality
 - ✅ Chi router integration
+- ✅ Interactive route addition
+- ✅ Automatic code generation
+- ✅ Template system with 3 built-in templates
+- ✅ Postman collection generation
+- ✅ Comprehensive error handling and user guidance
 
-### Phase 2 (Planned)
+### 🚧 Next Phase (Planned)
 
-- 🔄 Interactive route addition
-- 🔄 Automatic code generation
-- 🔄 Template system improvements
-- 🔄 Authentication middleware
+**Phase 2 - Enhanced Features**
 
-### Phase 3 (Future)
+- 🔄 Real proxy implementation (currently placeholder)
+- 🔄 Authentication middleware integration
+- 🔄 Request/response transformation
+- 🔄 Environment-specific configurations
+- 🔄 Advanced aggregation patterns
+
+### 🔮 Future Roadmap
+
+**Phase 3 - Advanced Capabilities**
 
 - 🔮 GraphQL support (schema stitching)
 - 🔮 Rate limiting / caching (Redis integration)
 - 🔮 Plugin system for extensibility
 - 🔮 Docker integration (`bffgen dockerize`)
 - 🔮 SDK generation for frontend frameworks
+- 🔮 Monitoring and observability
+- 🔮 Multi-environment deployment
 
 ---
 

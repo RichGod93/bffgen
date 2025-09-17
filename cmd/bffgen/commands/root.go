@@ -36,4 +36,5 @@ func init() {
 	rootCmd.AddCommand(addAggregatorCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(devCmd)
+	rootCmd.AddCommand(postmanCmd)
 }
