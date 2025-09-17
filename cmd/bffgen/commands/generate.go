@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/richgodusen/bffgen/internal/types"
@@ -103,7 +104,7 @@ func main() {
 {{range $serviceName, $service := .Services}}
 	// {{$serviceName}} service routes
 {{range $endpoint := $service.Endpoints}}
-	r.{{$endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
+	r.{{chiMethod $endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
 {{end}}
 {{end}}
 
@@ -121,7 +122,9 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 }`
 
-	tmpl, err := template.New("main").Parse(mainTemplate)
+	tmpl, err := template.New("main").Funcs(template.FuncMap{
+		"chiMethod": chiMethod,
+	}).Parse(mainTemplate)
 	if err != nil {
 		return err
 	}
@@ -178,7 +181,7 @@ func main() {
 {{range $serviceName, $service := .Services}}
 	// {{$serviceName}} service routes
 {{range $endpoint := $service.Endpoints}}
-	r.{{$endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
+	r.{{chiMethod $endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
 {{end}}
 {{end}}
 
@@ -196,7 +199,9 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 }`
 
-	tmpl, err := template.New("server").Parse(serverTemplate)
+	tmpl, err := template.New("server").Funcs(template.FuncMap{
+		"chiMethod": chiMethod,
+	}).Parse(serverTemplate)
 	if err != nil {
 		return err
 	}
@@ -218,4 +223,26 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	defer file.Close()
 
 	return tmpl.Execute(file, config)
+}
+
+// chiMethod converts HTTP method to Chi router method name
+func chiMethod(method string) string {
+	switch strings.ToUpper(method) {
+	case "GET":
+		return "Get"
+	case "POST":
+		return "Post"
+	case "PUT":
+		return "Put"
+	case "DELETE":
+		return "Delete"
+	case "PATCH":
+		return "Patch"
+	case "HEAD":
+		return "Head"
+	case "OPTIONS":
+		return "Options"
+	default:
+		return "Get" // Default to Get for unknown methods
+	}
 }
