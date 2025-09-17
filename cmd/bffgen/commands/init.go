@@ -93,27 +93,6 @@ func initializeProject(projectName string) error {
 		}
 	}
 
-	// Create go.mod
-	goModContent := fmt.Sprintf(`module %s
-
-go 1.21
-
-require (
-	github.com/go-chi/chi/v5 v5.2.3
-	github.com/go-chi/cors v1.2.2
-	gopkg.in/yaml.v3 v3.0.1
-)`, projectName)
-
-	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
-		return fmt.Errorf("failed to create go.mod: %w", err)
-	}
-
-	// Run go mod tidy to download dependencies
-	if err := runCommand("go", "mod", "tidy"); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to run go mod tidy: %v\n", err)
-		fmt.Println("   You may need to run 'go mod tidy' manually in the project directory")
-	}
-
 	// Create main.go based on framework
 	var mainGoContent string
 	switch framework {
@@ -231,6 +210,18 @@ func main() {
 		return fmt.Errorf("failed to create main.go: %w", err)
 	}
 
+	// Create go.mod based on framework
+	goModContent := generateGoMod(projectName, framework)
+	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
+		return fmt.Errorf("failed to create go.mod: %w", err)
+	}
+
+	// Run go mod tidy to download dependencies
+	if err := runCommandInDir(projectName, "go", "mod", "tidy"); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to run go mod tidy: %v\n", err)
+		fmt.Println("   You may need to run 'go mod tidy' manually in the project directory")
+	}
+
 	// Create bff.config.yaml
 	configContent := `# BFF Configuration
 # Define your backend services and endpoints here
@@ -336,7 +327,58 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// runCommand runs a command in the project directory
+// generateGoMod generates the appropriate go.mod content based on the framework
+func generateGoMod(projectName, framework string) string {
+	baseContent := fmt.Sprintf(`module %s
+
+go 1.21
+
+require (
+	gopkg.in/yaml.v3 v3.0.1
+)`, projectName)
+
+	switch framework {
+	case "chi":
+		return `module ` + projectName + `
+
+go 1.21
+
+require (
+	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/cors v1.2.2
+	gopkg.in/yaml.v3 v3.0.1
+)`
+	case "echo":
+		return `module ` + projectName + `
+
+go 1.21
+
+require (
+	github.com/labstack/echo/v4 v4.11.4
+	gopkg.in/yaml.v3 v3.0.1
+)`
+	case "fiber":
+		return `module ` + projectName + `
+
+go 1.21
+
+require (
+	github.com/gofiber/fiber/v2 v2.52.9
+	gopkg.in/yaml.v3 v3.0.1
+)`
+	default:
+		return baseContent
+	}
+}
+
+// runCommandInDir runs a command in the specified directory
+func runCommandInDir(dir string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	return cmd.Run()
+}
+
+// runCommand runs a command in the current directory
 func runCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = "."
