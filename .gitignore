@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-bffgen
+/bffgen
 bffgen.exe
 
 # Test binary, built with `go test -c`
