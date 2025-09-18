@@ -173,13 +173,13 @@ func main() {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			
 			// Log request
-			log.Printf("REQUEST: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			log.Printf("REQUEST: %%s %%s from %%s", r.Method, r.URL.Path, r.RemoteAddr)
 			
 			next.ServeHTTP(ww, r)
 			
 			// Log response
 			duration := time.Since(start)
-			log.Printf("RESPONSE: %d %s %s %v", ww.Status(), r.Method, r.URL.Path, duration)
+			log.Printf("RESPONSE: %%d %%s %%s %%v", ww.Status(), r.Method, r.URL.Path, duration)
 		})
 	})
 
@@ -273,7 +273,7 @@ func main() {
 			// Parse and validate JWT token
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
 				}
 				return []byte(jwtSecret), nil
 			})
@@ -506,7 +506,7 @@ func main() {
 		// Parse and validate JWT token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
+					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
 			}
 			return []byte(jwtSecret), nil
 		})
