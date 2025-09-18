@@ -1,4 +1,4 @@
-module github.com/richgodusen/bffgen
+module github.com/RichGod93/bffgen
 
 go 1.25.1
 

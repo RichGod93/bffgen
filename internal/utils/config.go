@@ -3,7 +3,7 @@ package utils
 import (
 	"os"
 
-	"github.com/richgodusen/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/internal/types"
 	"gopkg.in/yaml.v3"
 )
 

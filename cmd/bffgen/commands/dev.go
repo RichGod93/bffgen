@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/richgodusen/bffgen/internal/types"
-	"github.com/richgodusen/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
 )
 

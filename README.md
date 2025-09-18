@@ -23,7 +23,7 @@ It enables teams to aggregate backend endpoints and expose them in a frontend-fr
 
 ```bash
 # Clone the repository
-git clone https://github.com/richgodusen/bffgen
+git clone https://github.com/RichGod93/bffgen
 cd bffgen
 
 # Build the binary
@@ -37,7 +37,7 @@ sudo mv bffgen /usr/local/bin/
 
 ```bash
 # Install directly from GitHub
-go install github.com/richgodusen/bffgen/cmd/bffgen@latest
+go install github.com/RichGod93/bffgen/cmd/bffgen@latest
 ```
 
 ---
@@ -408,7 +408,7 @@ curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/api/prote
 
 ```bash
 # Clone and setup
-git clone https://github.com/richgodusen/bffgen
+git clone https://github.com/RichGod93/bffgen
 cd bffgen
 
 # Install dependencies

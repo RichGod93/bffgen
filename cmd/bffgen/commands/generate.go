@@ -6,8 +6,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/richgodusen/bffgen/internal/types"
-	"github.com/richgodusen/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
 )
 

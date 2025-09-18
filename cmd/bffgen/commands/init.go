@@ -50,7 +50,7 @@ var initCmd = &cobra.Command{
 		fmt.Println("💡 To make bffgen available globally:")
 		fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
 		fmt.Println("   Windows: Add the bffgen directory to your PATH")
-		fmt.Println("   Or use: go install github.com/richgodusen/bffgen/cmd/bffgen")
+		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen")
 	},
 }
 
@@ -610,7 +610,7 @@ Visit http://localhost:8080/health to verify the server is running.
 To make bffgen available globally:
 - macOS/Linux: sudo cp ../bffgen /usr/local/bin/
 - Windows: Add the bffgen directory to your PATH
-- Or use: go install github.com/richgodusen/bffgen/cmd/bffgen
+- Or use: go install github.com/RichGod93/bffgen/cmd/bffgen
 `, projectName)
 
 	if err := os.WriteFile(filepath.Join(projectName, "README.md"), []byte(readmeContent), 0644); err != nil {
