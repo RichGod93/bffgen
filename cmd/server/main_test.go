@@ -11,17 +11,17 @@ import (
 func TestHealthEndpoint(t *testing.T) {
 	// Create a test server with the same setup as main()
 	r := createTestRouter()
-	
+
 	// Test health endpoint
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	r.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	expectedBody := "BFF server is running!"
 	if w.Body.String() != expectedBody {
 		t.Errorf("Expected body '%s', got '%s'", expectedBody, w.Body.String())
@@ -30,12 +30,12 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestSecurityHeaders(t *testing.T) {
 	r := createTestRouter()
-	
+
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	r.ServeHTTP(w, req)
-	
+
 	// Check security headers
 	securityHeaders := map[string]string{
 		"X-Content-Type-Options": "nosniff",
@@ -44,7 +44,7 @@ func TestSecurityHeaders(t *testing.T) {
 		"Referrer-Policy":        "strict-origin-when-cross-origin",
 		"Permissions-Policy":     "geolocation=(), microphone=(), camera=()",
 	}
-	
+
 	for header, expectedValue := range securityHeaders {
 		actualValue := w.Header().Get(header)
 		if actualValue != expectedValue {
@@ -55,26 +55,26 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	r := createTestRouter()
-	
+
 	// Test preflight request
 	req := httptest.NewRequest("OPTIONS", "/health", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", "GET")
-	
+
 	w := httptest.NewRecorder()
-	
+
 	r.ServeHTTP(w, req)
-	
+
 	// Check CORS headers
 	corsHeaders := map[string]string{
 		"Access-Control-Allow-Origin":      "http://localhost:3000",
-		"Access-Control-Allow-Methods":    "GET,POST,PUT,DELETE,OPTIONS",
+		"Access-Control-Allow-Methods":     "GET,POST,PUT,DELETE,OPTIONS",
 		"Access-Control-Allow-Headers":     "Accept,Authorization,Content-Type,X-CSRF-Token",
 		"Access-Control-Expose-Headers":    "Link",
 		"Access-Control-Allow-Credentials": "true",
 		"Access-Control-Max-Age":           "300",
 	}
-	
+
 	for header, expectedValue := range corsHeaders {
 		actualValue := w.Header().Get(header)
 		if actualValue != expectedValue {
@@ -85,62 +85,62 @@ func TestCORSHeaders(t *testing.T) {
 
 func TestContentTypeValidation(t *testing.T) {
 	r := createTestRouter()
-	
+
 	tests := []struct {
-		name        string
-		method      string
-		contentType string
+		name           string
+		method         string
+		contentType    string
 		expectedStatus int
 	}{
 		{
-			name:        "POST with valid JSON content type",
-			method:      "POST",
-			contentType: "application/json",
+			name:           "POST with valid JSON content type",
+			method:         "POST",
+			contentType:    "application/json",
 			expectedStatus: http.StatusMethodNotAllowed, // Health endpoint only supports GET
 		},
 		{
-			name:        "POST with valid form content type",
-			method:      "POST",
-			contentType: "application/x-www-form-urlencoded",
+			name:           "POST with valid form content type",
+			method:         "POST",
+			contentType:    "application/x-www-form-urlencoded",
 			expectedStatus: http.StatusMethodNotAllowed, // Health endpoint only supports GET
 		},
 		{
-			name:        "POST with invalid content type",
-			method:      "POST",
-			contentType: "text/plain",
+			name:           "POST with invalid content type",
+			method:         "POST",
+			contentType:    "text/plain",
 			expectedStatus: http.StatusUnsupportedMediaType,
 		},
 		{
-			name:        "GET with no content type",
-			method:      "GET",
-			contentType: "",
+			name:           "GET with no content type",
+			method:         "GET",
+			contentType:    "",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:        "PUT with valid JSON content type",
-			method:      "PUT",
-			contentType: "application/json",
+			name:           "PUT with valid JSON content type",
+			method:         "PUT",
+			contentType:    "application/json",
 			expectedStatus: http.StatusMethodNotAllowed, // Health endpoint only supports GET
 		},
 		{
-			name:        "PUT with invalid content type",
-			method:      "PUT",
-			contentType: "text/html",
+			name:           "PUT with invalid content type",
+			method:         "PUT",
+			contentType:    "text/html",
 			expectedStatus: http.StatusUnsupportedMediaType,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, "/health", nil)
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
-			
+
 			w := httptest.NewRecorder()
-			
+
 			r.ServeHTTP(w, req)
-			
+
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
@@ -150,20 +150,20 @@ func TestContentTypeValidation(t *testing.T) {
 
 func TestAuthMiddleware_PublicEndpoints(t *testing.T) {
 	r := createTestRouter()
-	
+
 	publicEndpoints := []string{
 		"/health",
 		"/api/auth/login",
 		"/api/auth/register",
 	}
-	
+
 	for _, endpoint := range publicEndpoints {
 		t.Run("Public endpoint: "+endpoint, func(t *testing.T) {
 			req := httptest.NewRequest("GET", endpoint, nil)
 			w := httptest.NewRecorder()
-			
+
 			r.ServeHTTP(w, req)
-			
+
 			// Public endpoints should be accessible without auth
 			if w.Code == http.StatusUnauthorized {
 				t.Errorf("Expected public endpoint %s to be accessible, got 401", endpoint)
@@ -174,12 +174,12 @@ func TestAuthMiddleware_PublicEndpoints(t *testing.T) {
 
 func TestRequestIDMiddleware(t *testing.T) {
 	r := createTestRouter()
-	
+
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	r.ServeHTTP(w, req)
-	
+
 	// Check that RequestID header is set
 	requestID := w.Header().Get("X-Request-Id")
 	if requestID == "" {
@@ -189,12 +189,12 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestTimeoutMiddleware(t *testing.T) {
 	r := createTestRouter()
-	
+
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	r.ServeHTTP(w, req)
-	
+
 	// The timeout middleware should not affect normal requests
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
@@ -205,7 +205,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 // but without starting the server
 func createTestRouter() *chi.Mux {
 	r := chi.NewRouter()
-	
+
 	// Add the same middleware as in main()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +217,7 @@ func createTestRouter() *chi.Mux {
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// Add CORS middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -230,21 +230,21 @@ func createTestRouter() *chi.Mux {
 			w.Header().Set("Access-Control-Expose-Headers", "Link")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Max-Age", "300")
-			
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// Add request validation middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-			
+
 			if r.Method == "POST" || r.Method == "PUT" {
 				contentType := r.Header.Get("Content-Type")
 				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
@@ -252,11 +252,11 @@ func createTestRouter() *chi.Mux {
 					return
 				}
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// Add auth middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +267,7 @@ func createTestRouter() *chi.Mux {
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// Add RequestID middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -275,12 +275,12 @@ func createTestRouter() *chi.Mux {
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// Add health endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("BFF server is running!"))
 	})
-	
+
 	return r
 }
