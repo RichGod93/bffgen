@@ -1,0 +1,209 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+          echo "Releasing version: ${{ steps.version.outputs.version }}"
+
+      - name: Verify version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: v0.1.0"
+            exit 1
+          fi
+          echo "✅ Version format is valid: $VERSION"
+
+      - name: Build binaries
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+
+          # Build for multiple platforms
+          platforms=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          mkdir -p dist
+
+          for platform in "${platforms[@]}"; do
+            IFS='/' read -r os arch <<< "$platform"
+            output_name="bffgen"
+            if [ "$os" = "windows" ]; then
+              output_name="bffgen.exe"
+            fi
+            
+            echo "Building for $os/$arch..."
+            GOOS=$os GOARCH=$arch go build \
+              -ldflags="-X main.version=$VERSION -X main.buildTime=$BUILD_TIME -X main.commit=$COMMIT_SHA" \
+              -o "dist/bffgen-$os-$arch$([ "$os" = "windows" ] && echo ".exe")" \
+              ./cmd/bffgen
+          done
+
+          # Create checksums
+          cd dist
+          sha256sum * > checksums.txt
+          cd ..
+
+          echo "✅ Build completed"
+          ls -la dist/
+
+      - name: Run tests
+        run: |
+          go test -v ./...
+          go test -race ./...
+
+      - name: Run linter
+        run: |
+          go vet ./...
+          go fmt ./...
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not formatted"
+            gofmt -s -l .
+            exit 1
+          fi
+          echo "✅ Code formatting is correct"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "Generating release notes from $PREVIOUS_TAG to $VERSION"
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+          else
+            echo "Generating initial release notes"
+            CHANGELOG=$(git log --pretty=format:"- %s" --reverse)
+          fi
+
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## 🚀 What's New in $VERSION
+
+          ### ✨ Features
+          $CHANGELOG
+
+          ### 📦 Installation
+
+          **Quick Install:**
+          \`\`\`bash
+          go install github.com/RichGod93/bffgen/cmd/bffgen@$VERSION
+          \`\`\`
+
+          **Manual Download:**
+          Download the appropriate binary for your platform from the assets below.
+
+          ### 🔧 Usage
+
+          \`\`\`bash
+          # Initialize a new BFF project
+          bffgen init my-awesome-bff
+
+          # Add authentication template
+          bffgen add-template auth
+
+          # Generate Go code
+          bffgen generate
+
+          # Run development server
+          bffgen dev
+          \`\`\`
+
+          ### 📋 Checksums
+
+          Verify your download with the checksums file included in the release assets.
+
+          ### 🐛 Bug Reports
+
+          Found a bug? Please report it on [GitHub Issues](https://github.com/RichGod93/bffgen/issues).
+
+          ### 🤝 Contributing
+
+          Want to contribute? Check out our [Contributing Guide](https://github.com/RichGod93/bffgen/blob/main/CONTRIBUTING.md).
+          EOF
+
+          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: ${{ steps.release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+
+      - name: Upload Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/
+          asset_name: bffgen-${{ steps.version.outputs.version }}-binaries
+          asset_content_type: application/zip
+
+      - name: Upload Checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/checksums.txt
+          asset_name: checksums.txt
+          asset_content_type: text/plain
+
+      - name: Notify Success
+        run: |
+          echo "🎉 Release ${{ steps.version.outputs.version }} created successfully!"
+          echo "📦 Assets uploaded to GitHub Releases"
+          echo "🔗 View release: https://github.com/RichGod93/bffgen/releases/tag/${{ steps.version.outputs.version }}"

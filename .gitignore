@@ -114,3 +114,6 @@ vendor/
 
 # Air live reload (if used for development)
 tmp/
+
+# GitHub Actions generated files
+release_notes.md

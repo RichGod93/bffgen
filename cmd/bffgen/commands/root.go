@@ -18,6 +18,7 @@ Global Installation:
   macOS/Linux: sudo cp bffgen /usr/local/bin/
   Windows: Add the bffgen directory to your PATH
   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen`,
+	Version: "dev", // This will be set during build
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
