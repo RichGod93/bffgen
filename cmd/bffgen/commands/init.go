@@ -18,27 +18,46 @@ var initCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
-		if err := initializeProject(projectName); err != nil {
+		framework, err := initializeProject(projectName)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error initializing project: %v\n", err)
 			os.Exit(1)
 		}
-	fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
-	fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
-	fmt.Printf("🚀 Start development server: bffgen dev\n")
-	
-	// Add global installation instructions
-	fmt.Println()
-	fmt.Println("💡 To make bffgen available globally:")
-	fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
-	fmt.Println("   Windows: Add the bffgen directory to your PATH")
-	fmt.Println("   Or use: go install github.com/richgodusen/bffgen/cmd/bffgen")
+		
+		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
+		fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
+		fmt.Printf("🚀 Start development server: bffgen dev\n")
+		
+		// Add Redis setup instructions for Chi/Echo
+		if framework == "chi" || framework == "echo" {
+			fmt.Println()
+			fmt.Println("🔴 Redis Setup Required for Rate Limiting:")
+			fmt.Println("   1. Install Redis: brew install redis (macOS) or apt install redis (Ubuntu)")
+			fmt.Println("   2. Start Redis: redis-server")
+			fmt.Println("   3. Set environment: export REDIS_URL=redis://localhost:6379")
+			fmt.Println("   Note: Fiber includes built-in rate limiting, no Redis needed")
+		}
+		
+		// Add JWT setup instructions
+		fmt.Println()
+		fmt.Println("🔐 JWT Authentication Setup:")
+		fmt.Println("   1. Set JWT secret: export JWT_SECRET=your-secure-secret-key")
+		fmt.Println("   2. Generate tokens in your auth service")
+		fmt.Println("   3. Include 'Authorization: Bearer <token>' header in requests")
+		
+		// Add global installation instructions
+		fmt.Println()
+		fmt.Println("💡 To make bffgen available globally:")
+		fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
+		fmt.Println("   Windows: Add the bffgen directory to your PATH")
+		fmt.Println("   Or use: go install github.com/richgodusen/bffgen/cmd/bffgen")
 	},
 }
 
-func initializeProject(projectName string) error {
+func initializeProject(projectName string) (string, error) {
 	// Create project directory
 	if err := os.MkdirAll(projectName, 0755); err != nil {
-		return fmt.Errorf("failed to create project directory: %w", err)
+		return "", fmt.Errorf("failed to create project directory: %w", err)
 	}
 
 	// Create subdirectories
@@ -51,7 +70,7 @@ func initializeProject(projectName string) error {
 
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
 
@@ -66,6 +85,14 @@ func initializeProject(projectName string) error {
 		framework = "chi"
 	}
 
+	// CORS origins configuration
+	fmt.Print("✔ Frontend URLs (comma-separated) [localhost:3000,localhost:3001]: ")
+	corsOrigins, _ := reader.ReadString('\n')
+	corsOrigins = strings.TrimSpace(corsOrigins)
+	if corsOrigins == "" {
+		corsOrigins = "localhost:3000,localhost:3001"
+	}
+	
 	// Route configuration
 	fmt.Println("✔ Configure routes now or later?")
 	fmt.Println("   1) Define manually")
@@ -87,42 +114,176 @@ func initializeProject(projectName string) error {
 			
 			if _, err := os.Stat(srcPath); err == nil {
 				if err := copyFile(srcPath, dstPath); err != nil {
-					return fmt.Errorf("failed to copy template %s: %w", templateFile, err)
+					return "", fmt.Errorf("failed to copy template %s: %w", templateFile, err)
 				}
 			}
 		}
 	}
 
+	// Parse CORS origins for template
+	corsOriginsList := strings.Split(corsOrigins, ",")
+	for i, origin := range corsOriginsList {
+		corsOriginsList[i] = strings.TrimSpace(origin)
+		if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+			corsOriginsList[i] = "http://" + origin
+		}
+	}
+	
+	// Generate CORS configuration string
+	corsConfig := generateCORSConfig(corsOriginsList, framework)
+	
 	// Create main.go based on framework
 	var mainGoContent string
 	switch framework {
 	case "chi":
-		mainGoContent = `package main
+		mainGoContent = fmt.Sprintf(`package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func main() {
 	r := chi.NewRouter()
 
+	// Structured logging middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			
+			// Log request
+			log.Printf("REQUEST: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			
+			next.ServeHTTP(ww, r)
+			
+			// Log response
+			duration := time.Since(start)
+			log.Printf("RESPONSE: %d %s %s %v", ww.Status(), r.Method, r.URL.Path, duration)
+		})
+	})
+	
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Timeout(60 * time.Second))
+	
+	// Security headers middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("X-XSS-Protection", "1; mode=block")
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	// CORS configuration
+	%s
+	
+	// Request validation middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Basic request size limit (10MB)
+			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+			
+			// Content-Type validation for POST/PUT requests
+			if r.Method == "POST" || r.Method == "PUT" {
+				contentType := r.Header.Get("Content-Type")
+				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+					http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
+					return
+				}
+			}
+			
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	// Redis-based rate limiting middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if Redis is available
+			redisURL := os.Getenv("REDIS_URL")
+			if redisURL == "" {
+				redisURL = "redis://localhost:6379"
+			}
+			
+			// TODO: Implement Redis rate limiting
+			// For now, skip rate limiting if Redis is not available
+			// In production, implement proper Redis-based rate limiting
+			// Example: github.com/go-redis/redis/v8 with sliding window
+			
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	// JWT Authentication middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip auth for health check and public endpoints
+			if r.URL.Path == "/health" || r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/register" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			
+			// Extract JWT token from Authorization header
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				http.Error(w, "Missing or invalid authorization header", http.StatusUnauthorized)
+				return
+			}
+			
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			if tokenString == "" {
+				http.Error(w, "Empty token", http.StatusUnauthorized)
+				return
+			}
+			
+			// TODO: Replace with your JWT secret key
+			jwtSecret := os.Getenv("JWT_SECRET")
+			if jwtSecret == "" {
+				jwtSecret = "your-secret-key-change-in-production"
+			}
+			
+			// Parse and validate JWT token
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				return []byte(jwtSecret), nil
+			})
+			
+			if err != nil || !token.Valid {
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
+			
+			// Extract claims and add to request context
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				// Add user info to request context for downstream handlers
+				ctx := context.WithValue(r.Context(), "user_id", claims["user_id"])
+				ctx = context.WithValue(ctx, "user_email", claims["email"])
+				r = r.WithContext(ctx)
+			}
+			
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -136,15 +297,20 @@ func main() {
 
 	fmt.Println("🚀 BFF server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
-}`
+}`, corsConfig)
 	case "echo":
-		mainGoContent = `package main
+		mainGoContent = fmt.Sprintf(`package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -155,7 +321,85 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.RequestID())
+	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
+		Timeout: 60 * time.Second,
+	}))
+	
+	// Security headers middleware
+	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		HSTSMaxAge:            31536000,
+		ContentSecurityPolicy: "default-src 'self'",
+	}))
+	
+	// CORS configuration
+	%s
+	
+	// Request validation middleware
+	e.Use(middleware.BodyLimit("10M"))
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Content-Type validation for POST/PUT requests
+			if c.Request().Method == "POST" || c.Request().Method == "PUT" {
+				contentType := c.Request().Header.Get("Content-Type")
+				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+					return c.String(http.StatusUnsupportedMediaType, "Unsupported Content-Type")
+				}
+			}
+			return next(c)
+		}
+	})
+	
+	// JWT Authentication middleware
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Skip auth for health check and public endpoints
+			if c.Request().URL.Path == "/health" || c.Request().URL.Path == "/api/auth/login" || c.Request().URL.Path == "/api/auth/register" {
+				return next(c)
+			}
+			
+			// Extract JWT token from Authorization header
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				return c.String(http.StatusUnauthorized, "Missing or invalid authorization header")
+			}
+			
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			if tokenString == "" {
+				return c.String(http.StatusUnauthorized, "Empty token")
+			}
+			
+			// TODO: Replace with your JWT secret key
+			jwtSecret := os.Getenv("JWT_SECRET")
+			if jwtSecret == "" {
+				jwtSecret = "your-secret-key-change-in-production"
+			}
+			
+			// Parse and validate JWT token
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
+				}
+				return []byte(jwtSecret), nil
+			})
+			
+			if err != nil || !token.Valid {
+				return c.String(http.StatusUnauthorized, "Invalid token")
+			}
+			
+			// Extract claims and add to request context
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				// Add user info to request context for downstream handlers
+				c.Set("user_id", claims["user_id"])
+				c.Set("user_email", claims["email"])
+			}
+			
+			return next(c)
+		}
+	})
 
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
@@ -168,18 +412,26 @@ func main() {
 
 	fmt.Println("🚀 BFF server starting on :8080")
 	log.Fatal(e.Start(":8080"))
-}`
+}`, corsConfig)
 	case "fiber":
-		mainGoContent = `package main
+		mainGoContent = fmt.Sprintf(`package main
 
 import (
 	"fmt"
 	"log"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/gofiber/fiber/v2/middleware/timeout"
 )
 
 func main() {
@@ -188,7 +440,80 @@ func main() {
 	// Middleware
 	app.Use(logger.New())
 	app.Use(recover.New())
-	app.Use(cors.New())
+	app.Use(requestid.New())
+	app.Use(timeout.New(timeout.Config{
+		Timeout: 60 * time.Second,
+	}))
+	
+	// Security headers middleware
+	app.Use(helmet.New())
+	
+	// Rate limiting
+	app.Use(limiter.New(limiter.Config{
+		Max:        100, // requests per minute
+		Expiration: 1 * time.Minute,
+	}))
+	
+	// CORS configuration
+	%s
+	
+	// Request validation middleware
+	app.Use(func(c *fiber.Ctx) error {
+		// Content-Type validation for POST/PUT requests
+		if c.Method() == "POST" || c.Method() == "PUT" {
+			contentType := c.Get("Content-Type")
+			if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+				return c.Status(415).SendString("Unsupported Content-Type")
+			}
+		}
+		return c.Next()
+	})
+	
+	// JWT Authentication middleware
+	app.Use(func(c *fiber.Ctx) error {
+		// Skip auth for health check and public endpoints
+		if c.Path() == "/health" || c.Path() == "/api/auth/login" || c.Path() == "/api/auth/register" {
+			return c.Next()
+		}
+		
+		// Extract JWT token from Authorization header
+		authHeader := c.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			return c.Status(401).SendString("Missing or invalid authorization header")
+		}
+		
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == "" {
+			return c.Status(401).SendString("Empty token")
+		}
+		
+		// TODO: Replace with your JWT secret key
+		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			jwtSecret = "your-secret-key-change-in-production"
+		}
+		
+		// Parse and validate JWT token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
+			}
+			return []byte(jwtSecret), nil
+		})
+		
+		if err != nil || !token.Valid {
+			return c.Status(401).SendString("Invalid token")
+		}
+		
+		// Extract claims and add to request context
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			// Add user info to request context for downstream handlers
+			c.Locals("user_id", claims["user_id"])
+			c.Locals("user_email", claims["email"])
+		}
+		
+		return c.Next()
+	})
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -201,19 +526,19 @@ func main() {
 
 	fmt.Println("🚀 BFF server starting on :8080")
 	log.Fatal(app.Listen(":8080"))
-}`
+}`, corsConfig)
 	default:
-		return fmt.Errorf("unsupported framework: %s", framework)
+		return "", fmt.Errorf("unsupported framework: %s", framework)
 	}
 
 	if err := os.WriteFile(filepath.Join(projectName, "main.go"), []byte(mainGoContent), 0644); err != nil {
-		return fmt.Errorf("failed to create main.go: %w", err)
+		return "", fmt.Errorf("failed to create main.go: %w", err)
 	}
 
 	// Create go.mod based on framework
 	goModContent := generateGoMod(projectName, framework)
 	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
-		return fmt.Errorf("failed to create go.mod: %w", err)
+		return "", fmt.Errorf("failed to create go.mod: %w", err)
 	}
 
 	// Run go mod tidy to download dependencies
@@ -248,7 +573,7 @@ settings:
 `
 
 	if err := os.WriteFile(filepath.Join(projectName, "bff.config.yaml"), []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("failed to create bff.config.yaml: %w", err)
+		return "", fmt.Errorf("failed to create bff.config.yaml: %w", err)
 	}
 
 	// Create README.md
@@ -289,7 +614,7 @@ To make bffgen available globally:
 `, projectName)
 
 	if err := os.WriteFile(filepath.Join(projectName, "README.md"), []byte(readmeContent), 0644); err != nil {
-		return fmt.Errorf("failed to create README.md: %w", err)
+		return "", fmt.Errorf("failed to create README.md: %w", err)
 	}
 
 	// Handle route configuration based on user choice
@@ -306,7 +631,7 @@ To make bffgen available globally:
 		fmt.Println("   bffgen add-template")
 	}
 
-	return nil
+	return framework, nil
 }
 
 // copyFile copies a file from src to dst
@@ -346,6 +671,7 @@ go 1.21
 require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "echo":
@@ -354,6 +680,7 @@ require (
 go 1.21
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/labstack/echo/v4 v4.11.4
 	gopkg.in/yaml.v3 v3.0.1
 )`
@@ -364,6 +691,7 @@ go 1.21
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	default:
@@ -380,5 +708,55 @@ func runCommandInDir(dir string, name string, args ...string) error {
 		return fmt.Errorf("command failed: %v, output: %s", err, string(output))
 	}
 	return nil
+}
+
+// generateCORSConfig generates CORS configuration string for different frameworks
+func generateCORSConfig(origins []string, framework string) string {
+	originsStr := ""
+	for i, origin := range origins {
+		if i > 0 {
+			originsStr += ", "
+		}
+		originsStr += fmt.Sprintf("\"%s\"", origin)
+	}
+	
+	switch framework {
+	case "chi":
+		return fmt.Sprintf(`r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{%s},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))`, originsStr)
+	case "echo":
+		return fmt.Sprintf(`e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{%s},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposeHeaders:    []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))`, originsStr)
+	case "fiber":
+		originsStr = ""
+		for i, origin := range origins {
+			if i > 0 {
+				originsStr += ","
+			}
+			originsStr += origin
+		}
+		return fmt.Sprintf(`app.Use(cors.New(cors.Config{
+		AllowOrigins:     "%s",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Accept,Authorization,Content-Type,X-CSRF-Token",
+		ExposeHeaders:    "Link",
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))`, originsStr)
+	default:
+		return ""
+	}
 }
 

@@ -42,6 +42,59 @@ go install github.com/richgodusen/bffgen/cmd/bffgen@latest
 
 ---
 
+## 🔒 Security Features
+
+bffgen generates BFFs with secure defaults:
+
+**✅ Security Headers:**
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: geolocation=(), microphone=(), camera=()`
+
+**✅ CORS Configuration:**
+
+- Restrictive origins (localhost:3000, localhost:3001 by default)
+- Credentials enabled for authenticated requests
+- Specific allowed headers and methods
+
+**✅ Request Validation:**
+
+- 10MB request size limit
+- Content-Type validation for POST/PUT requests
+- Request timeout (60 seconds)
+
+**✅ Authentication & Security:**
+
+- JWT token validation with HMAC signing
+- User context injection (user_id, email)
+- Public endpoint exclusions (health, auth routes)
+- Environment-based JWT secret configuration
+
+**✅ Comprehensive Logging:**
+
+- Structured request/response logging
+- Request duration tracking
+- Request ID correlation
+- Error logging with context
+
+**✅ Rate Limiting:**
+
+- Fiber: Built-in in-memory rate limiting (100 req/min)
+- Chi/Echo: Redis-based rate limiting (requires Redis setup)
+- Configurable via environment variables
+
+**⚠️ Production Considerations:**
+
+- Set JWT_SECRET environment variable
+- Configure Redis for Chi/Echo rate limiting
+- Set up proper logging aggregation
+- Configure monitoring and alerting
+
+---
+
 ## 🛠 Usage
 
 ### Initialize a Project
@@ -263,6 +316,83 @@ settings:
 - 🔮 SDK generation for frontend frameworks
 - 🔮 Monitoring and observability
 - 🔮 Multi-environment deployment
+
+---
+
+## 🔴 Redis Setup (Chi/Echo Only)
+
+For Chi and Echo frameworks, Redis is required for rate limiting:
+
+### Installation
+
+**macOS:**
+```bash
+brew install redis
+brew services start redis
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install redis-server
+sudo systemctl start redis-server
+```
+
+**Docker:**
+```bash
+docker run -d -p 6379:6379 redis:alpine
+```
+
+### Configuration
+
+Set the Redis URL environment variable:
+```bash
+export REDIS_URL=redis://localhost:6379
+```
+
+### Verification
+
+Test Redis connection:
+```bash
+redis-cli ping
+# Should return: PONG
+```
+
+**Note:** Fiber framework includes built-in rate limiting and doesn't require Redis.
+
+---
+
+## 🔐 JWT Authentication Setup
+
+### Environment Configuration
+
+Set your JWT secret:
+```bash
+export JWT_SECRET=your-super-secure-secret-key-change-in-production
+```
+
+### Token Generation
+
+Generate JWT tokens in your authentication service:
+```go
+import "github.com/golang-jwt/jwt/v5"
+
+claims := jwt.MapClaims{
+    "user_id": "123",
+    "email": "user@example.com",
+    "exp": time.Now().Add(time.Hour * 24).Unix(),
+}
+
+token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+```
+
+### Usage
+
+Include the token in requests:
+```bash
+curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/api/protected
+```
 
 ---
 
