@@ -56,6 +56,7 @@ go run main.go
 | `generate`     | Generate Go code from config         |
 | `postman`      | Create Postman collection            |
 | `dev`          | Run development server               |
+| `config`       | Manage global configuration          |
 
 ---
 
@@ -126,6 +127,37 @@ bffgen postman
 # ✅ Postman collection generated successfully!
 # 📁 Created file: bff-postman-collection.json
 ```
+
+---
+
+## ⚙️ Configuration
+
+bffgen saves your preferences in `~/.bffgen/bffgen.yaml` for re-runs:
+
+### View Configuration
+
+```bash
+bffgen config show
+```
+
+### Set Defaults
+
+```bash
+bffgen config set framework fiber
+bffgen config set cors_origins localhost:5173,myapp.com
+bffgen config set jwt_secret my-super-secret-key
+bffgen config set redis_url redis://localhost:6379
+bffgen config set port 3000
+bffgen config set route_option 2
+```
+
+### Reset Configuration
+
+```bash
+bffgen config reset
+```
+
+**Configuration File Location:** `~/.bffgen/bffgen.yaml`
 
 ---
 

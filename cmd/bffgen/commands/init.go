@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -24,9 +26,9 @@ var initCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		
-		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
-		fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
-		fmt.Printf("🚀 Start development server: bffgen dev\n")
+	fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
+	fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
+	fmt.Printf("🚀 Start development server: bffgen dev\n")
 		
 		// Add Redis setup instructions for Chi/Echo
 		if framework == "chi" || framework == "echo" {
@@ -44,12 +46,12 @@ var initCmd = &cobra.Command{
 		fmt.Println("   1. Set JWT secret: export JWT_SECRET=your-secure-secret-key")
 		fmt.Println("   2. Generate tokens in your auth service")
 		fmt.Println("   3. Include 'Authorization: Bearer <token>' header in requests")
-		
-		// Add global installation instructions
-		fmt.Println()
-		fmt.Println("💡 To make bffgen available globally:")
-		fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
-		fmt.Println("   Windows: Add the bffgen directory to your PATH")
+	
+	// Add global installation instructions
+	fmt.Println()
+	fmt.Println("💡 To make bffgen available globally:")
+	fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
+	fmt.Println("   Windows: Add the bffgen directory to your PATH")
 		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen")
 	},
 }
@@ -74,23 +76,31 @@ func initializeProject(projectName string) (string, error) {
 		}
 	}
 
+	// Load configuration
+	config, err := utils.LoadBFFGenConfig()
+	if err != nil {
+		fmt.Printf("⚠️  Warning: Could not load config: %v\n", err)
+		config = types.GetDefaultConfig()
+	}
+
 	// Interactive prompts
 	reader := bufio.NewReader(os.Stdin)
 
 	// Framework selection
-	fmt.Print("✔ Which framework? (chi/echo/fiber) [chi]: ")
+	fmt.Printf("✔ Which framework? (chi/echo/fiber) [%s]: ", config.Defaults.Framework)
 	framework, _ := reader.ReadString('\n')
 	framework = strings.TrimSpace(strings.ToLower(framework))
 	if framework == "" {
-		framework = "chi"
+		framework = config.Defaults.Framework
 	}
 
 	// CORS origins configuration
-	fmt.Print("✔ Frontend URLs (comma-separated) [localhost:3000,localhost:3001]: ")
+	defaultCORS := strings.Join(config.Defaults.CORSOrigins, ",")
+	fmt.Printf("✔ Frontend URLs (comma-separated) [%s]: ", defaultCORS)
 	corsOrigins, _ := reader.ReadString('\n')
 	corsOrigins = strings.TrimSpace(corsOrigins)
 	if corsOrigins == "" {
-		corsOrigins = "localhost:3000,localhost:3001"
+		corsOrigins = defaultCORS
 	}
 	
 	// Route configuration
@@ -98,11 +108,11 @@ func initializeProject(projectName string) (string, error) {
 	fmt.Println("   1) Define manually")
 	fmt.Println("   2) Use a template")
 	fmt.Println("   3) Skip for now")
-	fmt.Print("✔ Select option (1-3) [3]: ")
+	fmt.Printf("✔ Select option (1-3) [%s]: ", config.Defaults.RouteOption)
 	routeOption, _ := reader.ReadString('\n')
 	routeOption = strings.TrimSpace(routeOption)
 	if routeOption == "" {
-		routeOption = "3"
+		routeOption = config.Defaults.RouteOption
 	}
 
 	// Copy template files only if user selected template option
@@ -131,7 +141,7 @@ func initializeProject(projectName string) (string, error) {
 	
 	// Generate CORS configuration string
 	corsConfig := generateCORSConfig(corsOriginsList, framework)
-	
+
 	// Create main.go based on framework
 	var mainGoContent string
 	switch framework {
@@ -172,7 +182,7 @@ func main() {
 			log.Printf("RESPONSE: %d %s %s %v", ww.Status(), r.Method, r.URL.Path, duration)
 		})
 	})
-	
+
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -629,6 +639,21 @@ To make bffgen available globally:
 		fmt.Println("💡 To add a template, run:")
 		fmt.Printf("   cd %s\n", projectName)
 		fmt.Println("   bffgen add-template")
+	}
+
+	// Update configuration with new defaults
+	config.Defaults.Framework = framework
+	config.Defaults.CORSOrigins = strings.Split(corsOrigins, ",")
+	config.Defaults.RouteOption = routeOption
+	
+	// Save updated configuration
+	if err := utils.SaveBFFGenConfig(config); err != nil {
+		fmt.Printf("⚠️  Warning: Could not save config: %v\n", err)
+	}
+	
+	// Update recent projects
+	if err := utils.UpdateRecentProject(projectName); err != nil {
+		fmt.Printf("⚠️  Warning: Could not update recent projects: %v\n", err)
 	}
 
 	return framework, nil
