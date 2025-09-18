@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -158,6 +159,7 @@ type Cache struct {
 	data      map[string]CacheEntry
 	ttl       time.Duration
 	cleanup   *time.Ticker
+	mutex     sync.RWMutex
 }
 
 // CacheEntry represents a cached item
@@ -183,14 +185,19 @@ func NewCache(ttl time.Duration) *Cache {
 
 // Get retrieves data from cache
 func (c *Cache) Get(key string) ([]byte, bool) {
+	c.mutex.RLock()
 	entry, exists := c.data[key]
+	c.mutex.RUnlock()
+	
 	if !exists {
 		return nil, false
 	}
 
 	// Check if entry has expired
 	if time.Since(entry.Timestamp) > entry.TTL {
+		c.mutex.Lock()
 		delete(c.data, key)
+		c.mutex.Unlock()
 		return nil, false
 	}
 
@@ -199,32 +206,40 @@ func (c *Cache) Get(key string) ([]byte, bool) {
 
 // Set stores data in cache
 func (c *Cache) Set(key string, data []byte) {
+	c.mutex.Lock()
 	c.data[key] = CacheEntry{
 		Data:      data,
 		Timestamp: time.Now(),
 		TTL:       c.ttl,
 	}
+	c.mutex.Unlock()
 }
 
 // Delete removes data from cache
 func (c *Cache) Delete(key string) {
+	c.mutex.Lock()
 	delete(c.data, key)
+	c.mutex.Unlock()
 }
 
 // Clear removes all data from cache
 func (c *Cache) Clear() {
+	c.mutex.Lock()
 	c.data = make(map[string]CacheEntry)
+	c.mutex.Unlock()
 }
 
 // cleanupRoutine periodically removes expired entries
 func (c *Cache) cleanupRoutine() {
 	for range c.cleanup.C {
+		c.mutex.Lock()
 		now := time.Now()
 		for key, entry := range c.data {
 			if now.Sub(entry.Timestamp) > entry.TTL {
 				delete(c.data, key)
 			}
 		}
+		c.mutex.Unlock()
 	}
 }
 
