@@ -105,7 +105,7 @@ func (pc *ParallelCaller) CallServices(calls []ServiceCall) []ServiceResponse {
 	for i, call := range calls {
 		go func(index int, serviceCall ServiceCall) {
 			start := time.Now()
-			
+
 			var resp *http.Response
 			var err error
 
@@ -129,7 +129,7 @@ func (pc *ParallelCaller) CallServices(calls []ServiceCall) []ServiceResponse {
 			if err == nil && resp != nil {
 				response.StatusCode = resp.StatusCode
 				response.Headers = resp.Header
-				
+
 				// Read response body
 				if resp.Body != nil {
 					defer resp.Body.Close()
@@ -156,10 +156,10 @@ func (pc *ParallelCaller) CallServices(calls []ServiceCall) []ServiceResponse {
 
 // Cache provides caching functionality for aggregators
 type Cache struct {
-	data      map[string]CacheEntry
-	ttl       time.Duration
-	cleanup   *time.Ticker
-	mutex     sync.RWMutex
+	data    map[string]CacheEntry
+	ttl     time.Duration
+	cleanup *time.Ticker
+	mutex   sync.RWMutex
 }
 
 // CacheEntry represents a cached item
@@ -188,7 +188,7 @@ func (c *Cache) Get(key string) ([]byte, bool) {
 	c.mutex.RLock()
 	entry, exists := c.data[key]
 	c.mutex.RUnlock()
-	
+
 	if !exists {
 		return nil, false
 	}
