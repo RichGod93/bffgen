@@ -25,11 +25,11 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error initializing project: %v\n", err)
 			os.Exit(1)
 		}
-		
-	fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
-	fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
-	fmt.Printf("🚀 Start development server: bffgen dev\n")
-		
+
+		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
+		fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
+		fmt.Printf("🚀 Start development server: bffgen dev\n")
+
 		// Add Redis setup instructions for Chi/Echo
 		if framework == "chi" || framework == "echo" {
 			fmt.Println()
@@ -39,19 +39,19 @@ var initCmd = &cobra.Command{
 			fmt.Println("   3. Set environment: export REDIS_URL=redis://localhost:6379")
 			fmt.Println("   Note: Fiber includes built-in rate limiting, no Redis needed")
 		}
-		
+
 		// Add JWT setup instructions
 		fmt.Println()
 		fmt.Println("🔐 JWT Authentication Setup:")
 		fmt.Println("   1. Set JWT secret: export JWT_SECRET=your-secure-secret-key")
 		fmt.Println("   2. Generate tokens in your auth service")
 		fmt.Println("   3. Include 'Authorization: Bearer <token>' header in requests")
-	
-	// Add global installation instructions
-	fmt.Println()
-	fmt.Println("💡 To make bffgen available globally:")
-	fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
-	fmt.Println("   Windows: Add the bffgen directory to your PATH")
+
+		// Add global installation instructions
+		fmt.Println()
+		fmt.Println("💡 To make bffgen available globally:")
+		fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
+		fmt.Println("   Windows: Add the bffgen directory to your PATH")
 		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen")
 	},
 }
@@ -102,7 +102,7 @@ func initializeProject(projectName string) (string, error) {
 	if corsOrigins == "" {
 		corsOrigins = defaultCORS
 	}
-	
+
 	// Route configuration
 	fmt.Println("✔ Configure routes now or later?")
 	fmt.Println("   1) Define manually")
@@ -121,7 +121,7 @@ func initializeProject(projectName string) (string, error) {
 		for _, templateFile := range templateFiles {
 			srcPath := filepath.Join("internal", "templates", templateFile)
 			dstPath := filepath.Join(projectName, "internal", "templates", templateFile)
-			
+
 			if _, err := os.Stat(srcPath); err == nil {
 				if err := copyFile(srcPath, dstPath); err != nil {
 					return "", fmt.Errorf("failed to copy template %s: %w", templateFile, err)
@@ -138,7 +138,7 @@ func initializeProject(projectName string) (string, error) {
 			corsOriginsList[i] = "http://" + origin
 		}
 	}
-	
+
 	// Generate CORS configuration string
 	corsConfig := generateCORSConfig(corsOriginsList, framework)
 
@@ -645,12 +645,12 @@ To make bffgen available globally:
 	config.Defaults.Framework = framework
 	config.Defaults.CORSOrigins = strings.Split(corsOrigins, ",")
 	config.Defaults.RouteOption = routeOption
-	
+
 	// Save updated configuration
 	if err := utils.SaveBFFGenConfig(config); err != nil {
 		fmt.Printf("⚠️  Warning: Could not save config: %v\n", err)
 	}
-	
+
 	// Update recent projects
 	if err := utils.UpdateRecentProject(projectName); err != nil {
 		fmt.Printf("⚠️  Warning: Could not update recent projects: %v\n", err)
@@ -744,7 +744,7 @@ func generateCORSConfig(origins []string, framework string) string {
 		}
 		originsStr += fmt.Sprintf("\"%s\"", origin)
 	}
-	
+
 	switch framework {
 	case "chi":
 		return fmt.Sprintf(`r.Use(cors.Handler(cors.Options{
@@ -784,4 +784,3 @@ func generateCORSConfig(origins []string, framework string) string {
 		return ""
 	}
 }
-
