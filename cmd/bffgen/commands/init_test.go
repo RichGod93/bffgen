@@ -6,14 +6,14 @@ import (
 
 func TestGenerateCORSConfig(t *testing.T) {
 	tests := []struct {
-		name     string
-		origins  []string
+		name      string
+		origins   []string
 		framework string
-		expected string
+		expected  string
 	}{
 		{
-			name:     "Chi framework with single origin",
-			origins:  []string{"http://localhost:3000"},
+			name:      "Chi framework with single origin",
+			origins:   []string{"http://localhost:3000"},
 			framework: "chi",
 			expected: `r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
@@ -25,8 +25,8 @@ func TestGenerateCORSConfig(t *testing.T) {
 	}))`,
 		},
 		{
-			name:     "Echo framework with multiple origins",
-			origins:  []string{"http://localhost:3000", "https://example.com"},
+			name:      "Echo framework with multiple origins",
+			origins:   []string{"http://localhost:3000", "https://example.com"},
 			framework: "echo",
 			expected: `e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"http://localhost:3000", "https://example.com"},
@@ -38,8 +38,8 @@ func TestGenerateCORSConfig(t *testing.T) {
 	}))`,
 		},
 		{
-			name:     "Fiber framework with single origin",
-			origins:  []string{"http://localhost:3000"},
+			name:      "Fiber framework with single origin",
+			origins:   []string{"http://localhost:3000"},
 			framework: "fiber",
 			expected: `app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000",
