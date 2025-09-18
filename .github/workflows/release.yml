@@ -173,39 +173,28 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        run: |
+          # Create release using GitHub CLI
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "Release ${{ steps.version.outputs.version }}" \
+            --notes-file release_notes.md \
+            --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          release_name: Release ${{ steps.version.outputs.version }}
-          body: ${{ steps.release_notes.outputs.release_notes }}
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
 
       - name: Upload Assets
         run: |
-          # Upload each binary individually
+          # Upload each binary individually using GitHub CLI
           for file in ./dist/bffgen-*; do
             if [ -f "$file" ]; then
               echo "Uploading $file..."
-              curl -X POST \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Content-Type: application/octet-stream" \
-                --data-binary @"$file" \
-                "${{ steps.create_release.outputs.upload_url }}?name=$(basename "$file")"
+              gh release upload ${{ steps.version.outputs.version }} "$file"
             fi
           done
-
-      - name: Upload Checksums
-        uses: actions/upload-release-asset@v1
+          # Upload checksums
+          gh release upload ${{ steps.version.outputs.version }} ./dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/checksums.txt
-          asset_name: checksums.txt
-          asset_content_type: text/plain
 
       - name: Notify Success
         run: |
