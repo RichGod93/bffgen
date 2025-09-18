@@ -184,14 +184,18 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
 
       - name: Upload Assets
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/
-          asset_name: bffgen-${{ steps.version.outputs.version }}-binaries
-          asset_content_type: application/zip
+        run: |
+          # Upload each binary individually
+          for file in ./dist/bffgen-*; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file..."
+              curl -X POST \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Content-Type: application/octet-stream" \
+                --data-binary @"$file" \
+                "${{ steps.create_release.outputs.upload_url }}?name=$(basename "$file")"
+            fi
+          done
 
       - name: Upload Checksums
         uses: actions/upload-release-asset@v1
