@@ -42,10 +42,12 @@ var initCmd = &cobra.Command{
 
 		// Add JWT setup instructions
 		fmt.Println()
-		fmt.Println("🔐 JWT Authentication Setup:")
-		fmt.Println("   1. Set JWT secret: export JWT_SECRET=your-secure-secret-key")
-		fmt.Println("   2. Generate tokens in your auth service")
-		fmt.Println("   3. Include 'Authorization: Bearer <token>' header in requests")
+		fmt.Println("🔐 Secure Authentication Setup:")
+		fmt.Println("   1. Set encryption key: export ENCRYPTION_KEY=<base64-encoded-32-byte-key>")
+		fmt.Println("   2. Set JWT secret: export JWT_SECRET=<base64-encoded-32-byte-key>")
+		fmt.Println("   3. Keys will be auto-generated if not set (check console output)")
+		fmt.Println("   4. Features: Encrypted JWT tokens, secure sessions, CSRF protection")
+		fmt.Println("   5. Auth endpoints: /api/auth/login, /api/auth/refresh, /api/auth/logout")
 
 		// Add global installation instructions
 		fmt.Println()
@@ -150,17 +152,19 @@ func initializeProject(projectName string) (string, error) {
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/RichGod93/bffgen/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func main() {
@@ -291,7 +295,58 @@ func main() {
 		})
 	})
 	
-	// JWT Authentication middleware
+	// Initialize secure auth
+	secureAuth, err := auth.NewSecureAuth()
+	if err != nil {
+		log.Fatalf("Failed to initialize secure auth: %%v", err)
+	}
+	
+	// CSRF Protection middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip CSRF for GET, HEAD, OPTIONS
+			if r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			
+			// Skip CSRF for public endpoints
+			if r.URL.Path == "/health" || r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/register" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			
+			// Validate CSRF token
+			csrfToken := r.Header.Get("X-CSRF-Token")
+			if csrfToken == "" {
+				http.Error(w, "CSRF token required", http.StatusForbidden)
+				return
+			}
+			
+			// Get session ID from encrypted token
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				http.Error(w, "Missing authorization header", http.StatusUnauthorized)
+				return
+			}
+			
+			encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+			if err != nil {
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
+			
+			if !auth.ValidateCSRFToken(csrfToken, claims.SessionID) {
+				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+				return
+			}
+			
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	// Secure JWT Authentication middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip auth for health check and public endpoints
@@ -300,45 +355,35 @@ func main() {
 				return
 			}
 			
-			// Extract JWT token from Authorization header
+			// Extract encrypted JWT token from Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, "Missing or invalid authorization header", http.StatusUnauthorized)
 				return
 			}
 			
-			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			if tokenString == "" {
+			encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+			if encryptedToken == "" {
 				http.Error(w, "Empty token", http.StatusUnauthorized)
 				return
 			}
 			
-			// TODO: Replace with your JWT secret key
-			jwtSecret := os.Getenv("JWT_SECRET")
-			if jwtSecret == "" {
-				jwtSecret = "your-secret-key-change-in-production"
-			}
-			
-			// Parse and validate JWT token
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
-				}
-				return []byte(jwtSecret), nil
-			})
-			
-			if err != nil || !token.Valid {
+			// Validate encrypted token
+			claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+			if err != nil {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
 			
-			// Extract claims and add to request context
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				// Add user info to request context for downstream handlers
-				ctx := context.WithValue(r.Context(), "user_id", claims["user_id"])
-				ctx = context.WithValue(ctx, "user_email", claims["email"])
-				r = r.WithContext(ctx)
-			}
+			// Add user info to request context for downstream handlers
+			ctx := context.WithValue(r.Context(), "user_id", claims.UserID)
+			ctx = context.WithValue(ctx, "user_email", claims.Email)
+			ctx = context.WithValue(ctx, "session_id", claims.SessionID)
+			r = r.WithContext(ctx)
+			
+			// Add CSRF token to response headers
+			csrfToken := auth.GenerateCSRFToken(claims.SessionID)
+			w.Header().Set("X-CSRF-Token", csrfToken)
 			
 			next.ServeHTTP(w, r)
 		})
@@ -349,6 +394,147 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "BFF server is running!")
 	})
+	
+	// Auth endpoints with secure cookies
+	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		// Parse login request
+		var loginReq struct {
+			Email    string ` + "json:\"email\"" + `
+			Password string ` + "json:\"password\"" + `
+		}
+		
+		if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		
+		// TODO: Validate credentials against your auth service
+		// For demo purposes, accept any email/password
+		if loginReq.Email == "" || loginReq.Password == "" {
+			http.Error(w, "Email and password required", http.StatusBadRequest)
+			return
+		}
+		
+		// Create encrypted token
+		accessToken, refreshToken, err := secureAuth.CreateEncryptedToken(loginReq.Email, loginReq.Email)
+		if err != nil {
+			http.Error(w, "Failed to create token", http.StatusInternalServerError)
+			return
+		}
+		
+		// Set secure cookies
+		accessCookie := auth.CreateSecureCookie("access_token", accessToken, 900) // 15 minutes
+		refreshCookie := auth.CreateSecureCookie("refresh_token", refreshToken, 86400) // 24 hours
+		
+		http.SetCookie(w, &http.Cookie{
+			Name:     accessCookie["Name"],
+			Value:    accessCookie["Value"],
+			Path:     accessCookie["Path"],
+			MaxAge:   maxAgeToInt(accessCookie["MaxAge"]),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		http.SetCookie(w, &http.Cookie{
+			Name:     refreshCookie["Name"],
+			Value:    refreshCookie["Value"],
+			Path:     refreshCookie["Path"],
+			MaxAge:   maxAgeToInt(refreshCookie["MaxAge"]),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		// Return tokens in response
+		response := map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"token_type":    "Bearer",
+			"expires_in":    "900", // 15 minutes
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})
+	
+	r.Post("/api/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		// Get refresh token from cookie or header
+		var refreshToken string
+		
+		if cookie, err := r.Cookie("refresh_token"); err == nil {
+			refreshToken = cookie.Value
+		} else {
+			var refreshReq struct {
+				RefreshToken string ` + "json:\"refresh_token\"" + `
+			}
+			if err := json.NewDecoder(r.Body).Decode(&refreshReq); err != nil {
+				http.Error(w, "Invalid request", http.StatusBadRequest)
+				return
+			}
+			refreshToken = refreshReq.RefreshToken
+		}
+		
+		// Refresh access token
+		newAccessToken, err := secureAuth.RefreshToken(refreshToken)
+		if err != nil {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+		
+		// Set new access token cookie
+		accessCookie := auth.CreateSecureCookie("access_token", newAccessToken, 900)
+		http.SetCookie(w, &http.Cookie{
+			Name:     accessCookie["Name"],
+			Value:    accessCookie["Value"],
+			Path:     accessCookie["Path"],
+			MaxAge:   maxAgeToInt(accessCookie["MaxAge"]),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		response := map[string]string{
+			"access_token": newAccessToken,
+			"token_type":   "Bearer",
+			"expires_in":   "900",
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})
+	
+	r.Post("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		// Get session ID from context
+		sessionID, ok := r.Context().Value("session_id").(string)
+		if ok {
+			secureAuth.RevokeSession(sessionID)
+		}
+		
+		// Clear cookies
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "Logged out successfully")
+	})
 
 	// TODO: Add your aggregated routes here
 	// Run 'bffgen add-route' or 'bffgen add-template' to add routes
@@ -356,20 +542,30 @@ func main() {
 
 	fmt.Println("🚀 BFF server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
+}
+
+// Helper function to convert string to int for cookie MaxAge
+func maxAgeToInt(maxAge string) int {
+	if val, err := strconv.Atoi(maxAge); err == nil {
+		return val
+	}
+	return 0
 }`, corsConfig)
 	case "echo":
 		mainGoContent = fmt.Sprintf(`package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/RichGod93/bffgen/internal/auth"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -465,7 +661,52 @@ func main() {
 		}
 	})
 	
-	// JWT Authentication middleware
+	// Initialize secure auth
+	secureAuth, err := auth.NewSecureAuth()
+	if err != nil {
+		log.Fatalf("Failed to initialize secure auth: %%v", err)
+	}
+	
+	// CSRF Protection middleware
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Skip CSRF for GET, HEAD, OPTIONS
+			if c.Request().Method == "GET" || c.Request().Method == "HEAD" || c.Request().Method == "OPTIONS" {
+				return next(c)
+			}
+			
+			// Skip CSRF for public endpoints
+			if c.Request().URL.Path == "/health" || c.Request().URL.Path == "/api/auth/login" || c.Request().URL.Path == "/api/auth/register" {
+				return next(c)
+			}
+			
+			// Validate CSRF token
+			csrfToken := c.Request().Header.Get("X-CSRF-Token")
+			if csrfToken == "" {
+				return c.String(http.StatusForbidden, "CSRF token required")
+			}
+			
+			// Get session ID from encrypted token
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				return c.String(http.StatusUnauthorized, "Missing authorization header")
+			}
+			
+			encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+			if err != nil {
+				return c.String(http.StatusUnauthorized, "Invalid token")
+			}
+			
+			if !auth.ValidateCSRFToken(csrfToken, claims.SessionID) {
+				return c.String(http.StatusForbidden, "Invalid CSRF token")
+			}
+			
+			return next(c)
+		}
+	})
+	
+	// Secure JWT Authentication middleware
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth for health check and public endpoints
@@ -473,41 +714,31 @@ func main() {
 				return next(c)
 			}
 			
-			// Extract JWT token from Authorization header
+			// Extract encrypted JWT token from Authorization header
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				return c.String(http.StatusUnauthorized, "Missing or invalid authorization header")
 			}
 			
-			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			if tokenString == "" {
+			encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+			if encryptedToken == "" {
 				return c.String(http.StatusUnauthorized, "Empty token")
 			}
 			
-			// TODO: Replace with your JWT secret key
-			jwtSecret := os.Getenv("JWT_SECRET")
-			if jwtSecret == "" {
-				jwtSecret = "your-secret-key-change-in-production"
-			}
-			
-			// Parse and validate JWT token
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
-				}
-				return []byte(jwtSecret), nil
-			})
-			
-			if err != nil || !token.Valid {
+			// Validate encrypted token
+			claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+			if err != nil {
 				return c.String(http.StatusUnauthorized, "Invalid token")
 			}
 			
-			// Extract claims and add to request context
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				// Add user info to request context for downstream handlers
-				c.Set("user_id", claims["user_id"])
-				c.Set("user_email", claims["email"])
-			}
+			// Add user info to request context for downstream handlers
+			c.Set("user_id", claims.UserID)
+			c.Set("user_email", claims.Email)
+			c.Set("session_id", claims.SessionID)
+			
+			// Add CSRF token to response headers
+			csrfToken := auth.GenerateCSRFToken(claims.SessionID)
+			c.Response().Header().Set("X-CSRF-Token", csrfToken)
 			
 			return next(c)
 		}
@@ -516,6 +747,134 @@ func main() {
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
 		return c.String(http.StatusOK, "BFF server is running!")
+	})
+	
+	// Auth endpoints with secure cookies
+	e.POST("/api/auth/login", func(c echo.Context) error {
+		// Parse login request
+		var loginReq struct {
+			Email    string ` + "json:\"email\"" + `
+			Password string ` + "json:\"password\"" + `
+		}
+		
+		if err := c.Bind(&loginReq); err != nil {
+			return c.String(http.StatusBadRequest, "Invalid request")
+		}
+		
+		// TODO: Validate credentials against your auth service
+		if loginReq.Email == "" || loginReq.Password == "" {
+			return c.String(http.StatusBadRequest, "Email and password required")
+		}
+		
+		// Create encrypted token
+		accessToken, refreshToken, err := secureAuth.CreateEncryptedToken(loginReq.Email, loginReq.Email)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to create token")
+		}
+		
+		// Set secure cookies
+		c.SetCookie(&http.Cookie{
+			Name:     "access_token",
+			Value:    accessToken,
+			Path:     "/",
+			MaxAge:   900, // 15 minutes
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		c.SetCookie(&http.Cookie{
+			Name:     "refresh_token",
+			Value:    refreshToken,
+			Path:     "/",
+			MaxAge:   86400, // 24 hours
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		// Return tokens in response
+		response := map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"token_type":    "Bearer",
+			"expires_in":    "900",
+		}
+		
+		return c.JSON(http.StatusOK, response)
+	})
+	
+	e.POST("/api/auth/refresh", func(c echo.Context) error {
+		// Get refresh token from cookie or body
+		var refreshToken string
+		
+		if cookie, err := c.Cookie("refresh_token"); err == nil {
+			refreshToken = cookie.Value
+		} else {
+			var refreshReq struct {
+				RefreshToken string ` + "json:\"refresh_token\"" + `
+			}
+			if err := c.Bind(&refreshReq); err != nil {
+				return c.String(http.StatusBadRequest, "Invalid request")
+			}
+			refreshToken = refreshReq.RefreshToken
+		}
+		
+		// Refresh access token
+		newAccessToken, err := secureAuth.RefreshToken(refreshToken)
+		if err != nil {
+			return c.String(http.StatusUnauthorized, "Invalid refresh token")
+		}
+		
+		// Set new access token cookie
+		c.SetCookie(&http.Cookie{
+			Name:     "access_token",
+			Value:    newAccessToken,
+			Path:     "/",
+			MaxAge:   900,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		response := map[string]string{
+			"access_token": newAccessToken,
+			"token_type":   "Bearer",
+			"expires_in":   "900",
+		}
+		
+		return c.JSON(http.StatusOK, response)
+	})
+	
+	e.POST("/api/auth/logout", func(c echo.Context) error {
+		// Get session ID from context
+		sessionID := c.Get("session_id")
+		if sessionID != nil {
+			secureAuth.RevokeSession(sessionID.(string))
+		}
+		
+		// Clear cookies
+		c.SetCookie(&http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		c.SetCookie(&http.Cookie{
+			Name:     "refresh_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		
+		return c.String(http.StatusOK, "Logged out successfully")
 	})
 
 	// TODO: Add your aggregated routes here
@@ -529,13 +888,14 @@ func main() {
 		mainGoContent = fmt.Sprintf(`package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/RichGod93/bffgen/internal/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
@@ -637,48 +997,81 @@ func main() {
 		return c.Next()
 	})
 	
-	// JWT Authentication middleware
+	// Initialize secure auth
+	secureAuth, err := auth.NewSecureAuth()
+	if err != nil {
+		log.Fatalf("Failed to initialize secure auth: %%v", err)
+	}
+	
+	// CSRF Protection middleware
+	app.Use(func(c *fiber.Ctx) error {
+		// Skip CSRF for GET, HEAD, OPTIONS
+		if c.Method() == "GET" || c.Method() == "HEAD" || c.Method() == "OPTIONS" {
+			return c.Next()
+		}
+		
+		// Skip CSRF for public endpoints
+		if c.Path() == "/health" || c.Path() == "/api/auth/login" || c.Path() == "/api/auth/register" {
+			return c.Next()
+		}
+		
+		// Validate CSRF token
+		csrfToken := c.Get("X-CSRF-Token")
+		if csrfToken == "" {
+			return c.Status(403).SendString("CSRF token required")
+		}
+		
+		// Get session ID from encrypted token
+		authHeader := c.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			return c.Status(401).SendString("Missing authorization header")
+		}
+		
+		encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+		if err != nil {
+			return c.Status(401).SendString("Invalid token")
+		}
+		
+		if !auth.ValidateCSRFToken(csrfToken, claims.SessionID) {
+			return c.Status(403).SendString("Invalid CSRF token")
+		}
+		
+		return c.Next()
+	})
+	
+	// Secure JWT Authentication middleware
 	app.Use(func(c *fiber.Ctx) error {
 		// Skip auth for health check and public endpoints
 		if c.Path() == "/health" || c.Path() == "/api/auth/login" || c.Path() == "/api/auth/register" {
 			return c.Next()
 		}
 		
-		// Extract JWT token from Authorization header
+		// Extract encrypted JWT token from Authorization header
 		authHeader := c.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			return c.Status(401).SendString("Missing or invalid authorization header")
 		}
 		
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == "" {
+		encryptedToken := strings.TrimPrefix(authHeader, "Bearer ")
+		if encryptedToken == "" {
 			return c.Status(401).SendString("Empty token")
 		}
 		
-		// TODO: Replace with your JWT secret key
-		jwtSecret := os.Getenv("JWT_SECRET")
-		if jwtSecret == "" {
-			jwtSecret = "your-secret-key-change-in-production"
-		}
-		
-		// Parse and validate JWT token
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %%v", token.Header["alg"])
-			}
-			return []byte(jwtSecret), nil
-		})
-		
-		if err != nil || !token.Valid {
+		// Validate encrypted token
+		claims, err := secureAuth.ValidateEncryptedToken(encryptedToken)
+		if err != nil {
 			return c.Status(401).SendString("Invalid token")
 		}
 		
-		// Extract claims and add to request context
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			// Add user info to request context for downstream handlers
-			c.Locals("user_id", claims["user_id"])
-			c.Locals("user_email", claims["email"])
-		}
+		// Add user info to request context for downstream handlers
+		c.Locals("user_id", claims.UserID)
+		c.Locals("user_email", claims.Email)
+		c.Locals("session_id", claims.SessionID)
+		
+		// Add CSRF token to response headers
+		csrfToken := auth.GenerateCSRFToken(claims.SessionID)
+		c.Set("X-CSRF-Token", csrfToken)
 		
 		return c.Next()
 	})
@@ -686,6 +1079,134 @@ func main() {
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.SendString("BFF server is running!")
+	})
+	
+	// Auth endpoints with secure cookies
+	app.Post("/api/auth/login", func(c *fiber.Ctx) error {
+		// Parse login request
+		var loginReq struct {
+			Email    string ` + "json:\"email\"" + `
+			Password string ` + "json:\"password\"" + `
+		}
+		
+		if err := c.BodyParser(&loginReq); err != nil {
+			return c.Status(400).SendString("Invalid request")
+		}
+		
+		// TODO: Validate credentials against your auth service
+		if loginReq.Email == "" || loginReq.Password == "" {
+			return c.Status(400).SendString("Email and password required")
+		}
+		
+		// Create encrypted token
+		accessToken, refreshToken, err := secureAuth.CreateEncryptedToken(loginReq.Email, loginReq.Email)
+		if err != nil {
+			return c.Status(500).SendString("Failed to create token")
+		}
+		
+		// Set secure cookies
+		c.Cookie(&fiber.Cookie{
+			Name:     "access_token",
+			Value:    accessToken,
+			Path:     "/",
+			MaxAge:   900, // 15 minutes
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: "Strict",
+		})
+		
+		c.Cookie(&fiber.Cookie{
+			Name:     "refresh_token",
+			Value:    refreshToken,
+			Path:     "/",
+			MaxAge:   86400, // 24 hours
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: "Strict",
+		})
+		
+		// Return tokens in response
+		response := map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"token_type":    "Bearer",
+			"expires_in":    "900",
+		}
+		
+		return c.JSON(response)
+	})
+	
+	app.Post("/api/auth/refresh", func(c *fiber.Ctx) error {
+		// Get refresh token from cookie or body
+		var refreshToken string
+		
+		if cookie := c.Cookies("refresh_token"); cookie != "" {
+			refreshToken = cookie
+		} else {
+			var refreshReq struct {
+				RefreshToken string ` + "json:\"refresh_token\"" + `
+			}
+			if err := c.BodyParser(&refreshReq); err != nil {
+				return c.Status(400).SendString("Invalid request")
+			}
+			refreshToken = refreshReq.RefreshToken
+		}
+		
+		// Refresh access token
+		newAccessToken, err := secureAuth.RefreshToken(refreshToken)
+		if err != nil {
+			return c.Status(401).SendString("Invalid refresh token")
+		}
+		
+		// Set new access token cookie
+		c.Cookie(&fiber.Cookie{
+			Name:     "access_token",
+			Value:    newAccessToken,
+			Path:     "/",
+			MaxAge:   900,
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: "Strict",
+		})
+		
+		response := map[string]string{
+			"access_token": newAccessToken,
+			"token_type":   "Bearer",
+			"expires_in":   "900",
+		}
+		
+		return c.JSON(response)
+	})
+	
+	app.Post("/api/auth/logout", func(c *fiber.Ctx) error {
+		// Get session ID from context
+		sessionID := c.Locals("session_id")
+		if sessionID != nil {
+			secureAuth.RevokeSession(sessionID.(string))
+		}
+		
+		// Clear cookies
+		c.Cookie(&fiber.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: "Strict",
+		})
+		
+		c.Cookie(&fiber.Cookie{
+			Name:     "refresh_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HTTPOnly: true,
+			Secure:   true,
+			SameSite: "Strict",
+		})
+		
+		return c.SendString("Logged out successfully")
 	})
 
 	// TODO: Add your aggregated routes here
@@ -855,9 +1376,9 @@ require (
 go 1.21
 
 require (
+	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
-	github.com/golang-jwt/jwt/v5 v5.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "echo":
@@ -866,7 +1387,7 @@ require (
 go 1.21
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/labstack/echo/v4 v4.11.4
 	gopkg.in/yaml.v3 v3.0.1
 )`
@@ -876,8 +1397,8 @@ require (
 go 1.21
 
 require (
+	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/gofiber/fiber/v2 v2.52.9
-	github.com/golang-jwt/jwt/v5 v5.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	default:
