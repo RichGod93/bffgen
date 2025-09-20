@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,6 +19,7 @@ type SecureAuth struct {
 	encryptionKey []byte
 	signingKey    []byte
 	sessionStore  map[string]*Session
+	mutex         sync.RWMutex
 }
 
 // Session represents a secure user session
@@ -153,7 +155,9 @@ func (sa *SecureAuth) CreateEncryptedToken(userID, email string) (string, string
 	}
 
 	// Store session
+	sa.mutex.Lock()
 	sa.sessionStore[sessionID] = session
+	sa.mutex.Unlock()
 
 	// Create JWT claims
 	claims := TokenClaims{
@@ -223,18 +227,25 @@ func (sa *SecureAuth) ValidateEncryptedToken(encryptedToken string) (*TokenClaim
 	}
 
 	// Validate session
+	sa.mutex.RLock()
 	session, exists := sa.sessionStore[claims.SessionID]
+	sa.mutex.RUnlock()
+	
 	if !exists {
 		return nil, fmt.Errorf("session not found")
 	}
 
 	if time.Now().After(session.ExpiresAt) {
+		sa.mutex.Lock()
 		delete(sa.sessionStore, claims.SessionID)
+		sa.mutex.Unlock()
 		return nil, fmt.Errorf("session expired")
 	}
 
 	// Update last used
+	sa.mutex.Lock()
 	session.LastUsed = time.Now()
+	sa.mutex.Unlock()
 
 	return claims, nil
 }
@@ -244,6 +255,8 @@ func (sa *SecureAuth) RefreshToken(refreshToken string) (string, error) {
 	// Find session by refresh token
 	var session *Session
 	var sessionID string
+	
+	sa.mutex.RLock()
 	for id, s := range sa.sessionStore {
 		if s.RefreshToken == refreshToken {
 			session = s
@@ -251,13 +264,16 @@ func (sa *SecureAuth) RefreshToken(refreshToken string) (string, error) {
 			break
 		}
 	}
+	sa.mutex.RUnlock()
 
 	if session == nil {
 		return "", fmt.Errorf("invalid refresh token")
 	}
 
 	if time.Now().After(session.ExpiresAt) {
+		sa.mutex.Lock()
 		delete(sa.sessionStore, sessionID)
+		sa.mutex.Unlock()
 		return "", fmt.Errorf("refresh token expired")
 	}
 
@@ -272,11 +288,16 @@ func (sa *SecureAuth) RefreshToken(refreshToken string) (string, error) {
 
 // RevokeSession revokes a user session
 func (sa *SecureAuth) RevokeSession(sessionID string) {
+	sa.mutex.Lock()
 	delete(sa.sessionStore, sessionID)
+	sa.mutex.Unlock()
 }
 
 // RevokeAllUserSessions revokes all sessions for a user
 func (sa *SecureAuth) RevokeAllUserSessions(userID string) {
+	sa.mutex.Lock()
+	defer sa.mutex.Unlock()
+	
 	for sessionID, session := range sa.sessionStore {
 		if session.UserID == userID {
 			delete(sa.sessionStore, sessionID)
