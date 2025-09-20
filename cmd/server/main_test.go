@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -201,6 +203,139 @@ func TestTimeoutMiddleware(t *testing.T) {
 	}
 }
 
+func TestTRACEMethodDisabled(t *testing.T) {
+	r := createTestRouter()
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("TRACE", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status %d for TRACE method, got: %d", http.StatusMethodNotAllowed, w.Code)
+	}
+
+	body := strings.TrimSpace(w.Body.String())
+	if body != "Method Not Allowed" {
+		t.Errorf("Expected 'Method Not Allowed' response, got: %s", body)
+	}
+}
+
+func TestRequestSizeLimit(t *testing.T) {
+	r := chi.NewRouter()
+	
+	// Add request validation middleware with size limit
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	r.Post("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Try to read the body to trigger size limit
+		body := make([]byte, 6<<20) // Try to read 6MB
+		_, err := r.Body.Read(body)
+		if err != nil {
+			http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Create a request larger than 5MB
+	largeBody := make([]byte, 6<<20) // 6MB
+	req := httptest.NewRequest("POST", "/test", bytes.NewReader(largeBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Should be rejected due to size limit
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("Expected status %d for large request, got: %d", http.StatusRequestEntityTooLarge, w.Code)
+	}
+}
+
+func TestMethodValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		expected int
+	}{
+		{"Valid GET", "GET", http.StatusOK},
+		{"Valid POST", "POST", http.StatusOK},
+		{"Valid PUT", "PUT", http.StatusOK},
+		{"Valid DELETE", "DELETE", http.StatusOK},
+		{"Valid OPTIONS", "OPTIONS", http.StatusOK},
+		{"Valid HEAD", "HEAD", http.StatusOK},
+		{"Invalid TRACE", "TRACE", http.StatusMethodNotAllowed},
+		{"Invalid CONNECT", "CONNECT", http.StatusMethodNotAllowed},
+		{"Invalid PATCH", "PATCH", http.StatusMethodNotAllowed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := createTestRouter()
+			r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Post("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Put("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Delete("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Options("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			r.Head("/test", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest(tt.method, "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.expected {
+				t.Errorf("Expected status %d, got: %d", tt.expected, w.Code)
+			}
+		})
+	}
+}
+
+func TestEnhancedSecurityHeaders(t *testing.T) {
+	r := createTestRouter()
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Check enhanced security headers
+	expectedHeaders := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":         "DENY",
+		"X-XSS-Protection":        "1; mode=block",
+		"Referrer-Policy":         "strict-origin-when-cross-origin",
+		"Permissions-Policy":       "geolocation=(), microphone=(), camera=()",
+	}
+
+	for header, expectedValue := range expectedHeaders {
+		actualValue := w.Header().Get(header)
+		if actualValue != expectedValue {
+			t.Errorf("Expected header %s: %s, got: %s", header, expectedValue, actualValue)
+		}
+	}
+}
+
 // createTestRouter creates a router with the same middleware setup as main()
 // but without starting the server
 func createTestRouter() *chi.Mux {
@@ -243,16 +378,36 @@ func createTestRouter() *chi.Mux {
 	// Add request validation middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+			r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
 
 			if r.Method == "POST" || r.Method == "PUT" {
 				contentType := r.Header.Get("Content-Type")
-				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" && contentType != "multipart/form-data" {
 					http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
 					return
 				}
 			}
 
+			// Validate request method
+			allowedMethods := map[string]bool{
+				"GET": true, "POST": true, "PUT": true, "DELETE": true, "OPTIONS": true, "HEAD": true,
+			}
+			if !allowedMethods[r.Method] {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	// Disable TRACE method for security
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "TRACE" {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	})

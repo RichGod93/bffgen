@@ -188,16 +188,56 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(30 * time.Second))
+	
+	// Production-safe error recovery middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Printf("Panic recovered: %%v", err)
+					
+					// In production, don't expose stack traces
+					if os.Getenv("ENV") == "production" {
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					} else {
+						http.Error(w, fmt.Sprintf("Internal Server Error: %%v", err), http.StatusInternalServerError)
+					}
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	})
+	
+	// Disable TRACE method for security
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "TRACE" {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	
 	// Security headers middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Essential security headers
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("X-Frame-Options", "DENY")
 			w.Header().Set("X-XSS-Protection", "1; mode=block")
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=()")
+			
+			// HSTS for HTTPS (only in production)
+			if os.Getenv("ENV") == "production" {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+			}
+			
+			// Content Security Policy
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';")
+			
 			next.ServeHTTP(w, r)
 		})
 	})
@@ -208,16 +248,25 @@ func main() {
 	// Request validation middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Basic request size limit (10MB)
-			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+			// Request size limit (5MB for security)
+			r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
 			
 			// Content-Type validation for POST/PUT requests
 			if r.Method == "POST" || r.Method == "PUT" {
 				contentType := r.Header.Get("Content-Type")
-				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" && contentType != "multipart/form-data" {
 					http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
 					return
 				}
+			}
+			
+			// Validate request method
+			allowedMethods := map[string]bool{
+				"GET": true, "POST": true, "PUT": true, "DELETE": true, "OPTIONS": true, "HEAD": true,
+			}
+			if !allowedMethods[r.Method] {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
 			}
 			
 			next.ServeHTTP(w, r)
@@ -333,8 +382,37 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
-		Timeout: 60 * time.Second,
+		Timeout: 30 * time.Second,
 	}))
+	
+	// Disable TRACE method for security
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if c.Request().Method == "TRACE" {
+				return c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
+			}
+			return next(c)
+		}
+	})
+	
+	// Production-safe error recovery
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Printf("Panic recovered: %%v", err)
+					
+					// In production, don't expose stack traces
+					if os.Getenv("ENV") == "production" {
+						c.String(http.StatusInternalServerError, "Internal Server Error")
+					} else {
+						c.String(http.StatusInternalServerError, fmt.Sprintf("Internal Server Error: %%v", err))
+					}
+				}
+			}()
+			return next(c)
+		}
+	})
 	
 	// Security headers middleware
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
@@ -342,23 +420,47 @@ func main() {
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
 		HSTSMaxAge:            31536000,
-		ContentSecurityPolicy: "default-src 'self'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';",
 	}))
+	
+	// Additional security headers
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			c.Response().Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=()")
+			
+			// HSTS only in production
+			if os.Getenv("ENV") == "production" {
+				c.Response().Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+			}
+			
+			return next(c)
+		}
+	})
 	
 	// CORS configuration
 	%s
 	
 	// Request validation middleware
-	e.Use(middleware.BodyLimit("10M"))
+	e.Use(middleware.BodyLimit("5M"))
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Content-Type validation for POST/PUT requests
 			if c.Request().Method == "POST" || c.Request().Method == "PUT" {
 				contentType := c.Request().Header.Get("Content-Type")
-				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+				if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" && contentType != "multipart/form-data" {
 					return c.String(http.StatusUnsupportedMediaType, "Unsupported Content-Type")
 				}
 			}
+			
+			// Validate request method
+			allowedMethods := map[string]bool{
+				"GET": true, "POST": true, "PUT": true, "DELETE": true, "OPTIONS": true, "HEAD": true,
+			}
+			if !allowedMethods[c.Request().Method] {
+				return c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
+			}
+			
 			return next(c)
 		}
 	})
@@ -452,11 +554,53 @@ func main() {
 	app.Use(recover.New())
 	app.Use(requestid.New())
 	app.Use(timeout.New(timeout.Config{
-		Timeout: 60 * time.Second,
+		Timeout: 30 * time.Second,
 	}))
 	
+	// Disable TRACE method for security
+	app.Use(func(c *fiber.Ctx) error {
+		if c.Method() == "TRACE" {
+			return c.Status(fiber.StatusMethodNotAllowed).SendString("Method Not Allowed")
+		}
+		return c.Next()
+	})
+	
+	// Production-safe error recovery
+	app.Use(func(c *fiber.Ctx) error {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("Panic recovered: %%v", err)
+				
+				// In production, don't expose stack traces
+				if os.Getenv("ENV") == "production" {
+					c.Status(fiber.StatusInternalServerError).SendString("Internal Server Error")
+				} else {
+					c.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("Internal Server Error: %%v", err))
+				}
+			}
+		}()
+		return c.Next()
+	})
+	
 	// Security headers middleware
-	app.Use(helmet.New())
+	app.Use(helmet.New(helmet.Config{
+		XSSProtection:             "1; mode=block",
+		ContentTypeNosniff:        "nosniff",
+		XFrameOptions:             "DENY",
+		HSTSMaxAge:                31536000,
+		ContentSecurityPolicy:     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';",
+		ReferrerPolicy:            "strict-origin-when-cross-origin",
+		PermissionsPolicy:         "geolocation=(), microphone=(), camera=(), payment=(), usb=()",
+	}))
+	
+	// Additional security headers for production
+	app.Use(func(c *fiber.Ctx) error {
+		// HSTS only in production
+		if os.Getenv("ENV") == "production" {
+			c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		}
+		return c.Next()
+	})
 	
 	// Rate limiting
 	app.Use(limiter.New(limiter.Config{
@@ -469,13 +613,27 @@ func main() {
 	
 	// Request validation middleware
 	app.Use(func(c *fiber.Ctx) error {
+		// Request size limit (5MB for security)
+		if len(c.Body()) > 5<<20 {
+			return c.Status(fiber.StatusRequestEntityTooLarge).SendString("Request too large")
+		}
+		
 		// Content-Type validation for POST/PUT requests
 		if c.Method() == "POST" || c.Method() == "PUT" {
 			contentType := c.Get("Content-Type")
-			if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" {
+			if contentType != "" && contentType != "application/json" && contentType != "application/x-www-form-urlencoded" && contentType != "multipart/form-data" {
 				return c.Status(415).SendString("Unsupported Content-Type")
 			}
 		}
+		
+		// Validate request method
+		allowedMethods := map[string]bool{
+			"GET": true, "POST": true, "PUT": true, "DELETE": true, "OPTIONS": true, "HEAD": true,
+		}
+		if !allowedMethods[c.Method()] {
+			return c.Status(fiber.StatusMethodNotAllowed).SendString("Method Not Allowed")
+		}
+		
 		return c.Next()
 	})
 	
@@ -580,6 +738,9 @@ settings:
   port: 8080
   timeout: 30s
   retries: 3
+  max_request_size: 5MB
+  enable_hsts: true
+  disable_trace: true
 `
 
 	if err := os.WriteFile(filepath.Join(projectName, "bff.config.yaml"), []byte(configContent), 0644); err != nil {
