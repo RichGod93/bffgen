@@ -78,9 +78,9 @@ func TestGenerateGoMod(t *testing.T) {
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},
@@ -93,8 +93,8 @@ require (
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/labstack/echo/v4 v4.11.4
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},
@@ -107,8 +107,8 @@ require (
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},
