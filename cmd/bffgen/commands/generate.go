@@ -24,6 +24,7 @@ var generateCmd = &cobra.Command{
 }
 
 func generate() error {
+	LogVerbose("Starting code generation from bff.config.yaml")
 	fmt.Println("🔧 Generating Go code from bff.config.yaml")
 	fmt.Println()
 
@@ -46,6 +47,8 @@ func generate() error {
 		return nil
 	}
 
+	LogVerbose("Found %d services to generate", len(config.Services))
+
 	// Generate main.go with routes
 	if err := generateMainGo(config); err != nil {
 		return fmt.Errorf("failed to generate main.go: %w", err)
@@ -66,10 +69,95 @@ func generate() error {
 	fmt.Println("📮 Generate Postman collection: bffgen postman")
 	fmt.Println("   This creates a ready-to-import collection for testing your BFF endpoints")
 
+	LogVerbose("Code generation completed successfully")
+
 	return nil
 }
 
 func generateMainGo(config *types.BFFConfig) error {
+	// Check if main.go already exists (created by init)
+	if _, err := os.Stat("main.go"); err == nil {
+		// main.go exists, just add proxy routes to it
+		return addProxyRoutesToMainGo(config)
+	}
+
+	// main.go doesn't exist, create a basic one
+	return createBasicMainGo(config)
+}
+
+func addProxyRoutesToMainGo(config *types.BFFConfig) error {
+	// Read existing main.go
+	content, err := os.ReadFile("main.go")
+	if err != nil {
+		return fmt.Errorf("failed to read main.go: %w", err)
+	}
+
+	contentStr := string(content)
+
+	// Check if proxy routes already exist
+	if strings.Contains(contentStr, "// Generated proxy routes") {
+		LogVerbose("Proxy routes already exist in main.go, skipping")
+		return nil
+	}
+
+	// Find the TODO comment and replace it with actual proxy routes
+	todoComment := "// TODO: Add your aggregated routes here\n\t// Run 'bffgen add-route' or 'bffgen add-template' to add routes\n\t// Then run 'bffgen generate' to generate the code"
+
+	// Generate proxy routes
+	proxyRoutes := generateProxyRoutesCode(config)
+
+	// Replace TODO comment with actual routes
+	newContent := strings.Replace(contentStr, todoComment, proxyRoutes, 1)
+
+	// Add createProxyHandler function if it doesn't exist
+	if !strings.Contains(newContent, "func createProxyHandler") {
+		// Find the end of main() function and insert createProxyHandler after it
+		mainEndPattern := "\n\tfmt.Println(\"🚀 BFF server starting on :8080\")\n\tlog.Fatal(http.ListenAndServe(\":8080\", r))\n}\n"
+		proxyHandlerFunc := generateProxyHandlerFunction()
+
+		// Insert createProxyHandler after the main function ends
+		newContent = strings.Replace(newContent, mainEndPattern, mainEndPattern+"\n"+proxyHandlerFunc+"\n", 1)
+	}
+
+	// Write updated main.go
+	if err := os.WriteFile("main.go", []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write main.go: %w", err)
+	}
+
+	LogVerbose("Added proxy routes to existing main.go")
+	return nil
+}
+
+func generateProxyRoutesCode(config *types.BFFConfig) string {
+	var routes strings.Builder
+	routes.WriteString("\t// Generated proxy routes\n")
+
+	for serviceName, service := range config.Services {
+		routes.WriteString(fmt.Sprintf("\t// %s service routes\n", serviceName))
+		for _, endpoint := range service.Endpoints {
+			method := chiMethod(endpoint.Method)
+			routes.WriteString(fmt.Sprintf("\tr.%s(\"%s\", createProxyHandler(\"%s\", \"%s\"))\n",
+				method, endpoint.ExposeAs, service.BaseURL, endpoint.Path))
+		}
+		routes.WriteString("\n")
+	}
+
+	return routes.String()
+}
+
+func generateProxyHandlerFunction() string {
+	return `// createProxyHandler creates a reverse proxy handler for the given backend URL and path
+func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Simple proxy implementation - in production, use httputil.ReverseProxy
+		// This is a placeholder for the actual proxy logic
+		w.WriteHeader(http.StatusNotImplemented)
+		fmt.Fprintf(w, "Proxy to %s%s not implemented yet", backendURL, backendPath)
+	}
+}`
+}
+
+func createBasicMainGo(config *types.BFFConfig) error {
 	mainTemplate := `package main
 
 import (

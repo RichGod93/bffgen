@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/RichGod93/bffgen/internal/types"
@@ -23,11 +24,16 @@ func LoadConfig(configPath string) (*types.BFFConfig, error) {
 }
 
 // SaveConfig saves BFF configuration to a YAML file
-func SaveConfig(configPath string, config *types.BFFConfig) error {
+func SaveConfig(config *types.BFFConfig, configPath string) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return err
 	}
 
 	return os.WriteFile(configPath, data, 0644)
+}
+
+// ConfigToJSON converts BFF configuration to JSON format
+func ConfigToJSON(config *types.BFFConfig) ([]byte, error) {
+	return json.MarshalIndent(config, "", "  ")
 }

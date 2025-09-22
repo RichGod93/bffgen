@@ -9,19 +9,14 @@ import (
 
 // Version information - set during build
 var (
-	version  = "dev"
+	version   = "dev"
 	buildTime = "unknown"
 	commit    = "unknown"
 )
 
 func main() {
-	// Add version command if --version flag is passed
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Printf("bffgen version %s\n", version)
-		fmt.Printf("Build time: %s\n", buildTime)
-		fmt.Printf("Commit: %s\n", commit)
-		os.Exit(0)
+	if err := commands.Execute(version, buildTime, commit); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	
-	commands.Execute()
 }

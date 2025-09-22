@@ -127,7 +127,7 @@ func addTemplate(templateName string) error {
 	}
 
 	// Save updated config
-	if err := utils.SaveConfig("bff.config.yaml", config); err != nil {
+	if err := utils.SaveConfig(config, "bff.config.yaml"); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 

@@ -55,6 +55,10 @@ var initCmd = &cobra.Command{
 		fmt.Println("   macOS/Linux: sudo cp ../bffgen /usr/local/bin/")
 		fmt.Println("   Windows: Add the bffgen directory to your PATH")
 		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen")
+
+		// Add doctor command suggestion
+		fmt.Println()
+		fmt.Println("🔍 Run 'bffgen doctor' to check your project health")
 	},
 }
 
@@ -161,7 +165,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/auth"
+	"`+projectName+`/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -399,8 +403,8 @@ func main() {
 	r.Post("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		// Parse login request
 		var loginReq struct {
-			Email    string ` + "json:\"email\"" + `
-			Password string ` + "json:\"password\"" + `
+			Email    string `+"`json:\"email\"`"+`
+			Password string `+"`json:\"password\"`"+`
 		}
 		
 		if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
@@ -466,7 +470,7 @@ func main() {
 			refreshToken = cookie.Value
 		} else {
 			var refreshReq struct {
-				RefreshToken string ` + "json:\"refresh_token\"" + `
+				RefreshToken string `+"`json:\"refresh_token\"`"+`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&refreshReq); err != nil {
 				http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -565,7 +569,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/auth"
+	"`+projectName+`/internal/auth"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -753,8 +757,8 @@ func main() {
 	e.POST("/api/auth/login", func(c echo.Context) error {
 		// Parse login request
 		var loginReq struct {
-			Email    string ` + "json:\"email\"" + `
-			Password string ` + "json:\"password\"" + `
+			Email    string `+"`json:\"email\"`"+`
+			Password string `+"`json:\"password\"`"+`
 		}
 		
 		if err := c.Bind(&loginReq); err != nil {
@@ -812,7 +816,7 @@ func main() {
 			refreshToken = cookie.Value
 		} else {
 			var refreshReq struct {
-				RefreshToken string ` + "json:\"refresh_token\"" + `
+				RefreshToken string `+"`json:\"refresh_token\"`"+`
 			}
 			if err := c.Bind(&refreshReq); err != nil {
 				return c.String(http.StatusBadRequest, "Invalid request")
@@ -895,7 +899,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/auth"
+	"`+projectName+`/internal/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
@@ -1085,8 +1089,8 @@ func main() {
 	app.Post("/api/auth/login", func(c *fiber.Ctx) error {
 		// Parse login request
 		var loginReq struct {
-			Email    string ` + "json:\"email\"" + `
-			Password string ` + "json:\"password\"" + `
+			Email    string `+"`json:\"email\"`"+`
+			Password string `+"`json:\"password\"`"+`
 		}
 		
 		if err := c.BodyParser(&loginReq); err != nil {
@@ -1144,7 +1148,7 @@ func main() {
 			refreshToken = cookie
 		} else {
 			var refreshReq struct {
-				RefreshToken string ` + "json:\"refresh_token\"" + `
+				RefreshToken string `+"`json:\"refresh_token\"`"+`
 			}
 			if err := c.BodyParser(&refreshReq); err != nil {
 				return c.Status(400).SendString("Invalid request")
@@ -1228,6 +1232,12 @@ func main() {
 	goModContent := generateGoMod(projectName, framework)
 	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
 		return "", fmt.Errorf("failed to create go.mod: %w", err)
+	}
+
+	// Copy auth package to the project
+	if err := copyAuthPackage(projectName); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to copy auth package: %v\n", err)
+		fmt.Println("   You may need to copy the auth package manually")
 	}
 
 	// Run go mod tidy to download dependencies
@@ -1376,9 +1386,9 @@ require (
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "echo":
@@ -1387,8 +1397,8 @@ require (
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/labstack/echo/v4 v4.11.4
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "fiber":
@@ -1397,8 +1407,8 @@ require (
 go 1.21
 
 require (
-	github.com/RichGod93/bffgen/internal/auth v0.0.0
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	default:
@@ -1465,4 +1475,34 @@ func generateCORSConfig(origins []string, framework string) string {
 	default:
 		return ""
 	}
+}
+
+// copyAuthPackage copies the auth package to the generated project
+func copyAuthPackage(projectName string) error {
+	// Create internal/auth directory in the project
+	authDir := filepath.Join(projectName, "internal", "auth")
+	if err := os.MkdirAll(authDir, 0755); err != nil {
+		return fmt.Errorf("failed to create auth directory: %w", err)
+	}
+
+	// Copy auth files
+	authFiles := []string{
+		"internal/auth/secure_auth.go",
+		"internal/auth/secure_auth_test.go",
+	}
+
+	for _, srcFile := range authFiles {
+		dstFile := filepath.Join(projectName, srcFile)
+
+		// Check if source file exists
+		if _, err := os.Stat(srcFile); os.IsNotExist(err) {
+			continue // Skip if source file doesn't exist
+		}
+
+		if err := copyFile(srcFile, dstFile); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", srcFile, err)
+		}
+	}
+
+	return nil
 }
