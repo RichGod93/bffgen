@@ -24,21 +24,21 @@ func InitGlobalConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
 	}
-	
+
 	defaultConfigPath := filepath.Join(homeDir, ".bffgen", "config.yaml")
 	globalConfig.ConfigPath = defaultConfigPath
-	
+
 	// Initialize viper
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(filepath.Join(homeDir, ".bffgen"))
 	viper.AddConfigPath(".")
-	
+
 	// Set default values
 	viper.SetDefault("verbose", false)
 	viper.SetDefault("no_color", false)
 	viper.SetDefault("config_path", defaultConfigPath)
-	
+
 	// Read config file if it exists
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -46,7 +46,7 @@ func InitGlobalConfig() error {
 		}
 		// Config file not found is OK, we'll use defaults
 	}
-	
+
 	return nil
 }
 
@@ -72,7 +72,7 @@ func GetConfigPath() string {
 	if globalConfig.ConfigPath != "" {
 		return globalConfig.ConfigPath
 	}
-	
+
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".bffgen", "config.yaml")
 }
@@ -81,10 +81,10 @@ func GetConfigPath() string {
 func EnsureConfigDir() error {
 	configPath := GetConfigPath()
 	configDir := filepath.Dir(configPath)
-	
+
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	return nil
 }

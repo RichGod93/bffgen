@@ -76,14 +76,14 @@ func runDevServer() error {
 
 	fmt.Printf("🚀 BFF server starting on :%d\n", port)
 	fmt.Println("📋 Aggregated routes:")
-	
+
 	// Print configured routes
 	for _, service := range config.Services {
 		for _, endpoint := range service.Endpoints {
-			fmt.Printf("   %s  %s  → %s%s\n", 
-				endpoint.Method, 
-				endpoint.ExposeAs, 
-				service.BaseURL, 
+			fmt.Printf("   %s  %s  → %s%s\n",
+				endpoint.Method,
+				endpoint.ExposeAs,
+				service.BaseURL,
 				endpoint.Path)
 		}
 	}
@@ -106,7 +106,7 @@ func setupProxyRoutes(r *chi.Mux, config *types.BFFConfig) {
 		for _, endpoint := range service.Endpoints {
 			// Create reverse proxy
 			proxy := httputil.NewSingleHostReverseProxy(baseURL)
-			
+
 			// Modify the request
 			proxy.Director = func(req *http.Request) {
 				req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))

@@ -102,12 +102,12 @@ func generatePostmanCollection() error {
 			fmt.Println("💡 Add baseUrl to your service configuration")
 			return fmt.Errorf("service %s missing baseUrl", serviceName)
 		}
-		
+
 		if len(service.Endpoints) == 0 {
 			fmt.Printf("⚠️  Service '%s' has no endpoints\n", serviceName)
 			fmt.Println("💡 Add endpoints to your service configuration")
 		}
-		
+
 		// Validate endpoints
 		for i, endpoint := range service.Endpoints {
 			if endpoint.Name == "" {
@@ -149,7 +149,7 @@ func generatePostmanCollection() error {
 	fmt.Println("📁 Created file: bff-postman-collection.json")
 	fmt.Println()
 	fmt.Println("📋 Collection Summary:")
-	
+
 	// Count endpoints
 	totalEndpoints := 0
 	for serviceName, service := range config.Services {
@@ -157,7 +157,7 @@ func generatePostmanCollection() error {
 		totalEndpoints += endpointCount
 		fmt.Printf("   • %s service: %d endpoints\n", serviceName, endpointCount)
 	}
-	
+
 	fmt.Printf("   • Total: %d endpoints across %d services\n", totalEndpoints, len(config.Services))
 	fmt.Printf("   • BFF server port: %d\n", config.Settings.Port)
 	fmt.Println()
@@ -340,8 +340,8 @@ func parsePath(path string) []string {
 
 // Collection data structures
 type PostmanCollection struct {
-	Info     CollectionInfo      `json:"info"`
-	Item     []CollectionItem    `json:"item"`
+	Info     CollectionInfo       `json:"info"`
+	Item     []CollectionItem     `json:"item"`
 	Variable []CollectionVariable `json:"variable"`
 }
 
@@ -366,10 +366,10 @@ type RequestItem struct {
 }
 
 type Request struct {
-	Method      string  `json:"method"`
+	Method      string   `json:"method"`
 	Header      []Header `json:"header"`
-	URL         URL     `json:"url"`
-	Description string  `json:"description"`
+	URL         URL      `json:"url"`
+	Description string   `json:"description"`
 }
 
 type Header struct {

@@ -225,7 +225,7 @@ func TestTRACEMethodDisabled(t *testing.T) {
 
 func TestRequestSizeLimit(t *testing.T) {
 	r := chi.NewRouter()
-	
+
 	// Add request validation middleware with size limit
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +233,7 @@ func TestRequestSizeLimit(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	r.Post("/test", func(w http.ResponseWriter, r *http.Request) {
 		// Try to read the body to trigger size limit
 		body := make([]byte, 6<<20) // Try to read 6MB
@@ -322,10 +322,10 @@ func TestEnhancedSecurityHeaders(t *testing.T) {
 	// Check enhanced security headers
 	expectedHeaders := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":         "DENY",
-		"X-XSS-Protection":        "1; mode=block",
-		"Referrer-Policy":         "strict-origin-when-cross-origin",
-		"Permissions-Policy":       "geolocation=(), microphone=(), camera=()",
+		"X-Frame-Options":        "DENY",
+		"X-XSS-Protection":       "1; mode=block",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
+		"Permissions-Policy":     "geolocation=(), microphone=(), camera=()",
 	}
 
 	for header, expectedValue := range expectedHeaders {

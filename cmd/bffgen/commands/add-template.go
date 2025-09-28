@@ -25,7 +25,7 @@ var addTemplateCmd = &cobra.Command{
 		} else {
 			templateName = selectTemplate()
 		}
-		
+
 		if err := addTemplate(templateName); err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding template: %v\n", err)
 			os.Exit(1)
@@ -108,7 +108,7 @@ func addTemplate(templateName string) error {
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
-			
+
 			if response == "y" || response == "yes" {
 				// Merge endpoints
 				existingService.Endpoints = append(existingService.Endpoints, templateService.Endpoints...)

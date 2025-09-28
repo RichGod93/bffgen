@@ -24,15 +24,15 @@ Global Installation:
 		if err := InitGlobalConfig(); err != nil {
 			return fmt.Errorf("failed to initialize global config: %w", err)
 		}
-		
+
 		// Update global config with flag values
 		globalConfig.Verbose, _ = cmd.Flags().GetBool("verbose")
 		globalConfig.NoColor, _ = cmd.Flags().GetBool("no-color")
-		
+
 		if configPath, _ := cmd.Flags().GetString("config-path"); configPath != "" {
 			globalConfig.ConfigPath = configPath
 		}
-		
+
 		return nil
 	},
 }
@@ -41,7 +41,7 @@ Global Installation:
 func Execute(version, buildTime, commit string) error {
 	// Set version information
 	rootCmd.Version = version
-	
+
 	// Add version command
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
@@ -52,20 +52,20 @@ func Execute(version, buildTime, commit string) error {
 			fmt.Printf("Commit: %s\n", commit)
 		},
 	})
-	
+
 	// Add all subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(doctorCmd)
-	
+
 	// Legacy commands (for backward compatibility)
 	rootCmd.AddCommand(addRouteCmd)
 	rootCmd.AddCommand(addTemplateCmd)
 	rootCmd.AddCommand(addAggregatorCmd)
 	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(postmanCmd)
-	
+
 	return rootCmd.Execute()
 }
 
@@ -74,7 +74,7 @@ func init() {
 	rootCmd.PersistentFlags().String("config-path", "", "Path to configuration file (default: ~/.bffgen/config.yaml)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored output")
-	
+
 	// Bind flags to viper
 	viper.BindPFlag("config_path", rootCmd.PersistentFlags().Lookup("config-path"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))

@@ -9,12 +9,12 @@ type BFFGenConfig struct {
 
 // Defaults represents default settings for new projects
 type Defaults struct {
-	Framework     string   `yaml:"framework"`     // chi, echo, fiber
-	CORSOrigins   []string `yaml:"cors_origins"`  // Default CORS origins
-	JWTSecret     string   `yaml:"jwt_secret"`    // Default JWT secret
-	RedisURL      string   `yaml:"redis_url"`     // Default Redis URL
-	Port          int      `yaml:"port"`          // Default port
-	RouteOption   string   `yaml:"route_option"`  // 1=manual, 2=template, 3=skip
+	Framework   string   `yaml:"framework"`    // chi, echo, fiber
+	CORSOrigins []string `yaml:"cors_origins"` // Default CORS origins
+	JWTSecret   string   `yaml:"jwt_secret"`   // Default JWT secret
+	RedisURL    string   `yaml:"redis_url"`    // Default Redis URL
+	Port        int      `yaml:"port"`         // Default port
+	RouteOption string   `yaml:"route_option"` // 1=manual, 2=template, 3=skip
 }
 
 // User represents user information

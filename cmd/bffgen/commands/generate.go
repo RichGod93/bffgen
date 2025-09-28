@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
@@ -23,9 +24,34 @@ var generateCmd = &cobra.Command{
 	},
 }
 
+var (
+	checkMode bool
+	dryRun    bool
+	verbose   bool
+)
+
+func init() {
+	generateCmd.Flags().BoolVar(&checkMode, "check", false, "Check mode: show what would be changed without making changes")
+	generateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Dry run: show what would be changed without making changes")
+	generateCmd.Flags().BoolVar(&verbose, "verbose", false, "Verbose output")
+}
+
 func generate() error {
 	LogVerbose("Starting code generation from bff.config.yaml")
-	fmt.Println("🔧 Generating Go code from bff.config.yaml")
+	
+	// Create generator with regeneration-safe capabilities
+	generator := scaffolding.NewGenerator()
+	generator.SetCheckMode(checkMode)
+	generator.SetDryRun(dryRun)
+	generator.SetVerbose(verbose)
+
+	if checkMode {
+		fmt.Println("🔍 Check mode: Analyzing what would be changed")
+	} else if dryRun {
+		fmt.Println("🔍 Dry run: Showing what would be changed")
+	} else {
+		fmt.Println("🔧 Generating Go code from bff.config.yaml")
+	}
 	fmt.Println()
 
 	// Check if config file exists
@@ -49,25 +75,27 @@ func generate() error {
 
 	LogVerbose("Found %d services to generate", len(config.Services))
 
-	// Generate main.go with routes
-	if err := generateMainGo(config); err != nil {
+	// Generate main.go with routes using regeneration-safe scaffolding
+	if err := generateMainGoWithScaffolding(config, generator); err != nil {
 		return fmt.Errorf("failed to generate main.go: %w", err)
 	}
 
-	// Generate server entry point
-	if err := generateServerMain(config); err != nil {
+	// Generate server entry point using regeneration-safe scaffolding
+	if err := generateServerMainWithScaffolding(config, generator); err != nil {
 		return fmt.Errorf("failed to generate server main: %w", err)
 	}
 
-	fmt.Println("✅ Code generation completed!")
-	fmt.Println("📁 Updated files:")
-	fmt.Println("   - main.go (with proxy routes)")
-	fmt.Println("   - cmd/server/main.go (server entry point)")
-	fmt.Println()
-	fmt.Println("🚀 Run 'go run main.go' to start your BFF server")
-	fmt.Println()
-	fmt.Println("📮 Generate Postman collection: bffgen postman")
-	fmt.Println("   This creates a ready-to-import collection for testing your BFF endpoints")
+	if !checkMode && !dryRun {
+		fmt.Println("✅ Code generation completed!")
+		fmt.Println("📁 Updated files:")
+		fmt.Println("   - main.go (with proxy routes)")
+		fmt.Println("   - cmd/server/main.go (server entry point)")
+		fmt.Println()
+		fmt.Println("🚀 Run 'go run main.go' to start your BFF server")
+		fmt.Println()
+		fmt.Println("📮 Generate Postman collection: bffgen postman")
+		fmt.Println("   This creates a ready-to-import collection for testing your BFF endpoints")
+	}
 
 	LogVerbose("Code generation completed successfully")
 
@@ -314,6 +342,93 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	defer file.Close()
 
 	return tmpl.Execute(file, config)
+}
+
+// generateMainGoWithScaffolding generates main.go using regeneration-safe scaffolding
+func generateMainGoWithScaffolding(config *types.BFFConfig, generator *scaffolding.Generator) error {
+	// Generate proxy routes content
+	proxyRoutes := generateProxyRoutesCode(config)
+	
+	// Use scaffolding to generate/update the file
+	return generator.GenerateFile("main.go", proxyRoutes)
+}
+
+// generateServerMainWithScaffolding generates server main using regeneration-safe scaffolding
+func generateServerMainWithScaffolding(config *types.BFFConfig, generator *scaffolding.Generator) error {
+	// Generate server content
+	serverContent := generateServerContent(config)
+	
+	// Use scaffolding to generate/update the file
+	return generator.GenerateFile("cmd/server/main.go", serverContent)
+}
+
+// generateServerContent generates the server main content
+func generateServerContent(config *types.BFFConfig) string {
+	var content strings.Builder
+	
+	content.WriteString(`package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+)
+
+func main() {
+	r := chi.NewRouter()
+
+	// Middleware
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	// Health check endpoint
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "BFF server is running!")
+	})
+
+	// Generated proxy routes
+`)
+
+	// Add proxy routes
+	for serviceName, service := range config.Services {
+		content.WriteString(fmt.Sprintf("\t// %s service routes\n", serviceName))
+		for _, endpoint := range service.Endpoints {
+			method := chiMethod(endpoint.Method)
+			content.WriteString(fmt.Sprintf("\tr.%s(\"%s\", createProxyHandler(\"%s\", \"%s\"))\n",
+				method, endpoint.ExposeAs, service.BaseURL, endpoint.Path))
+		}
+		content.WriteString("\n")
+	}
+
+	content.WriteString(fmt.Sprintf(`
+	fmt.Println("🚀 BFF server starting on :%d")
+	log.Fatal(http.ListenAndServe(":%d", r))
+}
+
+// createProxyHandler creates a reverse proxy handler for the given backend URL and path
+func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Simple proxy implementation - in production, use httputil.ReverseProxy
+		// This is a placeholder for the actual proxy logic
+		w.WriteHeader(http.StatusNotImplemented)
+		fmt.Fprintf(w, "Proxy to %%s%%s not implemented yet", backendURL, backendPath)
+	}
+}`, config.Settings.Port, config.Settings.Port))
+
+	return content.String()
 }
 
 // chiMethod converts HTTP method to Chi router method name

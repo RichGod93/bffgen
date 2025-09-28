@@ -1,0 +1,307 @@
+version: "1.0"
+
+project:
+  name: "my-bff"
+  description: "A sample BFF service for demonstration"
+  version: "1.0.0"
+  language: "go"
+  framework: "chi"
+  output:
+    directory: "."
+    package: "mybff"
+    module: "github.com/example/my-bff"
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+  timeout:
+    read: "30s"
+    write: "30s"
+    idle: "120s"
+  graceful_shutdown:
+    enabled: true
+    timeout: "30s"
+
+auth:
+  mode: "jwt"
+  jwt:
+    secret: "your-super-secure-secret-key-change-in-production"
+    expiration: "15m"
+    refresh_expiration: "24h"
+    encryption:
+      enabled: true
+      algorithm: "AES-GCM"
+  csrf:
+    enabled: true
+    header: "X-CSRF-Token"
+
+cors:
+  enabled: true
+  origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    - "https://myapp.com"
+  methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  headers:
+    - "Accept"
+    - "Authorization"
+    - "Content-Type"
+    - "X-CSRF-Token"
+  credentials: true
+  max_age: 86400
+
+security:
+  headers:
+    enabled: true
+    content_type_options: "nosniff"
+    frame_options: "DENY"
+    xss_protection: "1; mode=block"
+    referrer_policy: "strict-origin-when-cross-origin"
+    permissions_policy: "geolocation=(), microphone=(), camera=()"
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    burst: 10
+    store: "memory"
+  request_validation:
+    max_body_size: "10mb"
+    allowed_content_types:
+      - "application/json"
+      - "application/x-www-form-urlencoded"
+      - "multipart/form-data"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  request_logging:
+    enabled: true
+    log_body: false
+    log_headers: true
+
+monitoring:
+  health_check:
+    enabled: true
+    path: "/health"
+    checks: []
+  metrics:
+    enabled: true
+    path: "/metrics"
+    prometheus: true
+  tracing:
+    enabled: false
+
+services:
+  auth:
+    base_url: "http://localhost:3000/api"
+    timeout: "30s"
+    retries: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: "60s"
+    endpoints:
+      - name: "login"
+        path: "/auth/login"
+        method: "POST"
+        expose_as: "/api/auth/login"
+        auth_required: false
+      - name: "register"
+        path: "/auth/register"
+        method: "POST"
+        expose_as: "/api/auth/register"
+        auth_required: false
+      - name: "refresh"
+        path: "/auth/refresh"
+        method: "POST"
+        expose_as: "/api/auth/refresh"
+        auth_required: false
+      - name: "logout"
+        path: "/auth/logout"
+        method: "POST"
+        expose_as: "/api/auth/logout"
+        auth_required: true
+      - name: "profile"
+        path: "/auth/profile"
+        method: "GET"
+        expose_as: "/api/auth/profile"
+        auth_required: true
+        cache:
+          enabled: true
+          ttl: "5m"
+          key_template: "profile:{user_id}"
+
+  user:
+    base_url: "http://localhost:3001/api"
+    timeout: "30s"
+    retries: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: "60s"
+    endpoints:
+      - name: "get_user"
+        path: "/users/{id}"
+        method: "GET"
+        expose_as: "/api/users/{id}"
+        auth_required: true
+        cache:
+          enabled: true
+          ttl: "10m"
+          key_template: "user:{id}"
+      - name: "update_user"
+        path: "/users/{id}"
+        method: "PUT"
+        expose_as: "/api/users/{id}"
+        auth_required: true
+      - name: "delete_user"
+        path: "/users/{id}"
+        method: "DELETE"
+        expose_as: "/api/users/{id}"
+        auth_required: true
+
+  content:
+    base_url: "http://localhost:3002/api"
+    timeout: "30s"
+    retries: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: "60s"
+    endpoints:
+      - name: "get_posts"
+        path: "/posts"
+        method: "GET"
+        expose_as: "/api/posts"
+        auth_required: false
+        cache:
+          enabled: true
+          ttl: "5m"
+          key_template: "posts:{query}"
+      - name: "create_post"
+        path: "/posts"
+        method: "POST"
+        expose_as: "/api/posts"
+        auth_required: true
+      - name: "get_post"
+        path: "/posts/{id}"
+        method: "GET"
+        expose_as: "/api/posts/{id}"
+        auth_required: false
+        cache:
+          enabled: true
+          ttl: "10m"
+          key_template: "post:{id}"
+
+aggregators:
+  - name: "user_dashboard"
+    endpoint: "/api/dashboard"
+    method: "GET"
+    auth_required: true
+    services:
+      - service: "user"
+        endpoint: "get_user"
+        required: true
+      - service: "content"
+        endpoint: "get_posts"
+        required: false
+        timeout: "10s"
+    response:
+      merge_strategy: "merge"
+      template: |
+        {
+          "user": {{.user}},
+          "recent_posts": {{.content.posts}}
+        }
+
+  - name: "auth_flow"
+    endpoint: "/api/auth/complete"
+    method: "POST"
+    auth_required: false
+    services:
+      - service: "auth"
+        endpoint: "login"
+        required: true
+      - service: "user"
+        endpoint: "get_user"
+        required: true
+    response:
+      merge_strategy: "custom"
+      template: |
+        {
+          "token": "{{.auth.token}}",
+          "user": {{.user}},
+          "expires_at": "{{.auth.expires_at}}"
+        }
+
+middleware:
+  - name: "request_logger"
+    type: "logging"
+    enabled: true
+    order: 1
+    config:
+      format: "json"
+      level: "info"
+
+  - name: "rate_limiter"
+    type: "rate_limit"
+    enabled: true
+    order: 2
+    config:
+      requests_per_minute: 100
+      burst: 10
+
+  - name: "auth_middleware"
+    type: "auth"
+    enabled: true
+    order: 3
+    config:
+      mode: "jwt"
+      header: "Authorization"
+
+  - name: "cors_middleware"
+    type: "cors"
+    enabled: true
+    order: 4
+    config:
+      origins: ["http://localhost:3000", "https://myapp.com"]
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      credentials: true
+
+environment:
+  variables:
+    JWT_SECRET: "your-super-secure-secret-key-change-in-production"
+    REDIS_URL: "redis://localhost:6379"
+    LOG_LEVEL: "info"
+  files:
+    - ".env"
+    - ".env.local"
+
+build:
+  go_version: "1.21"
+  build_tags: []
+  ldflags: []
+  cgo_enabled: false
+
+deployment:
+  docker:
+    enabled: true
+    base_image: "golang:1.21-alpine"
+    final_image: "alpine:latest"
+    multi_stage: true
+  kubernetes:
+    enabled: false
+    namespace: "default"
+    replicas: 3
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"

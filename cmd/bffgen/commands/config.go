@@ -25,10 +25,10 @@ var configShowCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Println("🔧 Current bffgen Configuration:")
 		fmt.Println()
-		
+
 		fmt.Println("📋 Defaults:")
 		fmt.Printf("   Framework: %s\n", config.Defaults.Framework)
 		fmt.Printf("   CORS Origins: %s\n", strings.Join(config.Defaults.CORSOrigins, ", "))
@@ -37,7 +37,7 @@ var configShowCmd = &cobra.Command{
 		fmt.Printf("   Port: %d\n", config.Defaults.Port)
 		fmt.Printf("   Route Option: %s\n", getRouteOptionName(config.Defaults.RouteOption))
 		fmt.Println()
-		
+
 		if config.User.Name != "" || config.User.Email != "" || config.User.GitHub != "" {
 			fmt.Println("👤 User Info:")
 			if config.User.Name != "" {
@@ -54,7 +54,7 @@ var configShowCmd = &cobra.Command{
 			}
 			fmt.Println()
 		}
-		
+
 		if len(config.History.RecentProjects) > 0 {
 			fmt.Println("📁 Recent Projects:")
 			for i, project := range config.History.RecentProjects {
@@ -78,12 +78,12 @@ var configResetCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error getting config path: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "Error removing config file: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Println("✅ Configuration reset to defaults")
 		fmt.Println("📁 Config file removed:", configPath)
 	},
@@ -97,13 +97,13 @@ var configSetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		key := args[0]
 		value := args[1]
-		
+
 		config, err := utils.LoadBFFGenConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		switch key {
 		case "framework":
 			if value != "chi" && value != "echo" && value != "fiber" {
@@ -135,12 +135,12 @@ var configSetCmd = &cobra.Command{
 			fmt.Println("Available keys: framework, cors_origins, jwt_secret, redis_url, port, route_option")
 			os.Exit(1)
 		}
-		
+
 		if err := utils.SaveBFFGenConfig(config); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Printf("✅ Set %s = %s\n", key, value)
 	},
 }

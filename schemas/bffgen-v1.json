@@ -1,0 +1,883 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/RichGod93/bffgen/schemas/bffgen-v1.json",
+  "title": "bffgen Configuration Schema v1",
+  "description": "Configuration schema for bffgen Backend-for-Frontend generator",
+  "type": "object",
+  "required": ["version", "project"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version"
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "framework"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^[a-zA-Z0-9-_]+$",
+          "description": "Project name (alphanumeric, hyphens, underscores only)"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Project description"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "default": "1.0.0",
+          "description": "Project version (semantic versioning)"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["go"],
+          "default": "go",
+          "description": "Target programming language"
+        },
+        "framework": {
+          "type": "string",
+          "enum": ["chi", "echo", "fiber"],
+          "default": "chi",
+          "description": "HTTP framework to use"
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string",
+              "default": ".",
+              "description": "Output directory for generated code"
+            },
+            "package": {
+              "type": "string",
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+              "description": "Go package name (defaults to project name)"
+            },
+            "module": {
+              "type": "string",
+              "description": "Go module name (defaults to project name)"
+            }
+          }
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8080,
+          "description": "Server port"
+        },
+        "host": {
+          "type": "string",
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        "timeout": {
+          "type": "object",
+          "properties": {
+            "read": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "30s",
+              "description": "Read timeout (e.g., 30s, 5m, 1h)"
+            },
+            "write": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "30s",
+              "description": "Write timeout"
+            },
+            "idle": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "120s",
+              "description": "Idle timeout"
+            }
+          }
+        },
+        "graceful_shutdown": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable graceful shutdown"
+            },
+            "timeout": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "30s",
+              "description": "Graceful shutdown timeout"
+            }
+          }
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "jwt", "session", "oauth2"],
+          "default": "jwt",
+          "description": "Authentication mode"
+        },
+        "jwt": {
+          "type": "object",
+          "properties": {
+            "secret": {
+              "type": "string",
+              "minLength": 32,
+              "description": "JWT signing secret (use environment variable in production)"
+            },
+            "expiration": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "15m",
+              "description": "Token expiration time"
+            },
+            "refresh_expiration": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "24h",
+              "description": "Refresh token expiration time"
+            },
+            "encryption": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Enable JWT encryption (JWE)"
+                },
+                "algorithm": {
+                  "type": "string",
+                  "enum": ["AES-GCM"],
+                  "default": "AES-GCM",
+                  "description": "Encryption algorithm"
+                }
+              }
+            }
+          }
+        },
+        "session": {
+          "type": "object",
+          "properties": {
+            "store": {
+              "type": "string",
+              "enum": ["memory", "redis"],
+              "default": "memory",
+              "description": "Session store type"
+            },
+            "expiration": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "24h",
+              "description": "Session expiration time"
+            },
+            "secure": {
+              "type": "boolean",
+              "default": true,
+              "description": "Use secure cookies"
+            }
+          }
+        },
+        "csrf": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable CSRF protection"
+            },
+            "header": {
+              "type": "string",
+              "default": "X-CSRF-Token",
+              "description": "CSRF header name"
+            }
+          }
+        }
+      }
+    },
+    "cors": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CORS"
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["http://localhost:3000", "http://localhost:3001"],
+          "description": "Allowed origins"
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
+          },
+          "default": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+          "description": "Allowed HTTP methods"
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Accept",
+            "Authorization",
+            "Content-Type",
+            "X-CSRF-Token"
+          ],
+          "description": "Allowed headers"
+        },
+        "credentials": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow credentials"
+        },
+        "max_age": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 86400,
+          "description": "Preflight cache duration in seconds"
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable security headers"
+            },
+            "content_type_options": {
+              "type": "string",
+              "default": "nosniff",
+              "description": "X-Content-Type-Options value"
+            },
+            "frame_options": {
+              "type": "string",
+              "enum": ["DENY", "SAMEORIGIN"],
+              "default": "DENY",
+              "description": "X-Frame-Options value"
+            },
+            "xss_protection": {
+              "type": "string",
+              "default": "1; mode=block",
+              "description": "X-XSS-Protection value"
+            },
+            "referrer_policy": {
+              "type": "string",
+              "enum": [
+                "no-referrer",
+                "no-referrer-when-downgrade",
+                "origin",
+                "origin-when-cross-origin",
+                "same-origin",
+                "strict-origin",
+                "strict-origin-when-cross-origin",
+                "unsafe-url"
+              ],
+              "default": "strict-origin-when-cross-origin",
+              "description": "Referrer-Policy value"
+            },
+            "permissions_policy": {
+              "type": "string",
+              "default": "geolocation=(), microphone=(), camera=()",
+              "description": "Permissions-Policy value"
+            }
+          }
+        },
+        "rate_limiting": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable rate limiting"
+            },
+            "requests_per_minute": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100,
+              "description": "Requests per minute per IP"
+            },
+            "burst": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "Burst limit"
+            },
+            "store": {
+              "type": "string",
+              "enum": ["memory", "redis"],
+              "default": "memory",
+              "description": "Rate limiting store"
+            }
+          }
+        },
+        "request_validation": {
+          "type": "object",
+          "properties": {
+            "max_body_size": {
+              "type": "string",
+              "pattern": "^\\d+[kmg]?b?$",
+              "default": "10mb",
+              "description": "Maximum request body size"
+            },
+            "allowed_content_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "application/json",
+                "application/x-www-form-urlencoded",
+                "multipart/form-data"
+              ],
+              "description": "Allowed content types"
+            }
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Log level"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["json", "text"],
+          "default": "json",
+          "description": "Log format"
+        },
+        "output": {
+          "type": "string",
+          "enum": ["stdout", "stderr", "file"],
+          "default": "stdout",
+          "description": "Log output destination"
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "logs/app.log",
+              "description": "Log file path"
+            },
+            "max_size": {
+              "type": "string",
+              "pattern": "^\\d+[kmg]?b?$",
+              "default": "100mb",
+              "description": "Maximum log file size"
+            },
+            "max_backups": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 3,
+              "description": "Maximum number of backup files"
+            },
+            "max_age": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 28,
+              "description": "Maximum age of log files in days"
+            }
+          }
+        },
+        "request_logging": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable request logging"
+            },
+            "log_body": {
+              "type": "boolean",
+              "default": false,
+              "description": "Log request/response bodies"
+            },
+            "log_headers": {
+              "type": "boolean",
+              "default": true,
+              "description": "Log request headers"
+            }
+          }
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "health_check": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable health check endpoint"
+            },
+            "path": {
+              "type": "string",
+              "default": "/health",
+              "description": "Health check endpoint path"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["database", "redis", "external_services"]
+              },
+              "default": [],
+              "description": "Health checks to perform"
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable metrics collection"
+            },
+            "path": {
+              "type": "string",
+              "default": "/metrics",
+              "description": "Metrics endpoint path"
+            },
+            "prometheus": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable Prometheus metrics"
+            }
+          }
+        },
+        "tracing": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable distributed tracing"
+            },
+            "jaeger": {
+              "type": "object",
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "description": "Jaeger endpoint URL"
+                },
+                "service_name": {
+                  "type": "string",
+                  "description": "Service name for tracing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+          "type": "object",
+          "required": ["base_url"],
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Base URL of the backend service"
+            },
+            "timeout": {
+              "type": "string",
+              "pattern": "^\\d+[smh]$",
+              "default": "30s",
+              "description": "Request timeout for this service"
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5,
+              "default": 3,
+              "description": "Number of retry attempts"
+            },
+            "circuit_breaker": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Enable circuit breaker"
+                },
+                "failure_threshold": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 5,
+                  "description": "Failure threshold before opening circuit"
+                },
+                "recovery_timeout": {
+                  "type": "string",
+                  "pattern": "^\\d+[smh]$",
+                  "default": "60s",
+                  "description": "Time to wait before attempting recovery"
+                }
+              }
+            },
+            "endpoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "path", "method", "expose_as"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Endpoint name"
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/.*",
+                    "description": "Backend service path"
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "DELETE",
+                      "PATCH",
+                      "HEAD",
+                      "OPTIONS"
+                    ],
+                    "description": "HTTP method"
+                  },
+                  "expose_as": {
+                    "type": "string",
+                    "pattern": "^/.*",
+                    "description": "Frontend-facing path"
+                  },
+                  "auth_required": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Require authentication for this endpoint"
+                  },
+                  "cache": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enable response caching"
+                      },
+                      "ttl": {
+                        "type": "string",
+                        "pattern": "^\\d+[smh]$",
+                        "default": "5m",
+                        "description": "Cache TTL"
+                      },
+                      "key_template": {
+                        "type": "string",
+                        "description": "Cache key template (supports {method}, {path}, {query})"
+                      }
+                    }
+                  },
+                  "transform": {
+                    "type": "object",
+                    "properties": {
+                      "request": {
+                        "type": "object",
+                        "description": "Request transformation rules"
+                      },
+                      "response": {
+                        "type": "object",
+                        "description": "Response transformation rules"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "aggregators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "endpoint", "services"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Aggregator name"
+          },
+          "endpoint": {
+            "type": "string",
+            "pattern": "^/.*",
+            "description": "Frontend-facing endpoint path"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "default": "GET",
+            "description": "HTTP method"
+          },
+          "auth_required": {
+            "type": "boolean",
+            "default": false,
+            "description": "Require authentication"
+          },
+          "services": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["service", "endpoint"],
+              "properties": {
+                "service": {
+                  "type": "string",
+                  "description": "Service name (must exist in services section)"
+                },
+                "endpoint": {
+                  "type": "string",
+                  "description": "Endpoint name within the service"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether this service call is required for the aggregator"
+                },
+                "timeout": {
+                  "type": "string",
+                  "pattern": "^\\d+[smh]$",
+                  "description": "Override service timeout for this call"
+                }
+              }
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "merge_strategy": {
+                "type": "string",
+                "enum": ["merge", "array", "custom"],
+                "default": "merge",
+                "description": "How to merge multiple service responses"
+              },
+              "template": {
+                "type": "string",
+                "description": "Custom response template (for custom merge strategy)"
+              }
+            }
+          }
+        }
+      }
+    },
+    "middleware": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Middleware name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "rate_limit",
+              "auth",
+              "logging",
+              "cors",
+              "security"
+            ],
+            "description": "Middleware type"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether middleware is enabled"
+          },
+          "order": {
+            "type": "integer",
+            "description": "Middleware execution order (lower numbers execute first)"
+          },
+          "config": {
+            "type": "object",
+            "description": "Middleware-specific configuration"
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "variables": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Z_][A-Z0-9_]*$": {
+              "type": "string",
+              "description": "Environment variable value"
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Environment files to load (.env, .env.local, etc.)"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "go_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "default": "1.21",
+          "description": "Minimum Go version"
+        },
+        "build_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Build tags to include"
+        },
+        "ldflags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Linker flags"
+        },
+        "cgo_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable CGO"
+        }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "docker": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Generate Dockerfile"
+            },
+            "base_image": {
+              "type": "string",
+              "default": "golang:1.21-alpine",
+              "description": "Base Docker image"
+            },
+            "final_image": {
+              "type": "string",
+              "default": "alpine:latest",
+              "description": "Final runtime image"
+            },
+            "multi_stage": {
+              "type": "boolean",
+              "default": true,
+              "description": "Use multi-stage build"
+            }
+          }
+        },
+        "kubernetes": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Generate Kubernetes manifests"
+            },
+            "namespace": {
+              "type": "string",
+              "default": "default",
+              "description": "Kubernetes namespace"
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 3,
+              "description": "Number of replicas"
+            },
+            "resources": {
+              "type": "object",
+              "properties": {
+                "requests": {
+                  "type": "object",
+                  "properties": {
+                    "cpu": {
+                      "type": "string",
+                      "default": "100m",
+                      "description": "CPU request"
+                    },
+                    "memory": {
+                      "type": "string",
+                      "default": "128Mi",
+                      "description": "Memory request"
+                    }
+                  }
+                },
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "cpu": {
+                      "type": "string",
+                      "default": "500m",
+                      "description": "CPU limit"
+                    },
+                    "memory": {
+                      "type": "string",
+                      "default": "512Mi",
+                      "description": "Memory limit"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

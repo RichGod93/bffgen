@@ -36,8 +36,8 @@ func (ba *BaseAggregator) GetPath() string {
 type UserDashboardAggregator struct {
 	BaseAggregator
 	UserServiceURL        string
-	OrdersServiceURL       string
-	PreferencesServiceURL  string
+	OrdersServiceURL      string
+	PreferencesServiceURL string
 }
 
 // NewUserDashboardAggregator creates a new user dashboard aggregator
@@ -117,18 +117,18 @@ func (uda *UserDashboardAggregator) fetchPreferencesData(userID string) map[stri
 	// In a real implementation, this would make HTTP calls to the preferences service
 	// For now, return mock data
 	return map[string]interface{}{
-		"theme":        "dark",
-		"language":     "en",
+		"theme":         "dark",
+		"language":      "en",
 		"notifications": true,
-		"timezone":     "UTC",
+		"timezone":      "UTC",
 	}
 }
 
 // EcommerceAggregator aggregates e-commerce data
 type EcommerceAggregator struct {
 	BaseAggregator
-	ProductsServiceURL string
-	CartServiceURL     string
+	ProductsServiceURL  string
+	CartServiceURL      string
 	InventoryServiceURL string
 }
 
@@ -240,10 +240,10 @@ func (r *Registry) List() []Aggregator {
 // DefaultRegistry returns a registry with default aggregators
 func DefaultRegistry() *Registry {
 	registry := NewRegistry()
-	
+
 	// Register default aggregators
 	registry.Register(NewUserDashboardAggregator())
 	registry.Register(NewEcommerceAggregator())
-	
+
 	return registry
 }

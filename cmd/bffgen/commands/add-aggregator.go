@@ -15,7 +15,7 @@ import (
 var addAggregatorCmd = &cobra.Command{
 	Use:   "add-aggregator",
 	Short: "Add a data aggregator to your BFF",
-	Long:  `Add a data aggregator that combines data from multiple backend services.
+	Long: `Add a data aggregator that combines data from multiple backend services.
 	
 Examples:
   bffgen add-aggregator                    # Interactive selection
@@ -29,7 +29,7 @@ Examples:
 		} else {
 			aggregatorName = selectAggregator()
 		}
-		
+
 		if err := addAggregator(aggregatorName); err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding aggregator: %v\n", err)
 			os.Exit(1)

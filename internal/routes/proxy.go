@@ -36,7 +36,7 @@ func SetupProxyRoutes(r chi.Router, services map[string]Service) {
 		for _, endpoint := range service.Endpoints {
 			// Create reverse proxy
 			proxy := httputil.NewSingleHostReverseProxy(baseURL)
-			
+
 			// Modify the request
 			proxy.Director = func(req *http.Request) {
 				req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))

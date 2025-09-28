@@ -20,7 +20,7 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Timeout(60 * time.Second))
-	
+
 	// Security headers middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +32,7 @@ func main() {
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// CORS configuration (restrictive by default)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"}, // Configure for your frontend
@@ -42,13 +42,13 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	
+
 	// Request validation middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Basic request size limit (10MB)
 			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-			
+
 			// Content-Type validation for POST/PUT requests
 			if r.Method == "POST" || r.Method == "PUT" {
 				contentType := r.Header.Get("Content-Type")
@@ -57,11 +57,11 @@ func main() {
 					return
 				}
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	})
-	
+
 	// JWT Authentication middleware (placeholder - implement based on your auth strategy)
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,14 +70,14 @@ func main() {
 				next.ServeHTTP(w, r)
 				return
 			}
-			
+
 			// TODO: Implement JWT validation
 			// authHeader := r.Header.Get("Authorization")
 			// if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			//     http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			//     return
 			// }
-			
+
 			next.ServeHTTP(w, r)
 		})
 	})

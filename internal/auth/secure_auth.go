@@ -230,7 +230,7 @@ func (sa *SecureAuth) ValidateEncryptedToken(encryptedToken string) (*TokenClaim
 	sa.mutex.RLock()
 	session, exists := sa.sessionStore[claims.SessionID]
 	sa.mutex.RUnlock()
-	
+
 	if !exists {
 		return nil, fmt.Errorf("session not found")
 	}
@@ -255,7 +255,7 @@ func (sa *SecureAuth) RefreshToken(refreshToken string) (string, error) {
 	// Find session by refresh token
 	var session *Session
 	var sessionID string
-	
+
 	sa.mutex.RLock()
 	for id, s := range sa.sessionStore {
 		if s.RefreshToken == refreshToken {
@@ -297,7 +297,7 @@ func (sa *SecureAuth) RevokeSession(sessionID string) {
 func (sa *SecureAuth) RevokeAllUserSessions(userID string) {
 	sa.mutex.Lock()
 	defer sa.mutex.Unlock()
-	
+
 	for sessionID, session := range sa.sessionStore {
 		if session.UserID == userID {
 			delete(sa.sessionStore, sessionID)
