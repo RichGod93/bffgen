@@ -1,20 +1,22 @@
 # bffgen
 
-**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in Go with JWT auth, rate limiting, and comprehensive logging.
+**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in Go with enhanced backend architecture support, JWT auth, rate limiting, and comprehensive logging.
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/badge/Latest-v1.0.1-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.0.1)
 
 ---
 
 ## ⚡ Quick Start
 
 ```bash
-# Install
-go install github.com/RichGod93/bffgen/cmd/bffgen@latest
+# Install latest version with enhanced backend architecture support
+go install github.com/RichGod93/bffgen/cmd/bffgen@v1.0.1
 
-# Create BFF
+# Create BFF with your preferred backend architecture
 bffgen init my-bff
+# Choose: 1) Microservices, 2) Monolithic, 3) Hybrid
 cd my-bff
 
 # Add routes & generate code
@@ -60,7 +62,17 @@ go run main.go
 
 ---
 
-## 🔒 Security Features
+## ✨ Features
+
+### 🏗️ **Enhanced Backend Architecture Support**
+
+- **Microservices**: Different ports/URLs for each service
+- **Monolithic**: Single port/URL for all services
+- **Hybrid**: Services on same port with different paths
+- **Smart Configuration**: Auto-generates tailored bff.config.yaml
+- **Intelligent Defaults**: Smart port numbering and URL suggestions
+
+### 🔒 Security Features
 
 - **JWT Authentication** - Token validation with user context injection
 - **Rate Limiting** - Fiber built-in, Chi/Echo with Redis
@@ -72,7 +84,13 @@ go run main.go
 
 ## 📦 Installation
 
-**Quick Install:**
+**Quick Install (Latest v1.0.1):**
+
+```bash
+go install github.com/RichGod93/bffgen/cmd/bffgen@v1.0.1
+```
+
+**Latest Stable:**
 
 ```bash
 go install github.com/RichGod93/bffgen/cmd/bffgen@latest

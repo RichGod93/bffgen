@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/RichGod93/bffgen/internal/types"
@@ -20,13 +21,17 @@ var initCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
-		framework, err := initializeProject(projectName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error initializing project: %v\n", err)
-			os.Exit(1)
+		framework, backendServices, err := initializeProject(projectName)
+		if err != nil {			os.Exit(1)
 		}
 
 		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
+
+		// Show backend configuration summary
+		showBackendConfigSummary(backendServices)
+
+		// Add setup instructions
+		showSetupInstructions(backendServices, projectName)
 		fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
 		fmt.Printf("🚀 Start development server: bffgen dev\n")
 
@@ -61,11 +66,10 @@ var initCmd = &cobra.Command{
 		fmt.Println("🔍 Run 'bffgen doctor' to check your project health")
 	},
 }
-
-func initializeProject(projectName string) (string, error) {
+func initializeProject(projectName string) (string, []BackendService, error) {
 	// Create project directory
 	if err := os.MkdirAll(projectName, 0755); err != nil {
-		return "", fmt.Errorf("failed to create project directory: %w", err)
+		return "", nil, fmt.Errorf("failed to create project directory: %w", err)
 	}
 
 	// Create subdirectories
@@ -78,7 +82,7 @@ func initializeProject(projectName string) (string, error) {
 
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
+		return "", nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
 
@@ -109,6 +113,24 @@ func initializeProject(projectName string) (string, error) {
 		corsOrigins = defaultCORS
 	}
 
+
+	// Backend architecture selection
+	fmt.Println("✔ What's your backend architecture?")
+	fmt.Println("   1) Microservices (different ports/URLs)")
+	fmt.Println("   2) Monolithic (single port/URL)")
+	fmt.Println("   3) Hybrid (some services on same port)")
+	fmt.Printf("✔ Select option (1-3) [1]: ")
+	backendArch, _ := reader.ReadString('\n')
+	backendArch = strings.TrimSpace(backendArch)
+	if backendArch == "" {
+		backendArch = "1"
+	}
+
+	// Configure backend services based on selection
+	backendServices, err := configureBackendServices(backendArch, reader)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to configure backend services: %w", err)
+	}
 	// Route configuration
 	fmt.Println("✔ Configure routes now or later?")
 	fmt.Println("   1) Define manually")
@@ -130,7 +152,7 @@ func initializeProject(projectName string) (string, error) {
 
 			if _, err := os.Stat(srcPath); err == nil {
 				if err := copyFile(srcPath, dstPath); err != nil {
-					return "", fmt.Errorf("failed to copy template %s: %w", templateFile, err)
+		return "", nil, fmt.Errorf("failed to create main.go: %w", err)
 				}
 			}
 		}
@@ -147,6 +169,17 @@ func initializeProject(projectName string) (string, error) {
 
 	// Generate CORS configuration string
 	corsConfig := generateCORSConfig(corsOriginsList, framework)
+
+	// Copy auth package to the generated project
+	if err := copyAuthPackage(projectName); err != nil {
+		fmt.Printf("⚠️  Warning: Could not copy auth package: %v\n", err)
+	}
+
+	// Create go.mod file
+	goModContent := generateGoMod(projectName, framework)
+	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
+		return "", nil, fmt.Errorf("failed to create go.mod: %w", err)
+	}
 
 	// Create main.go based on framework
 	var mainGoContent string
@@ -1221,61 +1254,19 @@ func main() {
 	log.Fatal(app.Listen(":8080"))
 }`, corsConfig)
 	default:
-		return "", fmt.Errorf("unsupported framework: %s", framework)
+		return "", nil, fmt.Errorf("unsupported framework: %s", framework)
 	}
 
+	// Write main.go file
 	if err := os.WriteFile(filepath.Join(projectName, "main.go"), []byte(mainGoContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create main.go: %w", err)
+		return "", nil, fmt.Errorf("failed to create main.go: %w", err)
 	}
 
-	// Create go.mod based on framework
-	goModContent := generateGoMod(projectName, framework)
-	if err := os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(goModContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create go.mod: %w", err)
-	}
-
-	// Copy auth package to the project
-	if err := copyAuthPackage(projectName); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to copy auth package: %v\n", err)
-		fmt.Println("   You may need to copy the auth package manually")
-	}
-
-	// Run go mod tidy to download dependencies
-	if err := runCommandInDir(projectName, "go", "mod", "tidy"); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to run go mod tidy: %v\n", err)
-		fmt.Println("   You may need to run 'go mod tidy' manually in the project directory")
-	}
-
-	// Create bff.config.yaml
-	configContent := `# BFF Configuration
-# Define your backend services and endpoints here
-
-services:
-  # Example service configuration
-  # users:
-  #   baseUrl: "http://localhost:4000/api"
-  #   endpoints:
-  #     - name: "getUser"
-  #       path: "/users/:id"
-  #       method: "GET"
-  #       exposeAs: "/api/users/:id"
-  #     - name: "createUser"
-  #       path: "/users"
-  #       method: "POST"
-  #       exposeAs: "/api/users"
-
-# Global settings
-settings:
-  port: 8080
-  timeout: 30s
-  retries: 3
-  max_request_size: 5MB
-  enable_hsts: true
-  disable_trace: true
-`
+	// Create bff.config.yaml with enhanced backend configuration
+	configContent := generateEnhancedBFFConfig(backendServices, projectName)
 
 	if err := os.WriteFile(filepath.Join(projectName, "bff.config.yaml"), []byte(configContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create bff.config.yaml: %w", err)
+		return "", nil, fmt.Errorf("failed to create bff.config.yaml: %w", err)
 	}
 
 	// Create README.md
@@ -1316,7 +1307,7 @@ To make bffgen available globally:
 `, projectName)
 
 	if err := os.WriteFile(filepath.Join(projectName, "README.md"), []byte(readmeContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create README.md: %w", err)
+		return "", nil, fmt.Errorf("failed to create README.md: %w", err)
 	}
 
 	// Handle route configuration based on user choice
@@ -1331,6 +1322,11 @@ To make bffgen available globally:
 		fmt.Println("💡 To add a template, run:")
 		fmt.Printf("   cd %s\n", projectName)
 		fmt.Println("   bffgen add-template")
+	case "3":
+		fmt.Println()
+		fmt.Println("💡 To add routes later, run:")
+		fmt.Printf("   cd %s\n", projectName)
+		fmt.Println("   bffgen add-route")
 	}
 
 	// Update configuration with new defaults
@@ -1348,7 +1344,7 @@ To make bffgen available globally:
 		fmt.Printf("⚠️  Warning: Could not update recent projects: %v\n", err)
 	}
 
-	return framework, nil
+	return framework, backendServices, nil
 }
 
 // copyFile copies a file from src to dst
@@ -1505,4 +1501,342 @@ func copyAuthPackage(projectName string) error {
 	}
 
 	return nil
+}
+
+// BackendService represents a backend service configuration
+type BackendService struct {
+	Name      string
+	BaseURL   string
+	Port      int
+	Path      string
+	Endpoints []string
+}
+
+func configureBackendServices(arch string, reader *bufio.Reader) ([]BackendService, error) {
+	switch arch {
+	case "1":
+		return configureMicroservices(reader), nil
+	case "2":
+		return configureMonolithic(reader), nil
+	case "3":
+		return configureHybrid(reader), nil
+	default:
+		return configureMicroservices(reader), nil
+	}
+}
+
+func configureMicroservices(reader *bufio.Reader) []BackendService {
+	var services []BackendService
+
+	fmt.Println("\n🔧 Configuring Microservices Backend")
+	fmt.Println("Enter your backend services (press Enter with empty name to finish):")
+
+	for {
+		fmt.Printf("✔ Service name (e.g., 'users', 'products', 'orders'): ")
+		serviceName, _ := reader.ReadString('\n')
+		serviceName = strings.TrimSpace(serviceName)
+		if serviceName == "" {
+			break
+		}
+
+		fmt.Printf("✔ Base URL for %s (e.g., 'http://localhost:4000/api'): ", serviceName)
+		baseURL, _ := reader.ReadString('\n')
+		baseURL = strings.TrimSpace(baseURL)
+		if baseURL == "" {
+			baseURL = fmt.Sprintf("http://localhost:400%d/api", len(services)+1)
+			fmt.Printf("   Using default: %s\n", baseURL)
+		}
+
+		// Extract port from URL
+		port := 4000 + len(services)
+		if strings.Contains(baseURL, ":") {
+			parts := strings.Split(baseURL, ":")
+			if len(parts) >= 3 {
+				if p, err := strconv.Atoi(parts[2]); err == nil {
+					port = p
+				}
+			}
+		}
+
+		service := BackendService{
+			Name:      serviceName,
+			BaseURL:   baseURL,
+			Port:      port,
+			Path:      "",
+			Endpoints: getDefaultEndpoints(serviceName),
+		}
+
+		services = append(services, service)
+		fmt.Printf("✅ Added %s service on %s\n", serviceName, baseURL)
+	}
+
+	return services
+}
+
+func configureMonolithic(reader *bufio.Reader) []BackendService {
+	fmt.Println("\n🔧 Configuring Monolithic Backend")
+
+	fmt.Printf("✔ Backend base URL (e.g., 'http://localhost:3000/api'): ")
+	baseURL, _ := reader.ReadString('\n')
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		baseURL = "http://localhost:3000/api"
+		fmt.Printf("   Using default: %s\n", baseURL)
+	}
+
+	// Extract port from URL
+	port := 3000
+	if strings.Contains(baseURL, ":") {
+		parts := strings.Split(baseURL, ":")
+		if len(parts) >= 3 {
+			if p, err := strconv.Atoi(parts[2]); err == nil {
+				port = p
+			}
+		}
+	}
+
+	// Define all services for monolithic backend
+	serviceNames := []string{"users", "products", "orders", "cart", "auth"}
+	var services []BackendService
+
+	for _, serviceName := range serviceNames {
+		service := BackendService{
+			Name:      serviceName,
+			BaseURL:   baseURL,
+			Port:      port,
+			Path:      "",
+			Endpoints: getDefaultEndpoints(serviceName),
+		}
+		services = append(services, service)
+	}
+
+	fmt.Printf("✅ Configured monolithic backend on %s\n", baseURL)
+	fmt.Printf("   Services: %s\n", strings.Join(serviceNames, ", "))
+
+	return services
+}
+
+func configureHybrid(reader *bufio.Reader) []BackendService {
+	var services []BackendService
+
+	fmt.Println("\n🔧 Configuring Hybrid Backend")
+	fmt.Println("Enter your backend services (press Enter with empty name to finish):")
+
+	for {
+		fmt.Printf("✔ Service name (e.g., 'users', 'products', 'orders'): ")
+		serviceName, _ := reader.ReadString('\n')
+		serviceName = strings.TrimSpace(serviceName)
+		if serviceName == "" {
+			break
+		}
+
+		fmt.Printf("✔ Base URL for %s (e.g., 'http://localhost:3000/api/users'): ", serviceName)
+		baseURL, _ := reader.ReadString('\n')
+		baseURL = strings.TrimSpace(baseURL)
+		if baseURL == "" {
+			baseURL = fmt.Sprintf("http://localhost:3000/api/%s", serviceName)
+			fmt.Printf("   Using default: %s\n", baseURL)
+		}
+
+		// Extract port from URL
+		port := 3000
+		if strings.Contains(baseURL, ":") {
+			parts := strings.Split(baseURL, ":")
+			if len(parts) >= 3 {
+				if p, err := strconv.Atoi(parts[2]); err == nil {
+					port = p
+				}
+			}
+		}
+
+		// Extract path from URL
+		path := ""
+		if strings.Contains(baseURL, "/api/") {
+			pathParts := strings.Split(baseURL, "/api/")
+			if len(pathParts) > 1 {
+				path = "/" + pathParts[1]
+			}
+		}
+
+		service := BackendService{
+			Name:      serviceName,
+			BaseURL:   baseURL,
+			Port:      port,
+			Path:      path,
+			Endpoints: getDefaultEndpoints(serviceName),
+		}
+
+		services = append(services, service)
+		fmt.Printf("✅ Added %s service on %s\n", serviceName, baseURL)
+	}
+
+	return services
+}
+
+func getDefaultEndpoints(serviceName string) []string {
+	switch serviceName {
+	case "users":
+		return []string{"GET /users", "GET /users/:id", "POST /users", "PUT /users/:id", "DELETE /users/:id"}
+	case "products":
+		return []string{"GET /products", "GET /products/:id", "POST /products", "PUT /products/:id", "DELETE /products/:id"}
+	case "orders":
+		return []string{"GET /orders", "GET /orders/:id", "POST /orders", "PUT /orders/:id"}
+	case "cart":
+		return []string{"GET /cart", "POST /cart/items", "DELETE /cart/items/:id", "POST /cart/checkout"}
+	case "auth":
+		return []string{"POST /auth/login", "POST /auth/register", "POST /auth/refresh", "POST /auth/logout"}
+	default:
+		return []string{"GET /" + serviceName, "GET /" + serviceName + "/:id", "POST /" + serviceName, "PUT /" + serviceName + "/:id"}
+	}
+}
+
+func generateEnhancedBFFConfig(backendServices []BackendService, projectName string) string {
+	var configContent strings.Builder
+
+	configContent.WriteString("# BFF Configuration\n")
+	configContent.WriteString("# Generated with enhanced backend architecture support\n\n")
+
+	configContent.WriteString("services:\n")
+
+	// Group services by port for better organization
+	portGroups := make(map[int][]BackendService)
+	for _, service := range backendServices {
+		portGroups[service.Port] = append(portGroups[service.Port], service)
+	}
+
+	for _, services := range portGroups {
+		if len(services) == 1 {
+			// Single service on this port
+			service := services[0]
+			configContent.WriteString(fmt.Sprintf("  %s:\n", service.Name))
+			configContent.WriteString(fmt.Sprintf("    baseUrl: %s\n", service.BaseURL))
+			configContent.WriteString("    endpoints:\n")
+
+			for _, endpoint := range service.Endpoints {
+				parts := strings.Split(endpoint, " ")
+				if len(parts) >= 2 {
+					method := parts[0]
+					path := parts[1]
+					name := strings.ReplaceAll(strings.TrimPrefix(path, "/"), "/", "_")
+					exposeAs := path
+
+					configContent.WriteString(fmt.Sprintf("      - name: %s\n", name))
+					configContent.WriteString(fmt.Sprintf("        path: %s\n", path))
+					configContent.WriteString(fmt.Sprintf("        method: %s\n", method))
+					configContent.WriteString(fmt.Sprintf("        exposeAs: %s\n", exposeAs))
+				}
+			}
+		} else {
+			// Multiple services on same port (hybrid)
+			for _, service := range services {
+				configContent.WriteString(fmt.Sprintf("  %s:\n", service.Name))
+				configContent.WriteString(fmt.Sprintf("    baseUrl: %s\n", service.BaseURL))
+				configContent.WriteString("    endpoints:\n")
+
+				for _, endpoint := range service.Endpoints {
+					parts := strings.Split(endpoint, " ")
+					if len(parts) >= 2 {
+						method := parts[0]
+						path := parts[1]
+						name := strings.ReplaceAll(strings.TrimPrefix(path, "/"), "/", "_")
+						exposeAs := path
+
+						configContent.WriteString(fmt.Sprintf("      - name: %s\n", name))
+						configContent.WriteString(fmt.Sprintf("        path: %s\n", path))
+						configContent.WriteString(fmt.Sprintf("        method: %s\n", method))
+						configContent.WriteString(fmt.Sprintf("        exposeAs: %s\n", exposeAs))
+					}
+				}
+			}
+		}
+	}
+
+	configContent.WriteString("\n# Global settings\n")
+	configContent.WriteString("settings:\n")
+	configContent.WriteString("  port: 8080\n")
+	configContent.WriteString("  timeout: 30s\n")
+	configContent.WriteString("  retries: 3\n")
+	configContent.WriteString("  max_request_size: 5MB\n")
+	configContent.WriteString("  enable_hsts: true\n")
+	configContent.WriteString("  disable_trace: true\n")
+
+	return configContent.String()
+}
+
+func showBackendConfigSummary(backendServices []BackendService) {
+	fmt.Println("\n📋 Backend Configuration Summary:")
+	
+	// Group services by port to determine architecture
+	portGroups := make(map[int][]BackendService)
+	for _, service := range backendServices {
+		portGroups[service.Port] = append(portGroups[service.Port], service)
+	}
+	
+	if len(portGroups) == 1 {
+		// Single port - could be monolithic or hybrid
+		var services []BackendService
+		for _, s := range portGroups {
+			services = s
+		}
+		
+		if len(services) > 3 {
+			fmt.Println("   Architecture: Monolithic")
+			fmt.Printf("   - Backend: %s\n", services[0].BaseURL)
+		} else {
+			fmt.Println("   Architecture: Hybrid")
+		}
+		fmt.Printf("   - Services: %s\n", strings.Join(getServiceNames(services), ", "))
+	} else {
+		// Multiple ports - microservices
+		fmt.Println("   Architecture: Microservices")
+		for _, service := range backendServices {
+			fmt.Printf("   - %s: %s\n", service.Name, service.BaseURL)
+		}
+	}
+}
+
+func getServiceNames(services []BackendService) []string {
+	var names []string
+	for _, service := range services {
+		names = append(names, service.Name)
+	}
+	return names
+}
+
+func showSetupInstructions(backendServices []BackendService, projectName string) {
+	fmt.Println("\n🔧 Setup Instructions:")
+	
+	// Group services by port
+	portGroups := make(map[int][]BackendService)
+	for _, service := range backendServices {
+		portGroups[service.Port] = append(portGroups[service.Port], service)
+	}
+	
+	if len(portGroups) == 1 {
+		// Single port
+		var services []BackendService
+		for _, s := range portGroups {
+			services = s
+		}
+		
+		if len(services) > 3 {
+			fmt.Println("   1. Start your monolithic backend:")
+			fmt.Printf("      - Backend: %s\n", services[0].BaseURL)
+		} else {
+			fmt.Println("   1. Start your backend services:")
+			fmt.Printf("      - Services: %s\n", strings.Join(getServiceNames(services), ", "))
+		}
+	} else {
+		// Multiple ports - microservices
+		fmt.Println("   1. Start your microservices on the configured ports:")
+		for _, service := range backendServices {
+			fmt.Printf("      - %s: %s\n", service.Name, service.BaseURL)
+		}
+	}
+	
+	fmt.Println("   2. Run the BFF server:")
+	fmt.Printf("      cd %s\n", projectName)
+	fmt.Println("      bffgen dev")
+	fmt.Println("   3. Test the endpoints:")
+	fmt.Println("      curl http://localhost:8080/health")
 }
