@@ -26,7 +26,7 @@ go run main.go
 
 **Example Output:**
 
-```
+```text
 ✅ BFF project 'my-bff' initialized successfully!
 
 📋 Backend Configuration Summary:
@@ -36,7 +36,7 @@ go run main.go
 
 🔧 Setup Instructions:
    1. Start your monolithic backend: http://localhost:3000/api
-   2. Run the BFF server: cd my-bff && go run main.go  
+   2. Run the BFF server: cd my-bff && go run main.go
    3. Test endpoints: curl http://localhost:8080/health
 
 📁 Navigate to the project: cd my-bff
@@ -148,7 +148,7 @@ bffgen init my-microservices-bff
 ✔ Service name (e.g., 'users', 'products', 'orders'): products
 ✔ Base URL for products (e.g., 'http://localhost:4000/api'): http://localhost:5000/api
 ✅ Added products service on http://localhost:5000/api
-✔ Service name (e.g., 'users', 'products', 'orders'): 
+✔ Service name (e.g., 'users', 'products', 'orders'):
 ✔ Configure routes now or later?
   1) Define manually
   2) Use a template
@@ -307,7 +307,7 @@ curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/api/prote
 
 ## 📂 Project Structure
 
-```
+```text
 my-bff/
 ├── main.go                 # Generated server with routes
 ├── bff.config.yaml         # Service configuration
