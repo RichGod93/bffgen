@@ -19,31 +19,34 @@ bffgen init my-bff
 # Choose: 1) Microservices, 2) Monolithic, 3) Hybrid
 cd my-bff
 
-# Add routes & generate code
-bffgen add-template auth
-bffgen generate
-
-# Run server
+# Start backend services (configurable URLs from init)
+# Then run the BFF server
 go run main.go
 ```
 
-**Output:**
+**Example Output:**
 
 ```
 ✅ BFF project 'my-bff' initialized successfully!
+
+📋 Backend Configuration Summary:
+   Architecture: Monolithic
+   - Backend: http://localhost:3000/api
+   - Services: users, products, orders, cart, auth
+
+🔧 Setup Instructions:
+   1. Start your monolithic backend: http://localhost:3000/api
+   2. Run the BFF server: cd my-bff && go run main.go  
+   3. Test endpoints: curl http://localhost:8080/health
+
 📁 Navigate to the project: cd my-bff
-🚀 Start development server: bffgen dev
+🚀 Start development server: go run main.go
 
-🔴 Redis Setup Required for Rate Limiting (Chi/Echo only):
-   1. Install Redis: brew install redis (macOS) or apt install redis (Ubuntu)
-   2. Start Redis: redis-server
-   3. Set environment: export REDIS_URL=redis://localhost:6379
-   Note: Fiber includes built-in rate limiting, no Redis needed
-
-🔐 JWT Authentication Setup:
-   1. Set JWT secret: export JWT_SECRET=your-secure-secret-key
-   2. Generate tokens in your auth service
-   3. Include 'Authorization: Bearer <token>' header in requests
+🔐 Secure Authentication Setup:
+   1. Set encryption key: export ENCRYPTION_KEY=<key>
+   2. Set JWT secret: export JWT_SECRET=<key>
+   3. Features: Encrypted JWT tokens, secure sessions, CSRF protection
+   4. Auth endpoints: /api/auth/login, /api/auth/refresh, /api/auth/logout
 ```
 
 ---
@@ -108,33 +111,105 @@ sudo mv bffgen /usr/local/bin/
 
 ## 🚀 Usage Examples
 
-### Initialize Project
+### Initialize Project with Backend Architecture
 
 ```bash
 bffgen init my-bff
-✔ Which framework? (chi/echo/fiber) [chi]:
+✔ Which framework? (chi/echo/fiber) [chi]: fiber
 ✔ Frontend URLs (comma-separated) [localhost:3000,localhost:3001]: localhost:5173
+✔ What's your backend architecture?
+  1) Microservices (different ports/URLs)
+  2) Monolithic (single port/URL)
+  3) Hybrid (some services on same port)
+✔ Select option (1-3) [1]: 2
+✔ Backend base URL (e.g., 'http://localhost:3000/api'): http://localhost:3000/api
 ✔ Configure routes now or later?
-   1) Define manually
-   2) Use a template
-   3) Skip for now
-✔ Select option (1-3) [3]: 2
+  1) Define manually
+  2) Use a template
+  3) Skip for now
+✔ Select option (1-3) [3]: 3
 ```
 
-### Add Authentication Template
+### Example: Microservices Architecture
 
 ```bash
+bffgen init my-microservices-bff
+✔ Which framework? (chi/echo/fiber) [chi]: chi
+✔ Frontend URLs (comma-separated) [localhost:3000,localhost:3001]: localhost:5173
+✔ What's your backend architecture?
+  1) Microservices (different ports/URLs)
+  2) Monolithic (single port/URL)
+  3) Hybrid (some services on same port)
+✔ Select option (1-3) [1]: 1
+🔧 Configuring Microservices Backend
+✔ Service name (e.g., 'users', 'products', 'orders'): users
+✔ Base URL for users (e.g., 'http://localhost:4000/api'): http://localhost:4000/api
+✅ Added users service on http://localhost:4000/api
+✔ Service name (e.g., 'users', 'products', 'orders'): products
+✔ Base URL for products (e.g., 'http://localhost:4000/api'): http://localhost:5000/api
+✅ Added products service on http://localhost:5000/api
+✔ Service name (e.g., 'users', 'products', 'orders'): 
+✔ Configure routes now or later?
+  1) Define manually
+  2) Use a template
+  3) Skip for now
+✔ Select option (1-3): 3
+
+✅ BFF project 'my-microservices-bff' initialized successfully!
+
+📋 Backend Configuration Summary:
+   Architecture: Microservices
+   - users: http://localhost:4000/api
+   - products: http://localhost:5000/api
+
+🔧 Setup Instructions:
+   1. Start your microservices on the configured ports:
+      - users: http://localhost:4000/api
+      - products: http://localhost:5000/api
+   2. Run the BFF server:
+      cd my-microservices-bff
+      go run main.go
+   3. Test the endpoints:
+      curl http://localhost:8080/health
+
+📁 Navigate to the project: cd my-microservices-bff
+🚀 Start development server: go run main.go
+```
+
+### Working with Templates (Optional Routes)
+
+```bash
+# Add routes using templates
 bffgen add-template auth
-```
+# 📁 Template added: internal/templates/auth.yaml
 
-### Generate Code
+# Add manual routes
+bffgen add-route
+# ✔ Service name: payments
+# ✔ Endpoint path: /api/payments
+# ✔ HTTP method [GET]:
 
-```bash
+# Generate routes in main.go when ready
 bffgen generate
 # ✅ Code generation completed!
-# 📁 Updated files:
-#    - main.go (with proxy routes)
-#    - cmd/server/main.go (server entry point)
+# 📁 Updated: main.go (with proxy routes)
+```
+
+### Run Development Server
+
+```bash
+# Your project structure is ready! No generation needed.
+ls -la my-microservices-bff/
+# bff.config.yaml  go.mod  main.go  README.md  internal/
+
+# Start your backend services first
+# Users API: http://localhost:4000/api
+# Products API: http://localhost:5000/api
+
+# Then run the BFF server
+cd my-microservices-bff
+go run main.go
+# 🚀 BFF server starting on :8080
 ```
 
 ### Create Postman Collection
