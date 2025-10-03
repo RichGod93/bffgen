@@ -1,8 +1,9 @@
 # bffgen
 
-**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in Go with enhanced backend architecture support, JWT auth, rate limiting, and comprehensive logging.
+**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express)**, or **Node.js (Fastify)** with JWT auth, rate limiting, CORS, and comprehensive logging.
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
+[![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/badge/Latest-v1.0.1-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.0.1)
 
@@ -10,18 +11,33 @@
 
 ## ⚡ Quick Start
 
+### Go BFF
+
 ```bash
-# Install latest version with enhanced backend architecture support
+# Install
 go install github.com/RichGod93/bffgen/cmd/bffgen@v1.0.1
 
-# Create BFF with your preferred backend architecture
-bffgen init my-bff
-# Choose: 1) Microservices, 2) Monolithic, 3) Hybrid
-cd my-bff
+# Create Go BFF (Chi, Echo, or Fiber)
+bffgen init my-go-bff --lang go --framework chi
+cd my-go-bff && go run main.go
+```
 
-# Start backend services (configurable URLs from init)
-# Then run the BFF server
-go run main.go
+### Node.js BFF (Express)
+
+```bash
+# Create Express BFF
+bffgen init my-express-bff --lang nodejs-express
+cd my-express-bff
+npm install && npm run dev
+```
+
+### Node.js BFF (Fastify)
+
+```bash
+# Create Fastify BFF
+bffgen init my-fastify-bff --lang nodejs-fastify
+cd my-fastify-bff
+npm install && npm run dev
 ```
 
 **Example Output:**
@@ -53,35 +69,52 @@ go run main.go
 
 ## 🛠️ Commands
 
-| Command        | Description                          |
-| -------------- | ------------------------------------ |
-| `init`         | Scaffold new BFF project             |
-| `add-route`    | Add backend endpoint interactively   |
-| `add-template` | Add auth/ecommerce/content templates |
-| `generate`     | Generate Go code from config         |
-| `postman`      | Create Postman collection            |
-| `dev`          | Run development server               |
-| `config`       | Manage global configuration          |
+| Command        | Description                                                     | Go  | Node.js |
+| -------------- | --------------------------------------------------------------- | --- | ------- |
+| `init`         | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
+| `add-route`    | Add backend endpoint interactively                              | ✅  | ✅      |
+| `add-template` | Add auth/ecommerce/content templates                            | ✅  | ✅      |
+| `generate`     | Generate routes from config                                     | ✅  | ✅      |
+| `postman`      | Create Postman collection                                       | ✅  | ✅      |
+| `dev`          | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
+| `config`       | Manage global configuration                                     | ✅  | ✅      |
 
 ---
 
 ## ✨ Features
+
+### 🌐 **Multi-Runtime Support**
+
+- **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
+- **Node.js Express** - Popular, flexible web framework
+- **Node.js Fastify** - Fast, schema-based framework
+- **Template-Based Generation** - Embedded templates for consistency
+- **Auto-Detection** - Commands detect project type automatically
 
 ### 🏗️ **Enhanced Backend Architecture Support**
 
 - **Microservices**: Different ports/URLs for each service
 - **Monolithic**: Single port/URL for all services
 - **Hybrid**: Services on same port with different paths
-- **Smart Configuration**: Auto-generates tailored bff.config.yaml
+- **Smart Configuration**: Auto-generates bff.config.yaml or bffgen.config.json
 - **Intelligent Defaults**: Smart port numbering and URL suggestions
 
 ### 🔒 Security Features
 
 - **JWT Authentication** - Token validation with user context injection
-- **Rate Limiting** - Fiber built-in, Chi/Echo with Redis
-- **Security Headers** - XSS, CSRF, Content-Type protection
+- **Rate Limiting** - Built-in for all runtimes (Redis optional)
+- **Security Headers** - Helmet, CSP, HSTS, XSS protection
 - **CORS Configuration** - Restrictive origins, credentials support
 - **Request Validation** - Size limits, content-type validation
+
+### 🎨 **Developer Experience**
+
+- **Interactive CLI** - Guided project setup with prompts
+- **Template System** - Pre-built templates (auth, ecommerce, content)
+- **Code Generation** - Auto-generate routes from config
+- **Hot Reload** - Development mode with auto-restart (nodemon for Node.js)
+- **Professional Structure** - `src/` directory, tests, middleware
+- **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
 
 ---
 
@@ -307,8 +340,10 @@ curl -H "Authorization: Bearer <your-jwt-token>" http://localhost:8080/api/prote
 
 ## 📂 Project Structure
 
+### Go Project
+
 ```text
-my-bff/
+my-go-bff/
 ├── main.go                 # Generated server with routes
 ├── bff.config.yaml         # Service configuration
 ├── go.mod                  # Dependencies
@@ -318,6 +353,136 @@ my-bff/
     ├── aggregators/        # Data aggregation
     └── templates/          # Template files
 ```
+
+### Node.js Project (Express/Fastify)
+
+```text
+my-node-bff/
+├── src/
+│   ├── index.js            # Main server file
+│   ├── middleware/         # Auth, error handling
+│   ├── routes/             # Generated route files
+│   ├── controllers/        # Business logic
+│   ├── config/             # Configuration
+│   └── utils/              # Utilities
+├── tests/
+│   ├── unit/               # Unit tests
+│   └── integration/        # Integration tests
+├── bffgen.config.json      # BFF configuration
+├── package.json            # Dependencies & scripts
+├── .env.example            # Environment template
+├── .gitignore              # Git ignore
+└── README.md               # Project docs
+```
+
+---
+
+## 🚀 Node.js Usage Guide
+
+### Express Workflow
+
+```bash
+# 1. Initialize Express project
+bffgen init my-express-bff --lang nodejs-express
+
+# 2. Navigate to project
+cd my-express-bff
+
+# 3. Add a template (auth, ecommerce, or content)
+bffgen add-template ecommerce
+
+# 4. Generate route files
+bffgen generate
+
+# 5. Install dependencies
+npm install
+
+# 6. Start development server
+npm run dev:watch
+
+# 7. Test endpoints
+curl http://localhost:8080/health
+curl http://localhost:8080/api/products
+```
+
+### Fastify Workflow
+
+```bash
+# 1. Initialize Fastify project
+bffgen init my-fastify-bff --lang nodejs-fastify
+
+# 2. Navigate to project
+cd my-fastify-bff
+
+# 3. Add auth template
+bffgen add-template auth
+
+# 4. Generate routes
+bffgen generate
+
+# 5. Install dependencies
+npm install
+
+# 6. Start development server
+npm run dev
+
+# 7. Test auth endpoints
+curl http://localhost:8080/health
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+```
+
+### Available npm Scripts
+
+| Script               | Description                        |
+| -------------------- | ---------------------------------- |
+| `npm start`          | Start production server            |
+| `npm run dev`        | Start development server (nodemon) |
+| `npm run dev:watch`  | Watch mode with file watching      |
+| `npm test`           | Run tests with coverage            |
+| `npm run test:watch` | Watch mode for TDD                 |
+| `npm run lint`       | Check code with ESLint             |
+| `npm run lint:fix`   | Auto-fix linting issues            |
+| `npm run format`     | Format code with Prettier          |
+| `npm run validate`   | Run lint + format + tests          |
+
+### Templates for Node.js
+
+All templates work with both Go and Node.js projects:
+
+| Template    | Services               | Endpoints | Description                               |
+| ----------- | ---------------------- | --------- | ----------------------------------------- |
+| `auth`      | auth                   | 5         | Login, register, refresh, logout, profile |
+| `ecommerce` | products, orders, cart | 13        | Full e-commerce backend                   |
+| `content`   | posts, comments, likes | 12        | Content management system                 |
+
+**Usage:**
+
+```bash
+bffgen add-template auth       # Adds auth endpoints to config
+bffgen generate                # Generates route files
+```
+
+### Environment Configuration
+
+Node.js projects use `.env.example` as a template:
+
+```bash
+# Copy and configure
+cp .env.example .env
+
+# Edit with your values
+vim .env
+```
+
+**Key Variables:**
+
+- `NODE_ENV` - Environment (development/production)
+- `PORT` - Server port (default: 8080)
+- `JWT_SECRET` - Secret for JWT tokens
+- `CORS_ORIGINS` - Allowed CORS origins
+- `*_URL` - Backend service URLs
 
 ---
 

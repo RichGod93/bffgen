@@ -9,12 +9,13 @@ type BFFGenConfig struct {
 
 // Defaults represents default settings for new projects
 type Defaults struct {
-	Framework   string   `yaml:"framework"`    // chi, echo, fiber
-	CORSOrigins []string `yaml:"cors_origins"` // Default CORS origins
-	JWTSecret   string   `yaml:"jwt_secret"`   // Default JWT secret
-	RedisURL    string   `yaml:"redis_url"`    // Default Redis URL
-	Port        int      `yaml:"port"`         // Default port
-	RouteOption string   `yaml:"route_option"` // 1=manual, 2=template, 3=skip
+	Language     string   `yaml:"language"`     // go, nodejs-express, nodejs-fastify
+	Framework    string   `yaml:"framework"`    // chi, echo, fiber, express, fastify
+	CORSOrigins  []string `yaml:"cors_origins"` // Default CORS origins
+	JWTSecret    string   `yaml:"jwt_secret"`   // Default JWT secret
+	RedisURL     string   `yaml:"redis_url"`    // Default Redis URL
+	Port         int      `yaml:"port"`         // Default port
+	RouteOption  string   `yaml:"route_option"` // 1=manual, 2=template, 3=skip
 }
 
 // User represents user information
@@ -35,6 +36,7 @@ type History struct {
 func GetDefaultConfig() *BFFGenConfig {
 	return &BFFGenConfig{
 		Defaults: Defaults{
+			Language:    "go",
 			Framework:   "chi",
 			CORSOrigins: []string{"localhost:3000", "localhost:3001"},
 			JWTSecret:   "your-secret-key-change-in-production",

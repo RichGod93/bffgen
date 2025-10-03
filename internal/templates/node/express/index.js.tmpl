@@ -1,0 +1,162 @@
+// Generated Express.js BFF server for {{.ProjectName}}
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const { body, validationResult } = require('express-validator');
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+app.use(cookieParser());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.RATE_LIMIT || 100,
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
+
+// CORS configuration
+const corsOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',') 
+  : {{.CORSOrigins}};
+
+app.use(cors({
+  origin: corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Accept', 'Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Requested-With'],
+  exposedHeaders: ['X-CSRF-Token'],
+}));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
+
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Readiness check endpoint
+app.get('/ready', (req, res) => {
+  // Add checks for database, redis, etc.
+  res.json({ status: 'ready', timestamp: new Date().toISOString() });
+});
+
+// Auth endpoints placeholder
+app.post('/api/auth/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 })
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  
+  // TODO: Implement your authentication logic
+  // const { email, password } = req.body;
+  res.json({ 
+    message: 'Login endpoint - implement authentication',
+    todo: 'Add JWT token generation and validation'
+  });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  // TODO: Implement logout logic (clear tokens, sessions, etc.)
+  res.clearCookie('access_token');
+  res.clearCookie('refresh_token');
+  res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/api/auth/profile', (req, res) => {
+  // TODO: Add JWT validation middleware
+  // TODO: Extract user info from token
+  res.json({ 
+    message: 'Profile endpoint - add authentication',
+    todo: 'Implement JWT validation middleware'
+  });
+});
+
+{{.BackendRoutes}}
+
+// 404 handler - must be after all routes
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
+});
+
+// Error handling middleware - must be last
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  
+  // Don't leak error details in production
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  res.status(err.status || 500).json({
+    error: isDevelopment ? err.message : 'Internal server error',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+// Start server
+const server = app.listen(PORT, () => {
+  console.log('🚀 {{.ProjectName}} BFF server running on port ' + PORT);
+  console.log('📋 Health check: http://localhost:' + PORT + '/health');
+  console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
+});
+
+module.exports = app;
+

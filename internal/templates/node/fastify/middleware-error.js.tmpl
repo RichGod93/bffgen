@@ -1,0 +1,87 @@
+/**
+ * Error Handling Plugin for Fastify
+ * Centralized error handling with proper logging and responses
+ */
+
+const fp = require('fastify-plugin');
+
+/**
+ * Fastify error handling plugin
+ * @param {Object} fastify - Fastify instance
+ * @param {Object} options - Plugin options
+ */
+async function errorHandlerPlugin(fastify, options) {
+  // Custom error handler
+  fastify.setErrorHandler(function (error, request, reply) {
+    // Log error
+    this.log.error({
+      err: error,
+      method: request.method,
+      url: request.url,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Handle different error types
+    if (error.validation) {
+      reply.status(400).send({
+        error: 'Validation Error',
+        message: error.message,
+        details: error.validation
+      });
+      return;
+    }
+    
+    if (error.statusCode === 401) {
+      reply.status(401).send({
+        error: 'Unauthorized',
+        message: error.message || 'Authentication required'
+      });
+      return;
+    }
+    
+    if (error.statusCode === 403) {
+      reply.status(403).send({
+        error: 'Forbidden',
+        message: error.message || 'Insufficient permissions'
+      });
+      return;
+    }
+    
+    if (error.statusCode === 404) {
+      reply.status(404).send({
+        error: 'Not Found',
+        message: error.message || 'Resource not found'
+      });
+      return;
+    }
+    
+    if (error.statusCode) {
+      reply.status(error.statusCode).send({
+        error: error.name || 'Error',
+        message: error.message
+      });
+      return;
+    }
+    
+    // Default 500 error
+    reply.status(500).send({
+      error: 'Internal Server Error',
+      message: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : 'An unexpected error occurred',
+      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+    });
+  });
+  
+  // 404 handler
+  fastify.setNotFoundHandler(function (request, reply) {
+    reply.status(404).send({
+      error: 'Not Found',
+      message: `Cannot ${request.method} ${request.url}`,
+      timestamp: new Date().toISOString()
+    });
+  });
+}
+
+module.exports = fp(errorHandlerPlugin);
+

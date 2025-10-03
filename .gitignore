@@ -117,3 +117,26 @@ tmp/
 
 # GitHub Actions generated files
 release_notes.md
+
+# Test scripts at root level (if any remain during development)
+/test_*.sh
+/comprehensive_test.sh
+/scripts/test_*.sh
+/scripts/comprehensive_test.sh
+
+# AWK helper scripts (utilities)
+*.awk
+
+# Task documentation at root (should be in docs/tasks/)
+docs/tasks/*
+docs/ARCHITECTURE.md
+docs/NODEJS_TESTING.md
+docs/templates/*
+
+# Generated test projects
+nodejs-examples/
+
+# Cleanup: Old test files
+add_runtime.awk
+update_description.awk
+update_run.awk
