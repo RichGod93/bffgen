@@ -137,8 +137,9 @@ func TestRenderTemplate(t *testing.T) {
 			framework: "express",
 			filename:  "index.js.tmpl",
 			data: &TemplateData{
-				ProjectName: "test-app",
-				CORSOrigins: "['http://localhost:3000']",
+				ProjectName:   "test-app",
+				CORSOrigins:   `["http://localhost:3000"]`,
+				CORSOriginsJS: "['http://localhost:3000']",
 			},
 			wantErr:  false,
 			contains: []string{"test-app", "express", "localhost:3000"},
@@ -149,8 +150,9 @@ func TestRenderTemplate(t *testing.T) {
 			framework: "fastify",
 			filename:  "index.js.tmpl",
 			data: &TemplateData{
-				ProjectName: "test-fastify",
-				CORSOrigins: "['http://localhost:5000']",
+				ProjectName:   "test-fastify",
+				CORSOrigins:   `["http://localhost:5000"]`,
+				CORSOriginsJS: "['http://localhost:5000']",
 			},
 			wantErr:  false,
 			contains: []string{"test-fastify", "fastify", "localhost:5000"},
@@ -516,7 +518,8 @@ func TestTemplateRendering(t *testing.T) {
 			filename:  "index.js.tmpl",
 			data: &TemplateData{
 				ProjectName:   "test-app",
-				CORSOrigins:   "['http://localhost:3000']",
+				CORSOrigins:   `["http://localhost:3000"]`,
+				CORSOriginsJS: "['http://localhost:3000']",
 				BackendRoutes: "// Test routes",
 			},
 			wantContains: []string{"test-app", "express", "// Test routes"},
@@ -529,7 +532,8 @@ func TestTemplateRendering(t *testing.T) {
 			filename:  "index.js.tmpl",
 			data: &TemplateData{
 				ProjectName:   "test-fastify",
-				CORSOrigins:   "['http://localhost:5000']",
+				CORSOrigins:   `["http://localhost:5000"]`,
+				CORSOriginsJS: "['http://localhost:5000']",
 				BackendRoutes: "// Fastify routes",
 			},
 			wantContains: []string{"test-fastify", "fastify", "// Fastify routes"},
@@ -573,4 +577,3 @@ func TestTemplateRendering(t *testing.T) {
 		})
 	}
 }
-
