@@ -15,15 +15,19 @@ var initCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
-		
+
 		// Get flags
 		langFlag, _ := cmd.Flags().GetString("lang")
 		runtimeFlag, _ := cmd.Flags().GetString("runtime")
 		frameworkFlag, _ := cmd.Flags().GetString("framework")
-		
+		middlewareFlag, _ := cmd.Flags().GetString("middleware")
+		controllerType, _ := cmd.Flags().GetString("controller-type")
+		skipTests, _ := cmd.Flags().GetBool("skip-tests")
+		skipDocs, _ := cmd.Flags().GetBool("skip-docs")
+
 		languageType := scaffolding.LanguageGo
 		framework := "chi"
-		
+
 		// Determine language from flags
 		if langFlag != "" {
 			if !scaffolding.IsValidLanguage(langFlag) {
@@ -42,13 +46,22 @@ var initCmd = &cobra.Command{
 			config := scaffolding.GetLanguageConfig(languageType)
 			framework = config.Framework
 		}
-		
+
 		// Override framework if specified
 		if frameworkFlag != "" {
 			framework = frameworkFlag
 		}
-		
-		languageType, framework, backendServices, err := initializeProject(projectName, languageType, framework)
+
+		// Prepare project options
+		opts := ProjectOptions{
+			MiddlewareFlag:   middlewareFlag,
+			ControllerType:   controllerType,
+			SkipTests:        skipTests,
+			SkipDocs:         skipDocs,
+			LanguageExplicit: langFlag != "" || runtimeFlag != "",
+		}
+
+		languageType, framework, backendServices, err := initializeProjectWithOptions(projectName, languageType, framework, opts)
 		if err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
 			os.Exit(1)
@@ -87,4 +100,8 @@ func init() {
 	initCmd.Flags().StringP("lang", "l", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify)")
 	initCmd.Flags().StringP("runtime", "r", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify) - alias for --lang")
 	initCmd.Flags().StringP("framework", "f", "", "Framework (chi, echo, fiber for Go; express, fastify for Node.js)")
+	initCmd.Flags().String("middleware", "", "Comma-separated list of middleware to include (validation,logger,requestId,all,none)")
+	initCmd.Flags().String("controller-type", "both", "Controller type for Node.js projects (basic,aggregator,both)")
+	initCmd.Flags().Bool("skip-tests", false, "Skip test file generation")
+	initCmd.Flags().Bool("skip-docs", false, "Skip API documentation generation")
 }

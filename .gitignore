@@ -140,3 +140,9 @@ nodejs-examples/
 add_runtime.awk
 update_description.awk
 update_run.awk
+
+# Internal development documentation (not for repository)
+IMPLEMENTATION_SUMMARY.md
+RELEASE_PREP*.md
+*.plan.md
+.bffgen-config

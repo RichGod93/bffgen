@@ -17,13 +17,14 @@ var nodeTemplates embed.FS
 // TemplateData holds data for template rendering
 type TemplateData struct {
 	ProjectName        string
-	Runtime            string   // nodejs-express, nodejs-fastify
-	Framework          string   // express, fastify
-	CORSOrigins        string   // JSON array format for JS: ['http://localhost:3000']
-	CORSOriginsEnv     string   // Comma-separated for .env: http://localhost:3000,http://localhost:3001
-	BackendRoutes      string   // Generated route code
-	BackendServicesEnv string   // Environment variables for backend services
-	BackendsJSON       string   // JSON array of backend services
+	Runtime            string // nodejs-express, nodejs-fastify
+	Framework          string // express, fastify
+	CORSOrigins        string // JSON array format with double quotes: ["http://localhost:3000"]
+	CORSOriginsJS      string // JS array format with single quotes: ['http://localhost:3000']
+	CORSOriginsEnv     string // Comma-separated for .env: http://localhost:3000,http://localhost:3001
+	BackendRoutes      string // Generated route code
+	BackendServicesEnv string // Environment variables for backend services
+	BackendsJSON       string // JSON array of backend services
 	BackendServices    []BackendServiceData
 }
 
@@ -32,6 +33,35 @@ type BackendServiceData struct {
 	Name    string
 	BaseURL string
 	Port    int
+}
+
+// ServiceTemplateData holds data for service template rendering
+type ServiceTemplateData struct {
+	ServiceName       string
+	ServiceNamePascal string
+	BaseURL           string
+	EnvKey            string
+	Endpoints         []EndpointData
+}
+
+// ControllerTemplateData holds data for controller template rendering
+type ControllerTemplateData struct {
+	ServiceName       string
+	ServiceNamePascal string
+	Endpoints         []EndpointData
+}
+
+// EndpointData represents an API endpoint
+type EndpointData struct {
+	Name              string
+	Path              string
+	Method            string
+	BackendPath       string
+	ExposeAs          string
+	RequiresAuth      bool
+	HandlerName       string
+	HandlerNamePascal string
+	Description       string
 }
 
 // TemplateLoader handles loading and rendering templates
@@ -51,26 +81,35 @@ func NewTemplateLoader(langType scaffolding.LanguageType) *TemplateLoader {
 // LoadTemplate loads a template file
 func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, error) {
 	var path string
-	
-	switch tl.langType {
-	case scaffolding.LanguageNodeExpress:
-		if filename == "env.tmpl" || filename == "gitignore.tmpl" || filename == "bffgen.config.json.tmpl" {
-			path = filepath.Join("node", "common", filename)
-		} else if strings.HasPrefix(filename, "middleware-") || strings.HasPrefix(filename, "routes-") {
-			path = filepath.Join("node", "express", filename)
-		} else {
-			path = filepath.Join("node", "express", filename)
+
+	// Common templates (shared between Express and Fastify)
+	commonFiles := []string{
+		"env.tmpl", "gitignore.tmpl", "bffgen.config.json.tmpl",
+		"service-base.js.tmpl", "service-template.js.tmpl",
+		"jest.config.js.tmpl", "setup-tests.js.tmpl",
+		"swagger-config.js.tmpl", "logger.js.tmpl",
+	}
+
+	isCommon := false
+	for _, cf := range commonFiles {
+		if filename == cf {
+			isCommon = true
+			break
 		}
-	case scaffolding.LanguageNodeFastify:
-		if filename == "env.tmpl" || filename == "gitignore.tmpl" || filename == "bffgen.config.json.tmpl" {
-			path = filepath.Join("node", "common", filename)
-		} else if strings.HasPrefix(filename, "middleware-") || strings.HasPrefix(filename, "routes-") {
+	}
+
+	if isCommon {
+		path = filepath.Join("node", "common", filename)
+	} else {
+		// Framework-specific templates
+		switch tl.langType {
+		case scaffolding.LanguageNodeExpress:
+			path = filepath.Join("node", "express", filename)
+		case scaffolding.LanguageNodeFastify:
 			path = filepath.Join("node", "fastify", filename)
-		} else {
-			path = filepath.Join("node", "fastify", filename)
+		default:
+			return "", fmt.Errorf("unsupported language type: %s", tl.langType)
 		}
-	default:
-		return "", fmt.Errorf("unsupported language type: %s", tl.langType)
 	}
 
 	content, err := tl.fs.ReadFile(path)
@@ -106,7 +145,7 @@ func FormatCORSOriginsForJS(origins []string) string {
 	if len(origins) == 0 {
 		return "['http://localhost:3000']"
 	}
-	
+
 	formatted := make([]string, len(origins))
 	for i, origin := range origins {
 		// Ensure proper protocol
@@ -115,7 +154,25 @@ func FormatCORSOriginsForJS(origins []string) string {
 		}
 		formatted[i] = fmt.Sprintf("'%s'", origin)
 	}
-	
+
+	return "[" + strings.Join(formatted, ", ") + "]"
+}
+
+// FormatCORSOriginsForJSON formats CORS origins for JSON (double quotes)
+func FormatCORSOriginsForJSON(origins []string) string {
+	if len(origins) == 0 {
+		return `["http://localhost:3000"]`
+	}
+
+	formatted := make([]string, len(origins))
+	for i, origin := range origins {
+		// Ensure proper protocol
+		if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+			origin = "http://" + origin
+		}
+		formatted[i] = fmt.Sprintf(`"%s"`, origin)
+	}
+
 	return "[" + strings.Join(formatted, ", ") + "]"
 }
 
@@ -124,7 +181,7 @@ func FormatCORSOriginsForEnv(origins []string) string {
 	if len(origins) == 0 {
 		return "http://localhost:3000"
 	}
-	
+
 	formatted := make([]string, len(origins))
 	for i, origin := range origins {
 		// Ensure proper protocol
@@ -133,7 +190,7 @@ func FormatCORSOriginsForEnv(origins []string) string {
 		}
 		formatted[i] = origin
 	}
-	
+
 	return strings.Join(formatted, ",")
 }
 
@@ -142,13 +199,13 @@ func GenerateBackendServicesEnv(services []BackendServiceData) string {
 	if len(services) == 0 {
 		return "# No backend services configured"
 	}
-	
+
 	var lines []string
 	for _, service := range services {
 		envKey := strings.ToUpper(service.Name) + "_SERVICE_URL"
 		lines = append(lines, fmt.Sprintf("%s=%s", envKey, service.BaseURL))
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -168,10 +225,10 @@ func GenerateExpressRoutes(services []BackendServiceData) string {
 //   }
 // });`
 	}
-	
+
 	var routes []string
 	routes = append(routes, "\n// Generated backend service routes")
-	
+
 	for _, service := range services {
 		envKey := strings.ToUpper(service.Name) + "_SERVICE_URL"
 		routes = append(routes, fmt.Sprintf(`
@@ -189,7 +246,7 @@ app.get('/api/%s', async (req, res) => {
   }
 });`, service.Name, service.Name, envKey, service.BaseURL, service.Name, service.Name, service.Name))
 	}
-	
+
 	return strings.Join(routes, "\n")
 }
 
@@ -210,10 +267,10 @@ func GenerateFastifyRoutes(services []BackendServiceData) string {
     //   }
     // });`
 	}
-	
+
 	var routes []string
 	routes = append(routes, "\n    // Generated backend service routes")
-	
+
 	for _, service := range services {
 		envKey := strings.ToUpper(service.Name) + "_SERVICE_URL"
 		routes = append(routes, fmt.Sprintf(`
@@ -232,7 +289,7 @@ func GenerateFastifyRoutes(services []BackendServiceData) string {
       }
     });`, service.Name, service.Name, envKey, service.BaseURL, service.Name, service.Name, service.Name))
 	}
-	
+
 	return strings.Join(routes, "\n")
 }
 
@@ -241,7 +298,7 @@ func GenerateBackendsJSON(services []BackendServiceData) string {
 	if len(services) == 0 {
 		return "[]"
 	}
-	
+
 	var backends []string
 	for _, service := range services {
 		backend := fmt.Sprintf(`    {
@@ -257,6 +314,30 @@ func GenerateBackendsJSON(services []BackendServiceData) string {
     }`, service.Name, service.BaseURL)
 		backends = append(backends, backend)
 	}
-	
+
 	return "[\n" + strings.Join(backends, ",\n") + "\n  ]"
+}
+
+// ToPascalCase converts a string to PascalCase
+func ToPascalCase(s string) string {
+	words := strings.FieldsFunc(s, func(r rune) bool {
+		return r == '-' || r == '_' || r == ' '
+	})
+
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(string(word[0])) + strings.ToLower(word[1:])
+		}
+	}
+
+	return strings.Join(words, "")
+}
+
+// ToCamelCase converts a string to camelCase
+func ToCamelCase(s string) string {
+	pascal := ToPascalCase(s)
+	if len(pascal) > 0 {
+		return strings.ToLower(string(pascal[0])) + pascal[1:]
+	}
+	return pascal
 }

@@ -28,6 +28,7 @@ func createProjectDirectories(projectName string, langType scaffolding.LanguageT
 			filepath.Join(projectName, "src", "routes"),
 			filepath.Join(projectName, "src", "middleware"),
 			filepath.Join(projectName, "src", "controllers"),
+			filepath.Join(projectName, "src", "services"),
 			filepath.Join(projectName, "src", "utils"),
 			filepath.Join(projectName, "src", "config"),
 			filepath.Join(projectName, "tests"),
@@ -71,13 +72,18 @@ func createPackageJsonFile(projectName string, langType scaffolding.LanguageType
 
 // createMainFile creates the main server file based on language/framework
 func createMainFile(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []BackendService) error {
+	return createMainFileWithOptions(projectName, langType, framework, corsConfig, backendServs, ProjectOptions{})
+}
+
+// createMainFileWithOptions creates the main server file with options
+func createMainFileWithOptions(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []BackendService, opts ProjectOptions) error {
 	switch langType {
 	case scaffolding.LanguageGo:
 		return createGoMainFile(projectName, framework, corsConfig)
 	case scaffolding.LanguageNodeExpress:
-		return createNodeExpressMainFileFromTemplate(projectName, backendServs)
+		return createNodeExpressMainFileWithOptions(projectName, backendServs, opts)
 	case scaffolding.LanguageNodeFastify:
-		return createNodeFastifyMainFileFromTemplate(projectName, backendServs)
+		return createNodeFastifyMainFileWithOptions(projectName, backendServs, opts)
 	default:
 		return nil
 	}
@@ -322,7 +328,7 @@ module.exports = app;
 	return os.WriteFile(filepath.Join(projectName, "index.js"), []byte(content), 0644)
 }
 
-// createNodeFastifyMainFile creates Fastify index.js file  
+// createNodeFastifyMainFile creates Fastify index.js file
 func createNodeFastifyMainFile(projectName string) error {
 	content := `// Generated Fastify BFF server
 const fastify = require('fastify')({ 
@@ -435,7 +441,7 @@ func generateCORSConfigWithLang(origins []string, framework string, langType sca
 	if langType != scaffolding.LanguageGo {
 		return ""
 	}
-	
+
 	originsStr := ""
 	for i, origin := range origins {
 		if i > 0 {
@@ -486,8 +492,13 @@ func generateCORSConfigWithLang(origins []string, framework string, langType sca
 
 // createNodeExpressMainFileFromTemplate creates Express index.js from template
 func createNodeExpressMainFileFromTemplate(projectName string, backendServs []BackendService) error {
+	return createNodeExpressMainFileWithOptions(projectName, backendServs, ProjectOptions{})
+}
+
+// createNodeExpressMainFileWithOptions creates Express index.js from template with options
+func createNodeExpressMainFileWithOptions(projectName string, backendServs []BackendService, opts ProjectOptions) error {
 	loader := templates.NewTemplateLoader(scaffolding.LanguageNodeExpress)
-	
+
 	// Convert backend services to template format
 	var services []templates.BackendServiceData
 	for _, svc := range backendServs {
@@ -497,79 +508,109 @@ func createNodeExpressMainFileFromTemplate(projectName string, backendServs []Ba
 			Port:    svc.Port,
 		})
 	}
-	
+
 	// Prepare template data
 	data := &templates.TemplateData{
 		ProjectName:        projectName,
 		Runtime:            "nodejs-express",
 		Framework:          "express",
-		CORSOrigins:        templates.FormatCORSOriginsForJS([]string{"localhost:3000", "localhost:3001"}),
+		CORSOrigins:        templates.FormatCORSOriginsForJSON([]string{"localhost:3000", "localhost:3001"}),
+		CORSOriginsJS:      templates.FormatCORSOriginsForJS([]string{"localhost:3000", "localhost:3001"}),
 		CORSOriginsEnv:     templates.FormatCORSOriginsForEnv([]string{"localhost:3000", "localhost:3001"}),
 		BackendRoutes:      templates.GenerateExpressRoutes(services),
 		BackendServicesEnv: templates.GenerateBackendServicesEnv(services),
 		BackendsJSON:       templates.GenerateBackendsJSON(services),
 		BackendServices:    services,
 	}
-	
+
 	// Render templates
 	indexContent, err := loader.RenderTemplate("express", "index.js.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	packageContent, err := loader.RenderTemplate("express", "package.json.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	envContent, err := loader.RenderTemplate("express", "env.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	gitignoreContent, err := loader.RenderTemplate("express", "gitignore.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	bffgenConfigContent, err := loader.RenderTemplate("express", "bffgen.config.json.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	// Write files to src/
 	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), 0644); err != nil {
 		return err
 	}
-	
+
 	// Generate middleware files
 	if err := createExpressMiddleware(projectName, loader); err != nil {
 		return err
 	}
-	
+
+	// Generate logger utility
+	if err := createLoggerUtility(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+		return fmt.Errorf("failed to create logger utility: %w", err)
+	}
+
+	// Generate HTTP client and service files
+	if err := createServiceFiles(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+		return fmt.Errorf("failed to create service files: %w", err)
+	}
+
+	// Conditionally generate test files
+	if !opts.SkipTests {
+		if err := createTestFiles(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+			return fmt.Errorf("failed to create test files: %w", err)
+		}
+	}
+
+	// Conditionally generate Swagger files
+	if !opts.SkipDocs {
+		if err := createSwaggerFiles(projectName, scaffolding.LanguageNodeExpress, "express", projectName); err != nil {
+			return fmt.Errorf("failed to create swagger files: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // createNodeFastifyMainFileFromTemplate creates Fastify index.js from template
 func createNodeFastifyMainFileFromTemplate(projectName string, backendServs []BackendService) error {
+	return createNodeFastifyMainFileWithOptions(projectName, backendServs, ProjectOptions{})
+}
+
+// createNodeFastifyMainFileWithOptions creates Fastify index.js from template with options
+func createNodeFastifyMainFileWithOptions(projectName string, backendServs []BackendService, opts ProjectOptions) error {
 	loader := templates.NewTemplateLoader(scaffolding.LanguageNodeFastify)
-	
+
 	// Convert backend services to template format
 	var services []templates.BackendServiceData
 	for _, svc := range backendServs {
@@ -579,72 +620,97 @@ func createNodeFastifyMainFileFromTemplate(projectName string, backendServs []Ba
 			Port:    svc.Port,
 		})
 	}
-	
+
 	// Prepare template data
 	data := &templates.TemplateData{
 		ProjectName:        projectName,
 		Runtime:            "nodejs-fastify",
 		Framework:          "fastify",
-		CORSOrigins:        templates.FormatCORSOriginsForJS([]string{"localhost:3000", "localhost:3001"}),
+		CORSOrigins:        templates.FormatCORSOriginsForJSON([]string{"localhost:3000", "localhost:3001"}),
+		CORSOriginsJS:      templates.FormatCORSOriginsForJS([]string{"localhost:3000", "localhost:3001"}),
 		CORSOriginsEnv:     templates.FormatCORSOriginsForEnv([]string{"localhost:3000", "localhost:3001"}),
 		BackendRoutes:      templates.GenerateFastifyRoutes(services),
 		BackendServicesEnv: templates.GenerateBackendServicesEnv(services),
 		BackendsJSON:       templates.GenerateBackendsJSON(services),
 		BackendServices:    services,
 	}
-	
+
 	// Render templates
 	indexContent, err := loader.RenderTemplate("fastify", "index.js.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	packageContent, err := loader.RenderTemplate("fastify", "package.json.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	envContent, err := loader.RenderTemplate("fastify", "env.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	gitignoreContent, err := loader.RenderTemplate("fastify", "gitignore.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	bffgenConfigContent, err := loader.RenderTemplate("fastify", "bffgen.config.json.tmpl", data)
 	if err != nil {
 		return err
 	}
-	
+
 	// Write files to src/
 	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), 0644); err != nil {
 		return err
 	}
-	
+
 	// Generate middleware files
 	if err := createFastifyMiddleware(projectName, loader); err != nil {
 		return err
 	}
-	
+
+	// Generate logger utility
+	if err := createLoggerUtility(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+		return fmt.Errorf("failed to create logger utility: %w", err)
+	}
+
+	// Generate HTTP client and service files
+	if err := createServiceFiles(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+		return fmt.Errorf("failed to create service files: %w", err)
+	}
+
+	// Conditionally generate test files
+	if !opts.SkipTests {
+		if err := createTestFiles(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+			return fmt.Errorf("failed to create test files: %w", err)
+		}
+	}
+
+	// Conditionally generate Swagger files
+	if !opts.SkipDocs {
+		if err := createSwaggerFiles(projectName, scaffolding.LanguageNodeFastify, "fastify", projectName); err != nil {
+			return fmt.Errorf("failed to create swagger files: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -652,27 +718,27 @@ func createNodeFastifyMainFileFromTemplate(projectName string, backendServs []Ba
 func createExpressMiddleware(projectName string, loader *templates.TemplateLoader) error {
 	// Create middleware directory
 	middlewareDir := filepath.Join(projectName, "src", "middleware")
-	
+
 	// Render middleware templates
 	authContent, err := loader.RenderTemplate("express", "middleware-auth.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render auth middleware: %w", err)
 	}
-	
+
 	errorContent, err := loader.RenderTemplate("express", "middleware-error.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render error middleware: %w", err)
 	}
-	
+
 	// Write middleware files
 	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), 0644); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -680,27 +746,172 @@ func createExpressMiddleware(projectName string, loader *templates.TemplateLoade
 func createFastifyMiddleware(projectName string, loader *templates.TemplateLoader) error {
 	// Create middleware directory
 	middlewareDir := filepath.Join(projectName, "src", "middleware")
-	
+
 	// Render middleware templates
 	authContent, err := loader.RenderTemplate("fastify", "middleware-auth.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render auth middleware: %w", err)
 	}
-	
+
 	errorContent, err := loader.RenderTemplate("fastify", "middleware-error.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render error middleware: %w", err)
 	}
-	
+
 	// Write middleware files
 	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), 0644); err != nil {
 		return err
 	}
-	
+
 	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), 0644); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
+// createLoggerUtility creates the logger utility file
+func createLoggerUtility(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+
+	data := &templates.TemplateData{
+		Framework: framework,
+	}
+
+	loggerContent, err := loader.RenderTemplate(framework, "logger.js.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render logger: %w", err)
+	}
+
+	utilsDir := filepath.Join(projectName, "src", "utils")
+	if err := os.MkdirAll(utilsDir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(utilsDir, "logger.js"), []byte(loggerContent), 0644)
+}
+
+// createServiceFiles creates the HTTP client and service files
+func createServiceFiles(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+
+	// Create httpClient.js (base HTTP client)
+	httpClientContent, err := loader.RenderTemplate(framework, "service-base.js.tmpl", &templates.TemplateData{})
+	if err != nil {
+		return fmt.Errorf("failed to render HTTP client: %w", err)
+	}
+
+	servicesDir := filepath.Join(projectName, "src", "services")
+	if err := os.MkdirAll(servicesDir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(servicesDir, "httpClient.js"), []byte(httpClientContent), 0644)
+}
+
+// createTestFiles creates Jest configuration and sample test files
+func createTestFiles(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+
+	// Create jest.config.js
+	jestConfigContent, err := loader.RenderTemplate(framework, "jest.config.js.tmpl", &templates.TemplateData{})
+	if err != nil {
+		return fmt.Errorf("failed to render jest config: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "jest.config.js"), []byte(jestConfigContent), 0644); err != nil {
+		return err
+	}
+
+	// Create setup-tests.js
+	setupTestsContent, err := loader.RenderTemplate(framework, "setup-tests.js.tmpl", &templates.TemplateData{})
+	if err != nil {
+		return fmt.Errorf("failed to render test setup: %w", err)
+	}
+
+	testsDir := filepath.Join(projectName, "tests")
+	if err := os.WriteFile(filepath.Join(testsDir, "setup.js"), []byte(setupTestsContent), 0644); err != nil {
+		return err
+	}
+
+	// Create sample route test
+	routeTestContent, err := loader.RenderTemplate(framework, "test-route.test.js.tmpl", &templates.TemplateData{})
+	if err != nil {
+		return fmt.Errorf("failed to render route test: %w", err)
+	}
+
+	integrationDir := filepath.Join(testsDir, "integration")
+	if err := os.MkdirAll(integrationDir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(integrationDir, "health.test.js"), []byte(routeTestContent), 0644)
+}
+
+// createSwaggerFiles creates Swagger configuration files
+func createSwaggerFiles(projectName string, langType scaffolding.LanguageType, framework string, projectDisplayName string) error {
+	loader := templates.NewTemplateLoader(langType)
+
+	data := &templates.TemplateData{
+		ProjectName: projectDisplayName,
+	}
+
+	// Create swagger-config.js
+	swaggerConfigContent, err := loader.RenderTemplate(framework, "swagger-config.js.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render swagger config: %w", err)
+	}
+
+	configDir := filepath.Join(projectName, "src", "config")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(configDir, "swagger-config.js"), []byte(swaggerConfigContent), 0644); err != nil {
+		return err
+	}
+
+	// Create swagger-setup.js
+	swaggerSetupContent, err := loader.RenderTemplate(framework, "swagger-setup.js.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render swagger setup: %w", err)
+	}
+
+	return os.WriteFile(filepath.Join(configDir, "swagger-setup.js"), []byte(swaggerSetupContent), 0644)
+}
+
+// createAdditionalMiddleware creates optional middleware files based on selection
+func createAdditionalMiddleware(projectName string, langType scaffolding.LanguageType, framework string, middlewareTypes []string) error {
+	loader := templates.NewTemplateLoader(langType)
+	middlewareDir := filepath.Join(projectName, "src", "middleware")
+
+	for _, mwType := range middlewareTypes {
+		var templateName string
+		var fileName string
+
+		switch mwType {
+		case "validation":
+			templateName = "middleware-validation.js.tmpl"
+			fileName = "validation.js"
+		case "logger":
+			templateName = "middleware-logger.js.tmpl"
+			fileName = "logger.js"
+		case "requestId":
+			templateName = "middleware-requestId.js.tmpl"
+			fileName = "requestId.js"
+		default:
+			continue
+		}
+
+		content, err := loader.RenderTemplate(framework, templateName, &templates.TemplateData{})
+		if err != nil {
+			return fmt.Errorf("failed to render %s middleware: %w", mwType, err)
+		}
+
+		if err := os.WriteFile(filepath.Join(middlewareDir, fileName), []byte(content), 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

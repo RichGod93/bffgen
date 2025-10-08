@@ -21,7 +21,7 @@ async function start() {
     // CORS configuration
     const corsOrigins = process.env.CORS_ORIGINS 
       ? process.env.CORS_ORIGINS.split(',') 
-      : {{.CORSOrigins}};
+      : {{.CORSOriginsJS}};
 
     await fastify.register(require('@fastify/cors'), {
       origin: corsOrigins,

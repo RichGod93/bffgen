@@ -22,8 +22,22 @@ type BackendService struct {
 	Endpoints []string
 }
 
+// ProjectOptions holds options for project initialization
+type ProjectOptions struct {
+	MiddlewareFlag   string
+	ControllerType   string
+	SkipTests        bool
+	SkipDocs         bool
+	LanguageExplicit bool // True if language was explicitly set via flag
+}
+
 // initializeProject initializes a new BFF project
 func initializeProject(projectName string, langType scaffolding.LanguageType, framework string) (scaffolding.LanguageType, string, []BackendService, error) {
+	return initializeProjectWithOptions(projectName, langType, framework, ProjectOptions{})
+}
+
+// initializeProjectWithOptions initializes a new BFF project with custom options
+func initializeProjectWithOptions(projectName string, langType scaffolding.LanguageType, framework string, opts ProjectOptions) (scaffolding.LanguageType, string, []BackendService, error) {
 	if err := os.MkdirAll(projectName, 0755); err != nil {
 		return langType, framework, nil, fmt.Errorf("failed to create project directory: %w", err)
 	}
@@ -41,7 +55,8 @@ func initializeProject(projectName string, langType scaffolding.LanguageType, fr
 	reader := bufio.NewReader(os.Stdin)
 	prompter := utils.NewPromptConfig(reader, config.Defaults)
 
-	if langType == scaffolding.LanguageGo && framework == "chi" {
+	// Only prompt for language if not explicitly set via flags
+	if !opts.LanguageExplicit {
 		var err error
 		langType, framework, err = prompter.PromptLanguageSelection()
 		if err != nil {
@@ -75,6 +90,21 @@ func initializeProject(projectName string, langType scaffolding.LanguageType, fr
 		}
 	}
 
+	// Handle middleware selection (Node.js only)
+	var selectedMiddleware []string
+	if langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify {
+		if opts.MiddlewareFlag != "" {
+			// Use flag value
+			selectedMiddleware = parseMiddlewareFlag(opts.MiddlewareFlag)
+		} else {
+			// Interactive prompt
+			selectedMiddleware, err = promptMiddlewareSelection(reader)
+			if err != nil {
+				return langType, framework, nil, fmt.Errorf("failed to select middleware: %w", err)
+			}
+		}
+	}
+
 	corsConfig := generateCORSConfigWithLang(corsOriginsList, framework, langType)
 
 	if langType == scaffolding.LanguageGo {
@@ -87,8 +117,15 @@ func initializeProject(projectName string, langType scaffolding.LanguageType, fr
 		return langType, framework, nil, fmt.Errorf("failed to create dependency files: %w", err)
 	}
 
-	if err := createMainFile(projectName, langType, framework, corsConfig, backendServices); err != nil {
+	if err := createMainFileWithOptions(projectName, langType, framework, corsConfig, backendServices, opts); err != nil {
 		return langType, framework, nil, fmt.Errorf("failed to create main file: %w", err)
+	}
+
+	// Generate additional middleware files for Node.js projects
+	if (langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify) && len(selectedMiddleware) > 0 {
+		if err := createAdditionalMiddleware(projectName, langType, framework, selectedMiddleware); err != nil {
+			fmt.Printf("⚠️  Warning: Could not create additional middleware: %v\n", err)
+		}
 	}
 
 	if err := createBFFConfig(projectName, backendServices); err != nil {
@@ -97,6 +134,11 @@ func initializeProject(projectName string, langType scaffolding.LanguageType, fr
 
 	if err := createReadme(projectName, langType); err != nil {
 		return langType, framework, nil, fmt.Errorf("failed to create README.md: %w", err)
+	}
+
+	// Save controller type preference for generate command
+	if langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify {
+		saveControllerTypePreference(projectName, opts.ControllerType)
 	}
 
 	showRouteConfigInstructions(routeOption, projectName)
@@ -128,7 +170,7 @@ func createBFFConfig(projectName string, backendServices []BackendService) error
 
 func createReadme(projectName string, langType scaffolding.LanguageType) error {
 	var installCmd, runCmd string
-	
+
 	if langType == scaffolding.LanguageGo {
 		installCmd = "go mod tidy"
 		runCmd = "go run main.go"
@@ -418,18 +460,18 @@ func generateEnhancedBFFConfig(backendServices []BackendService, projectName str
 
 func showBackendConfigSummary(backendServices []BackendService) {
 	fmt.Println("\n📋 Backend Configuration Summary:")
-	
+
 	portGroups := make(map[int][]BackendService)
 	for _, service := range backendServices {
 		portGroups[service.Port] = append(portGroups[service.Port], service)
 	}
-	
+
 	if len(portGroups) == 1 {
 		var services []BackendService
 		for _, s := range portGroups {
 			services = s
 		}
-		
+
 		if len(services) > 3 {
 			fmt.Println("   Architecture: Monolithic")
 			fmt.Printf("   - Backend: %s\n", services[0].BaseURL)
@@ -452,3 +494,76 @@ func showSetupInstructions(backendServices []BackendService, projectName string)
 	fmt.Println("   3. Test: curl http://localhost:8080/health")
 }
 
+// promptMiddlewareSelection prompts user to select additional middleware
+func promptMiddlewareSelection(reader *bufio.Reader) ([]string, error) {
+	fmt.Println("\n🔧 Which additional middleware would you like to include?")
+	fmt.Println("   (Authentication and Error Handling are always included)")
+	fmt.Println("\n   1) Request Validation")
+	fmt.Println("   2) Request Logging")
+	fmt.Println("   3) Request ID Tracking")
+	fmt.Println("   4) All of the above")
+	fmt.Println("   5) None (minimal setup)")
+	fmt.Print("\n✔ Select option (1-5) [4]: ")
+
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if input == "" {
+		input = "4" // Default to all middleware
+	}
+
+	var selected []string
+	switch input {
+	case "1":
+		selected = []string{"validation"}
+	case "2":
+		selected = []string{"logger"}
+	case "3":
+		selected = []string{"requestId"}
+	case "4":
+		selected = []string{"validation", "logger", "requestId"}
+	case "5":
+		selected = []string{}
+	default:
+		fmt.Println("⚠️  Invalid option, defaulting to all middleware")
+		selected = []string{"validation", "logger", "requestId"}
+	}
+
+	if len(selected) > 0 {
+		fmt.Printf("✅ Selected middleware: %s\n", strings.Join(selected, ", "))
+	} else {
+		fmt.Println("✅ Minimal middleware setup selected")
+	}
+
+	return selected, nil
+}
+
+// parseMiddlewareFlag parses the middleware flag value
+func parseMiddlewareFlag(flag string) []string {
+	if flag == "none" || flag == "" {
+		return []string{}
+	}
+
+	if flag == "all" {
+		return []string{"validation", "logger", "requestId"}
+	}
+
+	// Split by comma and trim spaces
+	parts := strings.Split(flag, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
+}
+
+// saveControllerTypePreference saves controller type preference to project config
+func saveControllerTypePreference(projectName, controllerType string) {
+	configPath := filepath.Join(projectName, ".bffgen-config")
+	content := fmt.Sprintf("controller_type=%s\n", controllerType)
+	os.WriteFile(configPath, []byte(content), 0644)
+}

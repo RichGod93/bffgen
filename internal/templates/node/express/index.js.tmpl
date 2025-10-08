@@ -39,7 +39,7 @@ app.use('/api/', limiter);
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGINS 
   ? process.env.CORS_ORIGINS.split(',') 
-  : {{.CORSOrigins}};
+  : {{.CORSOriginsJS}};
 
 app.use(cors({
   origin: corsOrigins,

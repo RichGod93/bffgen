@@ -1,0 +1,227 @@
+{
+  "$schema": "https://bffgen.dev/schema.json",
+  "project": {
+    "name": "fastify-bff-example",
+    "version": "1.0.0",
+    "runtime": "nodejs-fastify",
+    "framework": "fastify"
+  },
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origins": ["http://localhost:3000", "http://localhost:5173"],
+      "credentials": true,
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      "allowedHeaders": [
+        "Accept",
+        "Authorization",
+        "Content-Type",
+        "X-CSRF-Token",
+        "X-Requested-With"
+      ]
+    },
+    "rateLimit": {
+      "enabled": true,
+      "windowMs": 900000,
+      "max": 100
+    },
+    "security": {
+      "helmet": true,
+      "csp": true,
+      "hsts": true
+    }
+  },
+  "backends": [
+    {
+      "name": "auth",
+      "baseUrl": "http://localhost:5000/api",
+      "timeout": 30000,
+      "retries": 3,
+      "healthCheck": {
+        "enabled": true,
+        "path": "/health",
+        "interval": 60000
+      },
+      "endpoints": [
+        {
+          "name": "login",
+          "path": "/auth/login",
+          "method": "POST",
+          "exposeAs": "/api/auth/login",
+          "requiresAuth": false,
+          "description": "User login with email and password"
+        },
+        {
+          "name": "register",
+          "path": "/auth/register",
+          "method": "POST",
+          "exposeAs": "/api/auth/register",
+          "requiresAuth": false,
+          "description": "New user registration"
+        },
+        {
+          "name": "logout",
+          "path": "/auth/logout",
+          "method": "POST",
+          "exposeAs": "/api/auth/logout",
+          "requiresAuth": true,
+          "description": "User logout"
+        },
+        {
+          "name": "profile",
+          "path": "/auth/profile",
+          "method": "GET",
+          "exposeAs": "/api/auth/profile",
+          "requiresAuth": true,
+          "description": "Get user profile"
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "baseUrl": "http://localhost:5001/api",
+      "timeout": 30000,
+      "retries": 3,
+      "healthCheck": {
+        "enabled": true,
+        "path": "/health",
+        "interval": 60000
+      },
+      "endpoints": [
+        {
+          "name": "getOrders",
+          "path": "/orders",
+          "method": "GET",
+          "exposeAs": "/api/orders",
+          "requiresAuth": true,
+          "description": "Get all orders for authenticated user"
+        },
+        {
+          "name": "getOrder",
+          "path": "/orders/:id",
+          "method": "GET",
+          "exposeAs": "/api/orders/:id",
+          "requiresAuth": true,
+          "description": "Get specific order by ID"
+        },
+        {
+          "name": "createOrder",
+          "path": "/orders",
+          "method": "POST",
+          "exposeAs": "/api/orders",
+          "requiresAuth": true,
+          "description": "Create new order"
+        },
+        {
+          "name": "updateOrder",
+          "path": "/orders/:id",
+          "method": "PUT",
+          "exposeAs": "/api/orders/:id",
+          "requiresAuth": true,
+          "description": "Update existing order"
+        },
+        {
+          "name": "cancelOrder",
+          "path": "/orders/:id",
+          "method": "DELETE",
+          "exposeAs": "/api/orders/:id",
+          "requiresAuth": true,
+          "description": "Cancel order"
+        }
+      ]
+    },
+    {
+      "name": "cart",
+      "baseUrl": "http://localhost:5002/api",
+      "timeout": 30000,
+      "retries": 3,
+      "healthCheck": {
+        "enabled": true,
+        "path": "/health",
+        "interval": 60000
+      },
+      "endpoints": [
+        {
+          "name": "getCart",
+          "path": "/cart",
+          "method": "GET",
+          "exposeAs": "/api/cart",
+          "requiresAuth": true,
+          "description": "Get user's shopping cart"
+        },
+        {
+          "name": "addToCart",
+          "path": "/cart/items",
+          "method": "POST",
+          "exposeAs": "/api/cart/items",
+          "requiresAuth": true,
+          "description": "Add item to cart"
+        },
+        {
+          "name": "updateCartItem",
+          "path": "/cart/items/:id",
+          "method": "PUT",
+          "exposeAs": "/api/cart/items/:id",
+          "requiresAuth": true,
+          "description": "Update cart item quantity"
+        },
+        {
+          "name": "removeFromCart",
+          "path": "/cart/items/:id",
+          "method": "DELETE",
+          "exposeAs": "/api/cart/items/:id",
+          "requiresAuth": true,
+          "description": "Remove item from cart"
+        },
+        {
+          "name": "clearCart",
+          "path": "/cart",
+          "method": "DELETE",
+          "exposeAs": "/api/cart",
+          "requiresAuth": true,
+          "description": "Clear entire cart"
+        }
+      ]
+    }
+  ],
+  "features": {
+    "authentication": {
+      "enabled": true,
+      "type": "jwt",
+      "endpoints": {
+        "login": "/api/auth/login",
+        "logout": "/api/auth/logout",
+        "refresh": "/api/auth/refresh",
+        "profile": "/api/auth/profile"
+      }
+    },
+    "logging": {
+      "enabled": true,
+      "level": "info",
+      "format": "json"
+    },
+    "monitoring": {
+      "health": "/health",
+      "ready": "/ready",
+      "live": "/live"
+    },
+    "documentation": {
+      "swagger": {
+        "enabled": true,
+        "path": "/api-docs"
+      }
+    }
+  },
+  "development": {
+    "hotReload": true,
+    "debugMode": true,
+    "mockBackends": false
+  },
+  "production": {
+    "compression": true,
+    "caching": true,
+    "clustering": false
+  }
+}

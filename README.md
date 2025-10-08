@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/badge/Latest-v1.0.1-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.0.1)
+[![Latest Release](https://img.shields.io/badge/Latest-v1.1.0-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.1.0)
 
 ---
 
@@ -69,15 +69,16 @@ npm install && npm run dev
 
 ## 🛠️ Commands
 
-| Command        | Description                                                     | Go  | Node.js |
-| -------------- | --------------------------------------------------------------- | --- | ------- |
-| `init`         | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
-| `add-route`    | Add backend endpoint interactively                              | ✅  | ✅      |
-| `add-template` | Add auth/ecommerce/content templates                            | ✅  | ✅      |
-| `generate`     | Generate routes from config                                     | ✅  | ✅      |
-| `postman`      | Create Postman collection                                       | ✅  | ✅      |
-| `dev`          | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
-| `config`       | Manage global configuration                                     | ✅  | ✅      |
+| Command         | Description                                                     | Go  | Node.js |
+| --------------- | --------------------------------------------------------------- | --- | ------- |
+| `init`          | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
+| `add-route`     | Add backend endpoint interactively                              | ✅  | ✅      |
+| `add-template`  | Add auth/ecommerce/content templates                            | ✅  | ✅      |
+| `generate`      | Generate routes, controllers, and services from config          | ✅  | ✅      |
+| `generate-docs` | Generate OpenAPI/Swagger documentation                          | -   | ✅      |
+| `postman`       | Create Postman collection                                       | ✅  | ✅      |
+| `dev`           | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
+| `config`        | Manage global configuration                                     | ✅  | ✅      |
 
 ---
 
@@ -111,19 +112,29 @@ npm install && npm run dev
 
 - **Interactive CLI** - Guided project setup with prompts
 - **Template System** - Pre-built templates (auth, ecommerce, content)
-- **Code Generation** - Auto-generate routes from config
+- **Code Generation** - Auto-generate routes, controllers, and services
 - **Hot Reload** - Development mode with auto-restart (nodemon for Node.js)
 - **Professional Structure** - `src/` directory, tests, middleware
 - **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
+
+### ✨ **Enhanced Node.js Scaffolding (NEW)**
+
+- **Controllers & Services** - Auto-generated with separation of concerns
+- **Configurable Middleware** - Choose validation, logging, request ID tracking
+- **Test Infrastructure** - Jest setup with sample tests and 70% coverage goals
+- **API Documentation** - Swagger UI at `/api-docs` with OpenAPI 3.0 spec
+- **Structured Logging** - Winston (Express) or Pino (Fastify) with file rotation
+- **HTTP Client** - Retry logic, timeouts, error handling built-in
+- **CLI Flags** - Non-interactive mode with full customization
 
 ---
 
 ## 📦 Installation
 
-**Quick Install (Latest v1.0.1):**
+**Quick Install (Latest v1.1.0):**
 
 ```bash
-go install github.com/RichGod93/bffgen/cmd/bffgen@v1.0.1
+go install github.com/RichGod93/bffgen/cmd/bffgen@v1.1.0
 ```
 
 **Latest Stable:**
@@ -360,14 +371,19 @@ my-go-bff/
 my-node-bff/
 ├── src/
 │   ├── index.js            # Main server file
-│   ├── middleware/         # Auth, error handling
+│   ├── controllers/        # 🆕 Auto-generated business logic
+│   ├── services/           # 🆕 Auto-generated HTTP clients
+│   ├── middleware/         # 🆕 Configurable middleware
 │   ├── routes/             # Generated route files
-│   ├── controllers/        # Business logic
-│   ├── config/             # Configuration
-│   └── utils/              # Utilities
-├── tests/
+│   ├── config/             # 🆕 Swagger configuration
+│   └── utils/              # 🆕 Logger utility
+├── tests/                  # 🆕 Jest test infrastructure
 │   ├── unit/               # Unit tests
-│   └── integration/        # Integration tests
+│   ├── integration/        # Integration tests
+│   └── setup.js            # Test helpers
+├── docs/                   # 🆕 API documentation
+│   └── openapi.yaml
+├── jest.config.js          # 🆕 Jest configuration
 ├── bffgen.config.json      # BFF configuration
 ├── package.json            # Dependencies & scripts
 ├── .env.example            # Environment template
@@ -379,11 +395,11 @@ my-node-bff/
 
 ## 🚀 Node.js Usage Guide
 
-### Express Workflow
+### Express Workflow (Enhanced)
 
 ```bash
-# 1. Initialize Express project
-bffgen init my-express-bff --lang nodejs-express
+# 1. Initialize Express project with full features
+bffgen init my-express-bff --lang nodejs-express --middleware all
 
 # 2. Navigate to project
 cd my-express-bff
@@ -391,18 +407,27 @@ cd my-express-bff
 # 3. Add a template (auth, ecommerce, or content)
 bffgen add-template ecommerce
 
-# 4. Generate route files
+# 4. Generate routes, controllers, and services
 bffgen generate
 
-# 5. Install dependencies
+# 5. Generate API documentation
+bffgen generate-docs
+
+# 6. Install dependencies
 npm install
 
-# 6. Start development server
-npm run dev:watch
+# 7. Start development server
+npm run dev
 
-# 7. Test endpoints
+# 8. Test endpoints
 curl http://localhost:8080/health
 curl http://localhost:8080/api/products
+
+# 9. View API documentation
+open http://localhost:8080/api-docs
+
+# 10. Run tests
+npm test
 ```
 
 ### Fastify Workflow
@@ -486,6 +511,79 @@ vim .env
 
 ---
 
+## 🎯 Enhanced Features Deep Dive
+
+### Controllers & Services Architecture
+
+```javascript
+// Thin route layer
+router.get('/api/users', authenticate, controller.getUsers);
+
+// Controller focuses on business logic
+async getUsers(req, res, next) {
+  const users = await this.service.getUsers();
+  const enriched = this.enrichUserData(users);
+  res.json(enriched);
+}
+
+// Service handles HTTP communication
+async getUsers() {
+  return this.client.get('/users');
+}
+```
+
+### CLI Flags Reference
+
+```bash
+# Full-featured setup
+bffgen init my-bff \
+  --lang nodejs-express \
+  --middleware all \
+  --controller-type both
+
+# Minimal setup
+bffgen init my-bff \
+  --lang nodejs-fastify \
+  --middleware none \
+  --skip-tests \
+  --skip-docs
+
+# Custom middleware
+bffgen init my-bff \
+  --lang nodejs-express \
+  --middleware validation,logger
+```
+
+### Generated Files Summary
+
+**During `init`:**
+
+- Main server (`src/index.js`)
+- HTTP client (`src/services/httpClient.js`)
+- Logger utility (`src/utils/logger.js`)
+- Swagger config (`src/config/swagger-*.js`)
+- Jest config (`jest.config.js`, `tests/setup.js`)
+- Sample test (`tests/integration/health.test.js`)
+
+**During `generate`:**
+
+- Routes (`src/routes/{service}.js`)
+- Controllers (`src/controllers/{service}.controller.js`)
+- Services (`src/services/{service}.service.js`)
+
+**During `generate-docs`:**
+
+- OpenAPI spec (`docs/openapi.yaml`)
+
+### Quick Links
+
+- 📖 [Enhanced Scaffolding Guide](docs/ENHANCED_SCAFFOLDING.md)
+- 📋 [Quick Reference](docs/QUICK_REFERENCE.md)
+- 🏗️ [Architecture](docs/ARCHITECTURE.md)
+- 🧪 [Node.js Testing](docs/NODEJS_TESTING.md)
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -507,4 +605,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [Chi Router](https://github.com/go-chi/chi) - Lightweight HTTP router
 - [Cobra](https://github.com/spf13/cobra) - CLI framework
 - [JWT](https://github.com/golang-jwt/jwt) - JSON Web Tokens
+- [Winston](https://github.com/winstonjs/winston) - Express logging
+- [Pino](https://github.com/pinojs/pino) - Fastify logging
+- [Jest](https://jestjs.io/) - Testing framework
+- [Swagger](https://swagger.io/) - API documentation
 - Inspired by [Backend-for-Frontend pattern](https://martinfowler.com/articles/bff.html) by Martin Fowler
