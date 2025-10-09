@@ -84,7 +84,8 @@ func initializeProjectWithOptions(projectName string, langType scaffolding.Langu
 		return langType, framework, nil, fmt.Errorf("failed to configure routes: %w", err)
 	}
 
-	if routeOption == "2" {
+	// Only copy Go template files for Go projects
+	if routeOption == "2" && langType == scaffolding.LanguageGo {
 		if err := copyTemplateFiles(projectName); err != nil {
 			fmt.Printf("⚠️  Warning: Could not copy templates: %v\n", err)
 		}

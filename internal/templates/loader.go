@@ -11,7 +11,7 @@ import (
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 )
 
-//go:embed node/**/*.tmpl
+//go:embed node/**/*
 var nodeTemplates embed.FS
 
 // TemplateData holds data for template rendering
@@ -88,6 +88,11 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 		"service-base.js.tmpl", "service-template.js.tmpl",
 		"jest.config.js.tmpl", "setup-tests.js.tmpl",
 		"swagger-config.js.tmpl", "logger.js.tmpl",
+		// New aggregation utilities
+		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",
+		"response-transformer.js.tmpl", "request-batcher.js.tmpl", "field-selector.js.tmpl",
+		// Docker and scripts
+		"docker-compose.yml.tmpl", "scripts/clear-cache.js.tmpl",
 	}
 
 	isCommon := false
@@ -99,6 +104,9 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 	}
 
 	if isCommon {
+		path = filepath.Join("node", "common", filename)
+	} else if strings.HasPrefix(filename, "examples/") || strings.HasPrefix(filename, "scripts/") {
+		// Examples and scripts are always in common
 		path = filepath.Join("node", "common", filename)
 	} else {
 		// Framework-specific templates

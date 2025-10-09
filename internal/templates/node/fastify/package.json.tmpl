@@ -14,7 +14,10 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.js'",
     "format:check": "prettier --check 'src/**/*.js'",
-    "validate": "npm run lint && npm run format:check && npm test"
+    "validate": "npm run lint && npm run format:check && npm test",
+    "test:aggregation": "jest --testPathPattern=aggregation",
+    "test:utils": "jest --testPathPattern=utils",
+    "cache:clear": "node scripts/clear-cache.js"
   },
   "keywords": ["bff", "backend-for-frontend", "api", "fastify"],
   "author": "",
@@ -33,6 +36,9 @@
     "pino": "^8.19.0",
     "pino-pretty": "^10.3.1",
     "dotenv": "^16.3.1"
+  },
+  "optionalDependencies": {
+    "redis": "^4.6.11"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",

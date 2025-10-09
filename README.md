@@ -5,7 +5,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/badge/Latest-v1.1.0-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.1.0)
+[![Latest Release](https://img.shields.io/badge/Latest-v1.2.0-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.2.0)
 
 ---
 
@@ -131,10 +131,10 @@ npm install && npm run dev
 
 ## 📦 Installation
 
-**Quick Install (Latest v1.1.0):**
+**Quick Install (Latest v1.2.0):**
 
 ```bash
-go install github.com/RichGod93/bffgen/cmd/bffgen@v1.1.0
+go install github.com/RichGod93/bffgen/cmd/bffgen@v1.2.0
 ```
 
 **Latest Stable:**

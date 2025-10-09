@@ -6,53 +6,57 @@
  */
 
 const {{.ServiceName}}Service = require('../services/{{.ServiceName}}.service');
+const ParallelAggregator = require('../utils/aggregator');
+const CacheManager = require('../utils/cache-manager');
+const CircuitBreaker = require('../utils/circuit-breaker');
+const ResponseTransformer = require('../utils/response-transformer');
 
 class {{.ServiceNamePascal}}Controller {
   constructor() {
     this.service = new {{.ServiceName}}Service();
-    this.cache = new Map(); // Simple in-memory cache (replace with Redis in production)
+    this.aggregator = new ParallelAggregator({ timeout: 5000 });
+    this.cache = new CacheManager({ ttl: 300, prefix: '{{.ServiceName}}:' });
+    this.circuitBreaker = new CircuitBreaker({ 
+      failureThreshold: 5, 
+      resetTimeout: 60000 
+    });
   }
 
 {{range .Endpoints}}
   /**
    * {{.Method}} {{.Path}}
    * {{if .RequiresAuth}}@requires Authentication{{else}}@public{{end}}
-   * 
-   * TODO: Add custom business logic, data transformation, or aggregation
    */
   async {{.HandlerName}}(request, reply) {
     try {
+      const cacheKey = this.buildCacheKey('{{.HandlerName}}', request.params, request.query);
+      
+      // Check cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        request.log.debug(`Cache hit for {{.HandlerName}}`);
+        return cached;
+      }
+
       request.log.info(`Processing {{.Method}} {{.Path}}`, {
         params: request.params,
         userId: request.user?.userId
       });
 
-      // TODO: Add caching logic if needed
-      // const cacheKey = `{{.HandlerName}}_${JSON.stringify(request.params)}`;
-      // if (this.cache.has(cacheKey)) {
-      //   return this.cache.get(cacheKey);
-      // }
-
-      // Fetch data from backend service
-      const result = await this.service.{{.HandlerName}}(
-        request.params, 
-        request.query, 
-        request.body, 
-        request.headers
+      // Execute with circuit breaker for resilience
+      const result = await this.circuitBreaker.execute(
+        () => this.service.{{.HandlerName}}(request.params, request.query, request.body, request.headers),
+        () => this.getFallbackData('{{.HandlerName}}') // Fallback on circuit open
       );
 
-      // TODO: Transform or aggregate data here
-      // const transformedData = this.transform{{.HandlerNamePascal}}(result);
+      // Transform response for frontend
+      const transformed = this.transformData(result);
 
-      // TODO: Combine with other services if needed
-      // const additionalData = await this.fetchRelatedData(result);
-      // const aggregatedData = { ...result, ...additionalData };
-
-      // TODO: Cache the result if needed
-      // this.cache.set(cacheKey, result);
+      // Cache the transformed result
+      await this.cache.set(cacheKey, transformed, 300);
 
       request.log.debug(`Successfully processed {{.Method}} {{.Path}}`);
-      return result;
+      return transformed;
     } catch (error) {
       request.log.error(`Error in {{.HandlerName}}:`, error);
       throw error;
@@ -61,30 +65,88 @@ class {{.ServiceNamePascal}}Controller {
 {{end}}
 
   /**
-   * Helper method for data transformation
-   * TODO: Implement custom transformation logic
+   * Example: Aggregate data from multiple services
+   * Demonstrates parallel fetching with graceful degradation
+   */
+  async aggregateData(request, reply) {
+    try {
+      const userId = request.params.id;
+      
+      // Fetch from multiple services in parallel
+      const results = await this.aggregator.fetchParallel([
+        { 
+          name: 'user', 
+          fetch: () => this.service.getUser(userId) 
+        },
+        { 
+          name: 'orders', 
+          fetch: () => this.service.getOrders(userId) 
+        },
+        { 
+          name: 'preferences', 
+          fetch: () => this.service.getPreferences(userId) 
+        }
+      ]);
+
+      // Combine successful results with graceful degradation
+      const aggregated = {
+        user: results.find(r => r.service === 'user' && r.success)?.data || null,
+        orders: results.find(r => r.service === 'orders' && r.success)?.data || [],
+        preferences: results.find(r => r.service === 'preferences' && r.success)?.data || {}
+      };
+
+      // Transform for frontend - only send what's needed
+      const transformed = ResponseTransformer.merge(
+        ResponseTransformer.pick(aggregated.user, ['id', 'name', 'email']),
+        { orders: aggregated.orders, preferences: aggregated.preferences }
+      );
+
+      // Include partial failure information
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        transformed._warnings = failed.map(f => `${f.service}: ${f.error}`);
+      }
+
+      return transformed;
+    } catch (error) {
+      request.log.error('Aggregation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Build cache key from method, params, and query
+   */
+  buildCacheKey(method, params, query) {
+    return `${method}:${JSON.stringify(params)}:${JSON.stringify(query)}`;
+  }
+
+  /**
+   * Transform data for endpoints
+   * Override this method to customize transformations per endpoint
    */
   transformData(data) {
-    // Example: Add computed fields, rename properties, filter sensitive data
-    return data;
+    // Remove sensitive fields
+    return ResponseTransformer.sanitize(data);
   }
 
   /**
-   * Helper method for fetching related data from other services
-   * TODO: Implement aggregation logic across multiple services
+   * Get fallback data when service is unavailable
    */
-  async fetchRelatedData(primaryData) {
-    // Example: Fetch related data from other microservices
-    return {};
+  getFallbackData(method) {
+    return { 
+      error: 'Service temporarily unavailable', 
+      data: null,
+      fallback: true 
+    };
   }
 
   /**
-   * Clear cache (useful for testing or manual cache invalidation)
+   * Get circuit breaker status (useful for health checks)
    */
-  clearCache() {
-    this.cache.clear();
+  getCircuitStatus() {
+    return this.circuitBreaker.getState();
   }
 }
 
 module.exports = new {{.ServiceNamePascal}}Controller();
-

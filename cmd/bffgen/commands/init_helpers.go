@@ -580,6 +580,23 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []Bac
 		return fmt.Errorf("failed to create logger utility: %w", err)
 	}
 
+	// Generate aggregation utilities
+	if err := createAggregationUtilities(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+		return fmt.Errorf("failed to create aggregation utilities: %w", err)
+	}
+
+	// Generate example controllers (optional)
+	if err := createExampleControllers(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+		// Non-fatal, just log warning
+		fmt.Printf("Warning: failed to create example controllers: %v\n", err)
+	}
+
+	// Generate optional Redis setup files
+	if err := createRedisSetupFiles(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
+		// Non-fatal, just log warning
+		fmt.Printf("Warning: failed to create Redis setup files: %v\n", err)
+	}
+
 	// Generate HTTP client and service files
 	if err := createServiceFiles(projectName, scaffolding.LanguageNodeExpress, "express"); err != nil {
 		return fmt.Errorf("failed to create service files: %w", err)
@@ -692,6 +709,23 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []Bac
 		return fmt.Errorf("failed to create logger utility: %w", err)
 	}
 
+	// Generate aggregation utilities
+	if err := createAggregationUtilities(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+		return fmt.Errorf("failed to create aggregation utilities: %w", err)
+	}
+
+	// Generate example controllers (optional)
+	if err := createExampleControllers(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+		// Non-fatal, just log warning
+		fmt.Printf("Warning: failed to create example controllers: %v\n", err)
+	}
+
+	// Generate optional Redis setup files
+	if err := createRedisSetupFiles(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
+		// Non-fatal, just log warning
+		fmt.Printf("Warning: failed to create Redis setup files: %v\n", err)
+	}
+
 	// Generate HTTP client and service files
 	if err := createServiceFiles(projectName, scaffolding.LanguageNodeFastify, "fastify"); err != nil {
 		return fmt.Errorf("failed to create service files: %w", err)
@@ -789,6 +823,118 @@ func createLoggerUtility(projectName string, langType scaffolding.LanguageType, 
 	}
 
 	return os.WriteFile(filepath.Join(utilsDir, "logger.js"), []byte(loggerContent), 0644)
+}
+
+// createAggregationUtilities creates the aggregation utility files
+func createAggregationUtilities(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+	utilsDir := filepath.Join(projectName, "src", "utils")
+	
+	data := &templates.TemplateData{
+		Framework: framework,
+	}
+
+	// List of utility files to create
+	utilities := []struct {
+		template string
+		filename string
+	}{
+		{"aggregator.js.tmpl", "aggregator.js"},
+		{"cache-manager.js.tmpl", "cache-manager.js"},
+		{"circuit-breaker.js.tmpl", "circuit-breaker.js"},
+		{"response-transformer.js.tmpl", "response-transformer.js"},
+		{"request-batcher.js.tmpl", "request-batcher.js"},
+		{"field-selector.js.tmpl", "field-selector.js"},
+	}
+
+	for _, util := range utilities {
+		content, err := loader.RenderTemplate(framework, util.template, data)
+		if err != nil {
+			return fmt.Errorf("failed to render %s: %w", util.template, err)
+		}
+
+		if err := os.WriteFile(filepath.Join(utilsDir, util.filename), []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", util.filename, err)
+		}
+	}
+
+	return nil
+}
+
+// createExampleControllers creates example aggregation controllers
+func createExampleControllers(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+	examplesDir := filepath.Join(projectName, "src", "examples")
+	
+	if err := os.MkdirAll(examplesDir, 0755); err != nil {
+		return err
+	}
+
+	data := &templates.TemplateData{
+		Framework: framework,
+	}
+
+	// List of example files to create
+	examples := []struct {
+		template string
+		filename string
+	}{
+		{"examples/user-dashboard.controller.js.tmpl", "user-dashboard.controller.js"},
+		{"examples/ecommerce-catalog.controller.js.tmpl", "ecommerce-catalog.controller.js"},
+	}
+
+	for _, example := range examples {
+		content, err := loader.RenderTemplate(framework, example.template, data)
+		if err != nil {
+			// Examples are optional, log but don't fail
+			fmt.Printf("Warning: failed to render %s: %v\n", example.template, err)
+			continue
+		}
+
+		if err := os.WriteFile(filepath.Join(examplesDir, example.filename), []byte(content), 0644); err != nil {
+			fmt.Printf("Warning: failed to write %s: %v\n", example.filename, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// createRedisSetupFiles creates optional Redis and script files
+func createRedisSetupFiles(projectName string, langType scaffolding.LanguageType, framework string) error {
+	loader := templates.NewTemplateLoader(langType)
+	
+	data := &templates.TemplateData{
+		ProjectName: filepath.Base(projectName),
+		Framework:   framework,
+	}
+
+	// Create docker-compose.yml
+	dockerComposeContent, err := loader.RenderTemplate(framework, "docker-compose.yml.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render docker-compose.yml: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "docker-compose.yml"), []byte(dockerComposeContent), 0644); err != nil {
+		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
+	}
+
+	// Create scripts directory and clear-cache.js
+	scriptsDir := filepath.Join(projectName, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+		return err
+	}
+
+	clearCacheContent, err := loader.RenderTemplate(framework, "scripts/clear-cache.js.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render clear-cache.js: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(scriptsDir, "clear-cache.js"), []byte(clearCacheContent), 0755); err != nil {
+		return fmt.Errorf("failed to write clear-cache.js: %w", err)
+	}
+
+	return nil
 }
 
 // createServiceFiles creates the HTTP client and service files
