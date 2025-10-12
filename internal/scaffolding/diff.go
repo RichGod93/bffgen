@@ -46,7 +46,7 @@ type DiffResult struct {
 func ComputeDiff(oldContent, newContent string) *DiffResult {
 	oldLines := strings.Split(oldContent, "\n")
 	newLines := strings.Split(newContent, "\n")
-	
+
 	var diffs []Diff
 	hasChanges := false
 
@@ -67,7 +67,7 @@ func ComputeDiff(oldContent, newContent string) *DiffResult {
 
 		if oldLine != newLine {
 			hasChanges = true
-			
+
 			if i >= len(oldLines) {
 				// Line added
 				diffs = append(diffs, Diff{
@@ -98,7 +98,7 @@ func ComputeDiff(oldContent, newContent string) *DiffResult {
 		added := 0
 		removed := 0
 		modified := 0
-		
+
 		for _, diff := range diffs {
 			switch diff.Type {
 			case DiffAdded:
@@ -109,7 +109,7 @@ func ComputeDiff(oldContent, newContent string) *DiffResult {
 				modified++
 			}
 		}
-		
+
 		var parts []string
 		if added > 0 {
 			parts = append(parts, fmt.Sprintf("%d added", added))
@@ -120,7 +120,7 @@ func ComputeDiff(oldContent, newContent string) *DiffResult {
 		if modified > 0 {
 			parts = append(parts, fmt.Sprintf("%d modified", modified))
 		}
-		
+
 		summary = strings.Join(parts, ", ")
 	}
 
@@ -157,10 +157,10 @@ type ThreeWayMerge struct {
 
 // MergeResult represents the result of a 3-way merge
 type MergeResult struct {
-	Content    string
-	Conflicts  []Conflict
+	Content      string
+	Conflicts    []Conflict
 	HasConflicts bool
-	Summary    string
+	Summary      string
 }
 
 // Conflict represents a merge conflict
@@ -197,7 +197,7 @@ func (twm *ThreeWayMerge) PerformMerge() *MergeResult {
 
 	for i := 0; i < maxLines; i++ {
 		var baseLine, localLine, remoteLine string
-		
+
 		if i < len(baseLines) {
 			baseLine = baseLines[i]
 		}
@@ -218,7 +218,7 @@ func (twm *ThreeWayMerge) PerformMerge() *MergeResult {
 				Remote: remoteLine,
 			}
 			conflicts = append(conflicts, conflict)
-			
+
 			// For now, prefer remote (generated) content
 			resultLines = append(resultLines, remoteLine)
 		} else if localLine != baseLine {
@@ -281,7 +281,7 @@ func (mr *MergeResult) ApplyResolutions() string {
 	}
 
 	lines := strings.Split(mr.Content, "\n")
-	
+
 	for _, conflict := range mr.Conflicts {
 		if conflict.Resolved != "" && conflict.Line <= len(lines) {
 			lines[conflict.Line-1] = conflict.Resolved

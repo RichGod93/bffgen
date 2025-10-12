@@ -9,11 +9,11 @@ import (
 
 // Generator represents a code generator with regeneration-safe capabilities
 type Generator struct {
-	Markers     CodeMarker
-	DryRun      bool
-	CheckMode   bool
-	BackupDir   string
-	Verbose     bool
+	Markers   CodeMarker
+	DryRun    bool
+	CheckMode bool
+	BackupDir string
+	Verbose   bool
 }
 
 // NewGenerator creates a new generator with default settings
@@ -152,7 +152,7 @@ func (g *Generator) wrapContentInMarkers(content string) string {
 // handleCheckMode handles check mode (dry-run with diffing)
 func (g *Generator) handleCheckMode(filePath, existingContent, updatedContent string, diff *DiffResult) error {
 	fmt.Printf("🔍 Check mode: %s\n", filePath)
-	
+
 	if !diff.HasChanges {
 		fmt.Printf("✅ No changes needed\n")
 		return nil
@@ -160,25 +160,25 @@ func (g *Generator) handleCheckMode(filePath, existingContent, updatedContent st
 
 	fmt.Printf("📋 Changes detected: %s\n", diff.Summary)
 	fmt.Printf("%s\n", diff.FormatDiff())
-	
+
 	return nil
 }
 
 // handleDryRun handles dry-run mode
 func (g *Generator) handleDryRun(filePath, existingContent, updatedContent string, diff *DiffResult) error {
 	fmt.Printf("🔍 Dry run: %s\n", filePath)
-	
+
 	if !diff.HasChanges {
 		fmt.Printf("✅ No changes needed\n")
 		return nil
 	}
 
 	fmt.Printf("📋 Would update: %s\n", diff.Summary)
-	
+
 	if g.Verbose {
 		fmt.Printf("%s\n", diff.FormatDiff())
 	}
-	
+
 	return nil
 }
 
@@ -228,7 +228,7 @@ func (g *Generator) writeFile(filePath, content string) error {
 // GenerateMultipleFiles generates multiple files with regeneration-safe markers
 func (g *Generator) GenerateMultipleFiles(files map[string]string) error {
 	var errors []string
-	
+
 	for filePath, content := range files {
 		if err := g.GenerateFile(filePath, content); err != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", filePath, err))

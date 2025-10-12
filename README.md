@@ -117,7 +117,7 @@ npm install && npm run dev
 - **Professional Structure** - `src/` directory, tests, middleware
 - **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
 
-### ✨ **Enhanced Node.js Scaffolding (NEW)**
+### ✨ **Enhanced Node.js Scaffolding**
 
 - **Controllers & Services** - Auto-generated with separation of concerns
 - **Configurable Middleware** - Choose validation, logging, request ID tracking
@@ -126,6 +126,16 @@ npm install && npm run dev
 - **Structured Logging** - Winston (Express) or Pino (Fastify) with file rotation
 - **HTTP Client** - Retry logic, timeouts, error handling built-in
 - **CLI Flags** - Non-interactive mode with full customization
+
+### 🚀 **Infrastructure Scaffolding (NEW)**
+
+- **CI/CD Pipelines** - GitHub Actions workflows with tests, linting, and Docker builds
+- **Production Dockerfile** - Multi-stage, optimized, security-hardened containers
+- **Health Checks** - Kubernetes-ready liveness/readiness probes with dependency checking
+- **Graceful Shutdown** - Signal handling for zero-downtime deployments
+- **Development Environment** - Docker Compose with Redis and all services
+- **Opt-In Features** - Choose what you need with simple CLI flags
+- **Cross-Runtime** - Works for both Go and Node.js projects
 
 ---
 
@@ -264,6 +274,62 @@ bffgen postman
 # ✅ Postman collection generated successfully!
 # 📁 Created file: bff-postman-collection.json
 ```
+
+### Infrastructure Scaffolding
+
+Generate production-ready infrastructure with opt-in flags:
+
+```bash
+# Generate everything (CI/CD, Docker, health checks, docker-compose)
+bffgen init my-prod-bff --lang go --include-all-infra
+
+# Selective generation
+bffgen init my-api --lang nodejs-express --include-ci --include-docker
+
+# Just health checks and graceful shutdown
+bffgen init my-service --lang nodejs-fastify --include-health
+```
+
+**Available Flags:**
+
+- `--include-ci` - GitHub Actions CI/CD workflow
+- `--include-docker` - Production Dockerfile and .dockerignore
+- `--include-health` - Health check endpoints and graceful shutdown
+- `--include-compose` - Development docker-compose.yml
+- `--include-all-infra` - All infrastructure features
+
+**Generated Files:**
+
+```text
+my-prod-bff/
+├── .github/workflows/ci.yml      # CI/CD pipeline
+├── Dockerfile                     # Production container
+├── .dockerignore                  # Docker ignore rules
+├── docker-compose.yml             # Dev environment
+├── internal/                      # Go
+│   ├── health/health.go          # Health checks
+│   └── shutdown/graceful.go      # Graceful shutdown
+└── src/utils/                     # Node.js
+    ├── health.js                 # Health checks
+    └── graceful-shutdown.js      # Graceful shutdown
+```
+
+**Quick Start:**
+
+```bash
+# Start development environment
+docker-compose up
+
+# Build production image
+docker build -t my-bff:latest .
+
+# Run with health checks
+docker run -p 8080:8080 my-bff:latest
+curl http://localhost:8080/healthz  # Liveness probe
+curl http://localhost:8080/health   # Readiness probe
+```
+
+📖 **Detailed Guide:** [Infrastructure Documentation](docs/INFRASTRUCTURE.md)
 
 ---
 
@@ -578,6 +644,7 @@ bffgen init my-bff \
 ### Quick Links
 
 - 📖 [Enhanced Scaffolding Guide](docs/ENHANCED_SCAFFOLDING.md)
+- 🚀 [Infrastructure Scaffolding](docs/INFRASTRUCTURE.md)
 - 📋 [Quick Reference](docs/QUICK_REFERENCE.md)
 - 🏗️ [Architecture](docs/ARCHITECTURE.md)
 - 🧪 [Node.js Testing](docs/NODEJS_TESTING.md)

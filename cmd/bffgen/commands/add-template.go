@@ -61,7 +61,7 @@ func selectTemplate() string {
 func addTemplate(templateName string) error {
 	// Detect project type (Go or Node.js)
 	projectType := detectProjectType()
-	
+
 	if projectType == "unknown" {
 		fmt.Println("❌ No BFF project found in current directory")
 		fmt.Println("💡 Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
@@ -70,12 +70,12 @@ func addTemplate(templateName string) error {
 
 	fmt.Printf("🔧 Adding template: %s (project type: %s)\n", templateName, projectType)
 	fmt.Println()
-	
+
 	// Handle based on project type
 	if projectType == "nodejs" {
 		return addTemplateNodeJS(templateName)
 	}
-	
+
 	// Default: Go project
 	return addTemplateGo(templateName)
 }

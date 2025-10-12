@@ -1,0 +1,89 @@
+/**
+ * Graceful shutdown handler for Express/Fastify servers
+ * Handles SIGTERM and SIGINT signals for clean shutdown
+ */
+
+class GracefulShutdown {
+  constructor(server, options = {}) {
+    this.server = server;
+    this.timeout = options.timeout || 30000; // 30 seconds default
+    this.logger = options.logger || console;
+    this.cleanup = options.cleanup || (() => Promise.resolve());
+    this.isShuttingDown = false;
+  }
+
+  /**
+   * Register signal handlers for graceful shutdown
+   */
+  handle() {
+    const signals = ['SIGTERM', 'SIGINT'];
+    
+    signals.forEach(signal => {
+      process.on(signal, () => this.shutdown(signal));
+    });
+
+    // Handle uncaught errors during shutdown
+    process.on('uncaughtException', (err) => {
+      this.logger.error('❌ Uncaught Exception:', err);
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      this.logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      process.exit(1);
+    });
+  }
+
+  /**
+   * Perform graceful shutdown
+   */
+  async shutdown(signal) {
+    if (this.isShuttingDown) {
+      this.logger.warn('⚠️  Shutdown already in progress...');
+      return;
+    }
+
+    this.isShuttingDown = true;
+    this.logger.info(`🛑 ${signal} received, starting graceful shutdown`);
+
+    // Set shutdown timeout
+    const shutdownTimeout = setTimeout(() => {
+      this.logger.error('⚠️  Shutdown timeout exceeded, forcing exit');
+      process.exit(1);
+    }, this.timeout);
+
+    try {
+      // Stop accepting new connections
+      this.logger.info('   Closing server and draining connections...');
+      await new Promise((resolve, reject) => {
+        this.server.close((err) => {
+          if (err) {
+            this.logger.error('   Error closing server:', err);
+            reject(err);
+          } else {
+            this.logger.info('   Server closed');
+            resolve();
+          }
+        });
+      });
+
+      // Run custom cleanup tasks (close DB connections, flush logs, etc.)
+      if (this.cleanup) {
+        this.logger.info('   Running cleanup tasks...');
+        await this.cleanup();
+        this.logger.info('   Cleanup complete');
+      }
+
+      clearTimeout(shutdownTimeout);
+      this.logger.info('✅ Graceful shutdown complete');
+      process.exit(0);
+    } catch (err) {
+      clearTimeout(shutdownTimeout);
+      this.logger.error('❌ Error during shutdown:', err);
+      process.exit(1);
+    }
+  }
+}
+
+module.exports = GracefulShutdown;
+

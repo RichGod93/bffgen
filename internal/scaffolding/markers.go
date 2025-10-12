@@ -115,28 +115,28 @@ func FindSections(content string, marker CodeMarker) ([]CodeSection, error) {
 // ReplaceSection replaces a code section with new content
 func ReplaceSection(content string, section CodeSection, newContent string) (string, error) {
 	lines := strings.Split(content, "\n")
-	
+
 	if section.BeginLine < 1 || section.EndLine > len(lines) {
 		return "", fmt.Errorf("section boundaries out of range")
 	}
 
 	// Build new content
 	var newLines []string
-	
+
 	// Add lines before the section
 	newLines = append(newLines, lines[:section.BeginLine-1]...)
-	
+
 	// Add begin marker
 	newLines = append(newLines, section.Marker.Begin)
-	
+
 	// Add new content
 	if newContent != "" {
 		newLines = append(newLines, strings.Split(newContent, "\n")...)
 	}
-	
+
 	// Add end marker
 	newLines = append(newLines, section.Marker.End)
-	
+
 	// Add lines after the section
 	newLines = append(newLines, lines[section.EndLine:]...)
 
@@ -146,28 +146,28 @@ func ReplaceSection(content string, section CodeSection, newContent string) (str
 // InsertSection inserts a new code section at the specified location
 func InsertSection(content string, marker CodeMarker, newContent string, insertAfterLine int) (string, error) {
 	lines := strings.Split(content, "\n")
-	
+
 	if insertAfterLine < 0 || insertAfterLine > len(lines) {
 		return "", fmt.Errorf("insert position out of range")
 	}
 
 	// Build new content
 	var newLines []string
-	
+
 	// Add lines before insertion point
 	newLines = append(newLines, lines[:insertAfterLine]...)
-	
+
 	// Add begin marker
 	newLines = append(newLines, marker.Begin)
-	
+
 	// Add new content
 	if newContent != "" {
 		newLines = append(newLines, strings.Split(newContent, "\n")...)
 	}
-	
+
 	// Add end marker
 	newLines = append(newLines, marker.End)
-	
+
 	// Add lines after insertion point
 	newLines = append(newLines, lines[insertAfterLine:]...)
 
@@ -177,17 +177,17 @@ func InsertSection(content string, marker CodeMarker, newContent string, insertA
 // RemoveSection removes a code section and its markers
 func RemoveSection(content string, section CodeSection) (string, error) {
 	lines := strings.Split(content, "\n")
-	
+
 	if section.BeginLine < 1 || section.EndLine > len(lines) {
 		return "", fmt.Errorf("section boundaries out of range")
 	}
 
 	// Build new content without the section
 	var newLines []string
-	
+
 	// Add lines before the section
 	newLines = append(newLines, lines[:section.BeginLine-1]...)
-	
+
 	// Add lines after the section
 	newLines = append(newLines, lines[section.EndLine:]...)
 
@@ -209,7 +209,7 @@ func GetMarkerSummary(content string, marker CodeMarker) ([]string, error) {
 
 	var summary []string
 	for _, section := range sections {
-		summary = append(summary, fmt.Sprintf("Section at lines %d-%d (%d lines)", 
+		summary = append(summary, fmt.Sprintf("Section at lines %d-%d (%d lines)",
 			section.BeginLine, section.EndLine, section.EndLine-section.BeginLine-1))
 	}
 

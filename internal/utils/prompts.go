@@ -27,29 +27,29 @@ func NewPromptConfig(reader *bufio.Reader, defaults types.Defaults) *PromptConfi
 // PromptLanguageSelection prompts user to select programming language/runtime
 func (p *PromptConfig) PromptLanguageSelection() (scaffolding.LanguageType, string, error) {
 	fmt.Println("✔ Which language/runtime would you like to use?")
-	
+
 	supportedLanguages := scaffolding.GetSupportedLanguages()
 	for i, lang := range supportedLanguages {
 		fmt.Printf("   %d) %s\n", i+1, lang.Name)
 	}
-	
+
 	defaultOption := "1" // Default to Go
 	fmt.Printf("✔ Select option (1-%d) [%s]: ", len(supportedLanguages), defaultOption)
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = defaultOption
 	}
-	
+
 	choice, err := strconv.Atoi(input)
 	if err != nil || choice < 1 || choice > len(supportedLanguages) {
 		return scaffolding.LanguageGo, "chi", fmt.Errorf("invalid choice: %s", input)
 	}
-	
+
 	selectedLang := supportedLanguages[choice-1]
-	
+
 	// For Node.js, we already have the framework. For Go, prompt for framework
 	if selectedLang.Type == scaffolding.LanguageGo {
 		framework, err := p.promptGoFramework()
@@ -58,7 +58,7 @@ func (p *PromptConfig) PromptLanguageSelection() (scaffolding.LanguageType, stri
 		}
 		return selectedLang.Type, framework, nil
 	}
-	
+
 	return selectedLang.Type, selectedLang.Framework, nil
 }
 
@@ -67,15 +67,15 @@ func (p *PromptConfig) promptGoFramework() (string, error) {
 	fmt.Printf("✔ Which Go framework? (chi/echo/fiber) [%s]: ", p.Defaults.Framework)
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
-	
+
 	if input == "" {
 		input = p.Defaults.Framework
 	}
-	
+
 	if input != "chi" && input != "echo" && input != "fiber" {
 		return p.Defaults.Framework, fmt.Errorf("unsupported framework: %s", input)
 	}
-	
+
 	return input, nil
 }
 
@@ -83,14 +83,14 @@ func (p *PromptConfig) promptGoFramework() (string, error) {
 func (p *PromptConfig) PromptCORSSetting() ([]string, error) {
 	defaultCORS := strings.Join(p.Defaults.CORSOrigins, ",")
 	fmt.Printf("✔ Frontend URLs (comma-separated) [%s]: ", defaultCORS)
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = defaultCORS
 	}
-	
+
 	corsList := strings.Split(input, ",")
 	for i, origin := range corsList {
 		origin = strings.TrimSpace(origin)
@@ -100,7 +100,7 @@ func (p *PromptConfig) PromptCORSSetting() ([]string, error) {
 			corsList[i] = origin
 		}
 	}
-	
+
 	return corsList, nil
 }
 
@@ -111,18 +111,18 @@ func (p *PromptConfig) PromptBackendArchitecture() (string, error) {
 	fmt.Println("   2) Monolithic (single port/URL)")
 	fmt.Println("   3) Hybrid (some services on same port)")
 	fmt.Printf("✔ Select option (1-3) [1]: ")
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = "1"
 	}
-	
+
 	if input != "1" && input != "2" && input != "3" {
 		return "1", fmt.Errorf("invalid choice: %s", input)
 	}
-	
+
 	return input, nil
 }
 
@@ -133,14 +133,14 @@ func (p *PromptConfig) PromptRouteConfiguration() (string, error) {
 	fmt.Println("   2) Use a template")
 	fmt.Println("   3) Skip for now")
 	fmt.Printf("✔ Select option (1-3) [%s]: ", p.Defaults.RouteOption)
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = p.Defaults.RouteOption
 	}
-	
+
 	return input, nil
 }
 
@@ -151,64 +151,64 @@ func (p *PromptConfig) PromptServicename(serviceNum int) (string, error) {
 	} else {
 		fmt.Printf("✔ Service name (e.g., 'users', 'products', 'orders') [#%d]: ", serviceNum)
 	}
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	return input, nil
 }
 
 // PromptServiceURL prompts user for service URL
 func (p *PromptConfig) PromptServiceURL(serviceName string, defaultURL string) (string, error) {
 	fmt.Printf("✔ Base URL for %s (e.g., '%s'): ", serviceName, defaultURL)
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = defaultURL
 		fmt.Printf("   Using default: %s\n", defaultURL)
 	}
-	
+
 	return input, nil
 }
 
 // PromptMonolithicURL prompts user for monolithic backend URL
 func (p *PromptConfig) PromptMonolithicURL() (string, error) {
 	fmt.Printf("✔ Backend base URL (e.g., 'http://localhost:3000/api'): ")
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = "http://localhost:3000/api"
 		fmt.Printf("   Using default: %s\n", input)
 	}
-	
+
 	return input, nil
 }
 
 // PromptHybridURL prompts user for hybrid service URL
 func (p *PromptConfig) PromptHybridURL(serviceName string) (string, error) {
 	fmt.Printf("✔ Base URL for %s (e.g., 'http://localhost:3000/api/%s'): ", serviceName, serviceName)
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(input)
-	
+
 	if input == "" {
 		input = fmt.Sprintf("http://localhost:3000/api/%s", serviceName)
 		fmt.Printf("   Using default: %s\n", input)
 	}
-	
+
 	return input, nil
 }
 
 // ConfirmAddMore prompts user to confirm adding more services
 func (p *PromptConfig) ConfirmAddMore() bool {
 	fmt.Printf("✔ Add another service? (y/N): ")
-	
+
 	input, _ := p.Reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
-	
+
 	return input == "y" || input == "yes"
 }

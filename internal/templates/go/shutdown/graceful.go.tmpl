@@ -1,0 +1,45 @@
+package shutdown
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+)
+
+// GracefulShutdown handles SIGTERM/SIGINT and gracefully shuts down the server
+func GracefulShutdown(server *http.Server, timeout time.Duration) {
+	// Create channel to listen for interrupt signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until signal is received
+	sig := <-quit
+	log.Printf("🛑 Shutdown signal received: %v", sig)
+	log.Println("   Draining connections and shutting down gracefully...")
+
+	// Create context with timeout for shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Disable keep-alives to prevent new connections
+	server.SetKeepAlivesEnabled(false)
+
+	// Attempt graceful shutdown
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("⚠️  Server forced to shutdown: %v", err)
+		os.Exit(1)
+	}
+
+	log.Println("✅ Server stopped gracefully")
+	os.Exit(0)
+}
+
+// WaitForShutdown waits for shutdown signal without blocking server startup
+func WaitForShutdown(server *http.Server, timeout time.Duration) {
+	go GracefulShutdown(server, timeout)
+}
+

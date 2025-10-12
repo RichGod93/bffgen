@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  {{.ProjectName}}-bff:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{.ProjectName}}-bff
+    ports:
+      - "{{.Port}}:{{.Port}}"
+    environment:
+      - NODE_ENV=development
+      - PORT={{.Port}}
+      - REDIS_URL=redis://redis:6379
+      {{range .BackendServices}}- {{.EnvName}}_URL={{.BaseURL}}
+      {{end}}- JWT_SECRET=dev-secret-change-in-production
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bff-network
+    volumes:
+      - .:/app
+      - /app/node_modules
+    restart: unless-stopped
+    command: ["npm", "run", "dev"]
+
+  redis:
+    image: redis:7-alpine
+    container_name: {{.ProjectName}}-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bff-network
+
+  # Optional: Redis Commander for Redis management UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: {{.ProjectName}}-redis-ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - bff-network
+    profiles:
+      - debug
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  bff-network:
+    driver: bridge
+
