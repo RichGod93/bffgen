@@ -141,7 +141,19 @@ npm install && npm run dev
 
 ## 📦 Installation
 
-**Quick Install (Latest v1.2.0):**
+### npm (Recommended for Node.js Developers)
+
+```bash
+# Install globally
+npm install -g bffgen
+
+# Or use npx (no installation needed)
+npx bffgen init my-project --lang nodejs-express
+```
+
+### Go Install
+
+**Latest (v1.2.0):**
 
 ```bash
 go install github.com/RichGod93/bffgen/cmd/bffgen@v1.2.0
@@ -153,11 +165,11 @@ go install github.com/RichGod93/bffgen/cmd/bffgen@v1.2.0
 go install github.com/RichGod93/bffgen/cmd/bffgen@latest
 ```
 
-**From Source:**
+### From Source
 
 ```bash
 git clone https://github.com/RichGod93/bffgen
-cd bffgen && go build -o bffgen ./cmd/bffgen
+cd bffgen && make build
 sudo mv bffgen /usr/local/bin/
 ```
 

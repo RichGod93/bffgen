@@ -100,6 +100,32 @@ dev:
 	@echo "Starting development server..."
 	go run ./cmd/bffgen
 
+# Prepare npm package
+.PHONY: npm-package
+npm-package:
+	@if [ -z "$(VERSION)" ] || [ "$(VERSION)" = "dev" ]; then \
+		echo "❌ VERSION must be set (e.g., make npm-package VERSION=v1.2.0)"; \
+		exit 1; \
+	fi
+	@echo "Preparing npm package for version $(VERSION)..."
+	@cd npm && npm version $(VERSION:v%=%) --no-git-tag-version --allow-same-version
+	@echo "✅ npm package version updated to $(VERSION:v%=%)"
+
+# Publish to npm (requires NPM_TOKEN environment variable)
+.PHONY: npm-publish
+npm-publish: npm-package
+	@echo "Publishing bffgen to npm..."
+	@cd npm && npm publish
+	@echo "✅ Published to npm"
+
+# Test npm package locally
+.PHONY: npm-test
+npm-test:
+	@echo "Testing npm package..."
+	@cd npm && npm pack
+	@echo "✅ npm package created successfully"
+	@echo "Test installation with: npm install -g npm/bffgen-$(VERSION:v%=%).tgz"
+
 # Help
 .PHONY: help
 help:
@@ -112,6 +138,9 @@ help:
 	@echo "  install      - Install locally"
 	@echo "  tag          - Create and push a git tag (requires VERSION=v0.1.0)"
 	@echo "  release-prep - Prepare release (build, test, lint)"
+	@echo "  npm-package  - Prepare npm package (requires VERSION=v1.2.0)"
+	@echo "  npm-publish  - Publish to npm (requires VERSION and NPM_TOKEN)"
+	@echo "  npm-test     - Test npm package locally"
 	@echo "  version      - Show version information"
 	@echo "  dev          - Start development server"
 	@echo "  help         - Show this help"
@@ -120,3 +149,5 @@ help:
 	@echo "  make build"
 	@echo "  make tag VERSION=v0.1.0"
 	@echo "  make release-prep"
+	@echo "  make npm-package VERSION=v1.2.0"
+	@echo "  make npm-publish VERSION=v1.2.0"

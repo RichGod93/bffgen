@@ -201,3 +201,53 @@ jobs:
           echo "🎉 Release ${{ steps.version.outputs.version }} created successfully!"
           echo "📦 Assets uploaded to GitHub Releases"
           echo "🔗 View release: https://github.com/RichGod93/bffgen/releases/tag/${{ steps.version.outputs.version }}"
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          # Remove 'v' prefix for npm
+          NPM_VERSION="${VERSION#v}"
+          echo "version=$NPM_VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing npm package version: $NPM_VERSION"
+
+      - name: Update npm package version
+        working-directory: npm
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          echo "✅ npm package version updated to ${{ steps.version.outputs.version }}"
+
+      - name: Publish to npm
+        working-directory: npm
+        run: |
+          npm publish
+          echo "✅ Published bffgen@${{ steps.version.outputs.version }} to npm"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Notify npm publish success
+        run: |
+          echo "🎉 npm package published successfully!"
+          echo "📦 Install with: npm install -g bffgen@${{ steps.version.outputs.version }}"
+          echo "🔗 View on npm: https://www.npmjs.com/package/bffgen"
