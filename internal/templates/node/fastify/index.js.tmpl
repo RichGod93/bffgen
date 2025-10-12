@@ -1,0 +1,201 @@
+// Generated Fastify BFF server for {{.ProjectName}}
+require('dotenv').config();
+const fastify = require('fastify')({ 
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    transport: process.env.NODE_ENV === 'development' ? {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'HH:MM:ss Z',
+        ignore: 'pid,hostname'
+      }
+    } : undefined
+  }
+});
+
+const PORT = process.env.PORT || 8080;
+
+// Register plugins
+async function start() {
+  try {
+    // CORS configuration
+    const corsOrigins = process.env.CORS_ORIGINS 
+      ? process.env.CORS_ORIGINS.split(',') 
+      : {{.CORSOriginsJS}};
+
+    await fastify.register(require('@fastify/cors'), {
+      origin: corsOrigins,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Accept', 'Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Requested-With'],
+      exposedHeaders: ['X-CSRF-Token']
+    });
+
+    // Security headers
+    await fastify.register(require('@fastify/helmet'), {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          fontSrc: ["'self'"],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'none'"]
+        }
+      }
+    });
+
+    // Rate limiting
+    await fastify.register(require('@fastify/rate-limit'), {
+      max: parseInt(process.env.RATE_LIMIT) || 100,
+      timeWindow: '15 minutes',
+      cache: 10000,
+      allowList: ['127.0.0.1'],
+      redis: process.env.REDIS_URL ? require('ioredis').createClient(process.env.REDIS_URL) : undefined
+    });
+
+    // Cookie support
+    await fastify.register(require('@fastify/cookie'), {
+      secret: process.env.COOKIE_SECRET || 'change-this-secret-in-production',
+      parseOptions: {}
+    });
+
+    // JWT support (optional)
+    if (process.env.JWT_SECRET) {
+      await fastify.register(require('@fastify/jwt'), {
+        secret: process.env.JWT_SECRET,
+        cookie: {
+          cookieName: 'token',
+          signed: false
+        }
+      });
+    }
+
+    // Request logging hook
+    fastify.addHook('onRequest', async (request, reply) => {
+      request.startTime = Date.now();
+    });
+
+    fastify.addHook('onResponse', async (request, reply) => {
+      const duration = Date.now() - request.startTime;
+      request.log.info({
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        duration: `${duration}ms`
+      });
+    });
+
+    // Health check endpoint
+    fastify.get('/health', async (request, reply) => {
+      return { 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development'
+      };
+    });
+
+    // Readiness check endpoint
+    fastify.get('/ready', async (request, reply) => {
+      // Add checks for database, redis, etc.
+      return { status: 'ready', timestamp: new Date().toISOString() };
+    });
+
+    // Liveness check endpoint
+    fastify.get('/live', async (request, reply) => {
+      return { status: 'alive', timestamp: new Date().toISOString() };
+    });
+
+    // Auth endpoints placeholder
+    fastify.post('/api/auth/login', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string', minLength: 6 }
+          }
+        }
+      }
+    }, async (request, reply) => {
+      // TODO: Implement your authentication logic
+      // const { email, password } = request.body;
+      return { 
+        message: 'Login endpoint - implement authentication',
+        todo: 'Add JWT token generation and validation'
+      };
+    });
+
+    fastify.post('/api/auth/logout', async (request, reply) => {
+      // TODO: Implement logout logic
+      reply.clearCookie('token');
+      reply.clearCookie('refresh_token');
+      return { message: 'Logged out successfully' };
+    });
+
+    fastify.get('/api/auth/profile', async (request, reply) => {
+      // TODO: Add JWT validation decorator/hook
+      // TODO: Extract user info from token
+      return { 
+        message: 'Profile endpoint - add authentication',
+        todo: 'Implement JWT validation hook'
+      };
+    });
+
+{{.BackendRoutes}}
+
+    // Error handler
+    fastify.setErrorHandler((error, request, reply) => {
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      
+      fastify.log.error(error);
+      
+      reply.status(error.statusCode || 500).send({
+        error: isDevelopment ? error.message : 'Internal server error',
+        ...(isDevelopment && { 
+          code: error.code,
+          stack: error.stack 
+        })
+      });
+    });
+
+    // 404 handler
+    fastify.setNotFoundHandler((request, reply) => {
+      reply.status(404).send({ 
+        error: 'Route not found',
+        path: request.url,
+        method: request.method
+      });
+    });
+
+    // Graceful shutdown
+    const closeGracefully = async (signal) => {
+      fastify.log.info(`Received signal ${signal}, closing gracefully`);
+      await fastify.close();
+      process.exit(0);
+    };
+
+    process.on('SIGTERM', () => closeGracefully('SIGTERM'));
+    process.on('SIGINT', () => closeGracefully('SIGINT'));
+
+    // Start server
+    await fastify.listen({ 
+      port: PORT, 
+      host: process.env.HOST || '0.0.0.0' 
+    });
+    
+    fastify.log.info(`🚀 {{.ProjectName}} BFF server running on port ${PORT}`);
+    fastify.log.info(`📋 Health check: http://localhost:${PORT}/health`);
+    fastify.log.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+}
+
+start();
+

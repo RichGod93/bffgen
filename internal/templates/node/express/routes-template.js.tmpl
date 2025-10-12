@@ -1,0 +1,49 @@
+/**
+ * {{.ServiceName}} Service Routes
+ * Auto-generated from bffgen.config.json
+ */
+
+const express = require('express');
+const router = express.Router();
+const { asyncHandler } = require('../middleware/errorHandler');
+const { authenticate, optionalAuth } = require('../middleware/auth');
+
+{{range .Endpoints}}
+/**
+ * {{.Method}} {{.Path}}
+ * {{if .RequiresAuth}}Requires authentication{{else}}Public endpoint{{end}}
+ */
+router.{{.ExpressMethod}}('{{.Path}}', {{if .RequiresAuth}}authenticate, {{end}}asyncHandler(async (req, res) => {
+  try {
+    // Proxy request to backend: {{$.BaseURL}}{{.BackendPath}}
+    const baseURL = process.env.{{$.EnvKey}}_URL || '{{$.BaseURL}}';
+    const response = await fetch(`${baseURL}{{.BackendPath}}`, {
+      method: '{{.Method}}',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(req.headers.authorization && { 'Authorization': req.headers.authorization })
+      },
+      ...(req.body && { body: JSON.stringify(req.body) })
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: 'Backend service error',
+        message: `{{$.ServiceName}} service returned status ${response.status}`
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('{{$.ServiceName}} service error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch data from {{$.ServiceName}} service'
+    });
+  }
+}));
+{{end}}
+
+module.exports = router;
+

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://bffgen.dev/schema.json",
+  "project": {
+    "name": "{{.ProjectName}}",
+    "version": "1.0.0",
+    "runtime": "{{.Runtime}}",
+    "framework": "{{.Framework}}"
+  },
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origins": {{.CORSOrigins}},
+      "credentials": true,
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      "allowedHeaders": [
+        "Accept",
+        "Authorization",
+        "Content-Type",
+        "X-CSRF-Token",
+        "X-Requested-With"
+      ]
+    },
+    "rateLimit": {
+      "enabled": true,
+      "windowMs": 900000,
+      "max": 100
+    },
+    "security": {
+      "helmet": true,
+      "csp": true,
+      "hsts": true
+    }
+  },
+  "backends": {{.BackendsJSON}},
+  "features": {
+    "authentication": {
+      "enabled": true,
+      "type": "jwt",
+      "endpoints": {
+        "login": "/api/auth/login",
+        "logout": "/api/auth/logout",
+        "refresh": "/api/auth/refresh",
+        "profile": "/api/auth/profile"
+      }
+    },
+    "logging": {
+      "enabled": true,
+      "level": "info",
+      "format": "json"
+    },
+    "monitoring": {
+      "health": "/health",
+      "ready": "/ready",
+      "metrics": "/metrics"
+    }
+  },
+  "development": {
+    "hotReload": true,
+    "debugMode": true,
+    "mockBackends": false
+  },
+  "production": {
+    "compression": true,
+    "caching": true,
+    "clustering": false
+  }
+}
+

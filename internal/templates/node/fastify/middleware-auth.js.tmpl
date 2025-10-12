@@ -1,0 +1,86 @@
+/**
+ * Authentication Plugin for Fastify
+ * Validates JWT tokens and adds user context to requests
+ */
+
+const fp = require('fastify-plugin');
+const jwt = require('jsonwebtoken');
+
+/**
+ * Fastify authentication plugin
+ * @param {Object} fastify - Fastify instance
+ * @param {Object} options - Plugin options
+ */
+async function authPlugin(fastify, options) {
+  /**
+   * Decorator to verify authentication
+   */
+  fastify.decorate('authenticate', async function(request, reply) {
+    try {
+      const authHeader = request.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'No token provided'
+        });
+        return;
+      }
+      
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+      
+      // Verify token
+      const decoded = jwt.verify(token, jwtSecret);
+      
+      // Add user info to request
+      request.user = decoded;
+      request.userId = decoded.userId || decoded.sub;
+      
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Token expired'
+        });
+        return;
+      }
+      
+      if (error.name === 'JsonWebTokenError') {
+        reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Invalid token'
+        });
+        return;
+      }
+      
+      reply.code(500).send({
+        error: 'Internal Server Error',
+        message: 'Authentication error'
+      });
+    }
+  });
+  
+  /**
+   * Decorator for optional authentication
+   */
+  fastify.decorate('optionalAuth', async function(request, reply) {
+    try {
+      const authHeader = request.headers.authorization;
+      
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+        
+        const decoded = jwt.verify(token, jwtSecret);
+        request.user = decoded;
+        request.userId = decoded.userId || decoded.sub;
+      }
+    } catch (error) {
+      // Ignore errors, continue without authentication
+    }
+  });
+}
+
+module.exports = fp(authPlugin);
+

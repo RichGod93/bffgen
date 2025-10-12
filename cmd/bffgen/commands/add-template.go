@@ -2,11 +2,12 @@ package commands
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/RichGod93/bffgen/internal/templates"
 	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
@@ -58,6 +59,29 @@ func selectTemplate() string {
 }
 
 func addTemplate(templateName string) error {
+	// Detect project type (Go or Node.js)
+	projectType := detectProjectType()
+	
+	if projectType == "unknown" {
+		fmt.Println("❌ No BFF project found in current directory")
+		fmt.Println("💡 Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
+		return fmt.Errorf("no project configuration found")
+	}
+
+	fmt.Printf("🔧 Adding template: %s (project type: %s)\n", templateName, projectType)
+	fmt.Println()
+	
+	// Handle based on project type
+	if projectType == "nodejs" {
+		return addTemplateNodeJS(templateName)
+	}
+	
+	// Default: Go project
+	return addTemplateGo(templateName)
+}
+
+// addTemplateGo handles adding templates for Go projects
+func addTemplateGo(templateName string) error {
 	// Check if config file exists
 	if _, err := os.Stat("bff.config.yaml"); os.IsNotExist(err) {
 		fmt.Println("❌ bff.config.yaml not found in current directory")
@@ -65,22 +89,14 @@ func addTemplate(templateName string) error {
 		return fmt.Errorf("config file not found")
 	}
 
-	fmt.Printf("🔧 Adding template: %s\n", templateName)
+	fmt.Printf("📝 Generating Go routes for template: %s\n", templateName)
 	fmt.Println()
 
-	// Load template file
-	templatePath := filepath.Join("internal", "templates", templateName+".yaml")
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		// Try relative to current working directory
-		templatePath = filepath.Join("internal", "templates", templateName+".yaml")
-		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			return fmt.Errorf("template file not found: %s", templatePath)
-		}
-	}
-
-	templateData, err := os.ReadFile(templatePath)
+	// Load template file from embedded filesystem
+	templatePath := templateName + ".yaml"
+	templateData, err := templates.TemplateFS.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("failed to read template file: %w", err)
+		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content)", templateName)
 	}
 
 	var templateConfig types.BFFConfig
@@ -134,6 +150,104 @@ func addTemplate(templateName string) error {
 	fmt.Println()
 	fmt.Printf("✅ Template '%s' applied successfully! Added %d total endpoints.\n", templateName, mergedCount)
 	fmt.Println("💡 Run 'bffgen generate' to update your Go code")
+
+	return nil
+}
+
+// addTemplateNodeJS handles adding templates for Node.js projects
+func addTemplateNodeJS(templateName string) error {
+	// Check if config file exists
+	if _, err := os.Stat("bffgen.config.json"); os.IsNotExist(err) {
+		fmt.Println("❌ bffgen.config.json not found in current directory")
+		fmt.Println("💡 Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
+		return fmt.Errorf("config file not found")
+	}
+
+	fmt.Printf("📝 Generating Node.js routes for template: %s\n", templateName)
+	fmt.Println()
+
+	// Load template file from embedded filesystem
+	templatePath := templateName + ".yaml"
+	templateData, err := templates.TemplateFS.ReadFile(templatePath)
+	if err != nil {
+		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content)", templateName)
+	}
+
+	var templateConfig types.BFFConfig
+	if err := yaml.Unmarshal(templateData, &templateConfig); err != nil {
+		return fmt.Errorf("failed to parse template file: %w", err)
+	}
+
+	// Load existing bffgen.config.json
+	configData, err := os.ReadFile("bffgen.config.json")
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	var config map[string]interface{}
+	// Parse as JSON first, fall back to YAML
+	if err := json.Unmarshal(configData, &config); err != nil {
+		// Try YAML parsing
+		if err := yaml.Unmarshal(configData, &config); err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
+	}
+
+	// Get or create backends array
+	backends, ok := config["backends"].([]interface{})
+	if !ok {
+		backends = []interface{}{}
+	}
+
+	// Add template services as backends
+	mergedCount := 0
+	for serviceName, templateService := range templateConfig.Services {
+		// Create backend entry
+		backend := map[string]interface{}{
+			"name":    serviceName,
+			"baseUrl": templateService.BaseURL,
+			"timeout": 30000,
+			"retries": 3,
+			"healthCheck": map[string]interface{}{
+				"enabled":  true,
+				"path":     "/health",
+				"interval": 60000,
+			},
+		}
+
+		// Add endpoints
+		endpoints := []map[string]interface{}{}
+		for _, endpoint := range templateService.Endpoints {
+			endpoints = append(endpoints, map[string]interface{}{
+				"name":         endpoint.Name,
+				"path":         endpoint.Path,
+				"method":       endpoint.Method,
+				"exposeAs":     endpoint.ExposeAs,
+				"requiresAuth": false, // Default to false, can be customized
+			})
+		}
+		backend["endpoints"] = endpoints
+
+		backends = append(backends, backend)
+		mergedCount += len(templateService.Endpoints)
+		fmt.Printf("✅ Added service '%s' with %d endpoints\n", serviceName, len(templateService.Endpoints))
+	}
+
+	config["backends"] = backends
+
+	// Save updated config as JSON with proper indentation
+	updatedData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile("bffgen.config.json", updatedData, 0644); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("✅ Template '%s' applied successfully! Added %d total endpoints.\n", templateName, mergedCount)
+	fmt.Println("💡 Run 'bffgen generate' to update your route files")
 
 	return nil
 }

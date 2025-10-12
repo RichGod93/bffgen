@@ -56,6 +56,7 @@ func Execute(version, buildTime, commit string) error {
 	// Add all subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(generateCmd)
+	rootCmd.AddCommand(generateDocsCmd)
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(doctorCmd)
 
