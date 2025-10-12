@@ -29,6 +29,11 @@ type ProjectOptions struct {
 	SkipTests        bool
 	SkipDocs         bool
 	LanguageExplicit bool // True if language was explicitly set via flag
+	// Infrastructure options
+	IncludeCI      bool
+	IncludeDocker  bool
+	IncludeHealth  bool
+	IncludeCompose bool
 }
 
 // initializeProject initializes a new BFF project
@@ -140,6 +145,47 @@ func initializeProjectWithOptions(projectName string, langType scaffolding.Langu
 	// Save controller type preference for generate command
 	if langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify {
 		saveControllerTypePreference(projectName, opts.ControllerType)
+	}
+
+	// Generate infrastructure files based on flags
+	fmt.Println()
+	if opts.IncludeCI {
+		if err := generateCIWorkflow(projectName, langType, opts.IncludeDocker); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to generate CI workflow: %v\n", err)
+		} else {
+			fmt.Println("✅ Generated GitHub Actions CI/CD workflow")
+		}
+	}
+
+	if opts.IncludeDocker {
+		if err := generateDockerfile(projectName, langType, framework, 8080); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to generate Dockerfile: %v\n", err)
+		} else {
+			fmt.Println("✅ Generated production Dockerfile and .dockerignore")
+		}
+	}
+
+	if opts.IncludeHealth {
+		if err := generateHealthChecks(projectName, langType, framework, backendServices); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to generate health checks: %v\n", err)
+		} else {
+			fmt.Println("✅ Generated enhanced health check endpoints")
+		}
+
+		// Also generate graceful shutdown when health checks are included
+		if err := generateGracefulShutdown(projectName, langType, framework); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to generate graceful shutdown: %v\n", err)
+		} else {
+			fmt.Println("✅ Generated graceful shutdown handler")
+		}
+	}
+
+	if opts.IncludeCompose {
+		if err := generateDockerCompose(projectName, langType, backendServices, 8080); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to generate docker-compose: %v\n", err)
+		} else {
+			fmt.Println("✅ Generated development docker-compose.yml")
+		}
 	}
 
 	showRouteConfigInstructions(routeOption, projectName)

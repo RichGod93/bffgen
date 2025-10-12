@@ -9,11 +9,11 @@ import (
 
 func TestCodeMarker(t *testing.T) {
 	marker := DefaultMarkers()
-	
+
 	if marker.Begin != "// bffgen:begin" {
 		t.Errorf("Expected begin marker '// bffgen:begin', got '%s'", marker.Begin)
 	}
-	
+
 	if marker.End != "// bffgen:end" {
 		t.Errorf("Expected end marker '// bffgen:end', got '%s'", marker.End)
 	}
@@ -21,14 +21,14 @@ func TestCodeMarker(t *testing.T) {
 
 func TestCustomMarkers(t *testing.T) {
 	marker := CustomMarkers("routes")
-	
+
 	expectedBegin := "// bffgen:begin:routes"
 	expectedEnd := "// bffgen:end:routes"
-	
+
 	if marker.Begin != expectedBegin {
 		t.Errorf("Expected begin marker '%s', got '%s'", expectedBegin, marker.Begin)
 	}
-	
+
 	if marker.End != expectedEnd {
 		t.Errorf("Expected end marker '%s', got '%s'", expectedEnd, marker.End)
 	}
@@ -64,7 +64,7 @@ func main() {
 	if section.BeginLine != 5 {
 		t.Errorf("Expected begin line 5, got %d", section.BeginLine)
 	}
-	
+
 	if section.EndLine != 9 {
 		t.Errorf("Expected end line 9, got %d", section.EndLine)
 	}
@@ -72,7 +72,7 @@ func main() {
 	expectedContent := `func generatedFunction() {
 	fmt.Println("This is generated code")
 }`
-	
+
 	if strings.TrimSpace(section.Content) != expectedContent {
 		t.Errorf("Expected content '%s', got '%s'", expectedContent, section.Content)
 	}
@@ -179,7 +179,7 @@ line 3
 line 4`
 
 	diff := ComputeDiff(oldContent, newContent)
-	
+
 	if !diff.HasChanges {
 		t.Error("Expected changes to be detected")
 	}
@@ -220,7 +220,7 @@ line 4 added by generator`
 	}
 
 	result := twm.PerformMerge()
-	
+
 	if result.HasConflicts {
 		t.Error("Expected no conflicts")
 	}

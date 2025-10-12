@@ -1,0 +1,93 @@
+/**
+ * Health check utilities with dependency checking
+ * Provides liveness and readiness probes for Kubernetes and container orchestration
+ */
+
+const axios = require('axios');
+
+class HealthChecker {
+  constructor(config = {}) {
+    this.version = config.version || '1.0.0';
+    this.redisClient = config.redisClient || null;
+    this.backendServices = config.backendServices || {};
+  }
+
+  /**
+   * Liveness probe - basic check that the service is running
+   * Returns immediately without checking dependencies
+   */
+  liveness() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Readiness probe - checks if the service is ready to handle traffic
+   * Validates all dependencies (Redis, backend services)
+   */
+  async readiness() {
+    const dependencies = {};
+    let allHealthy = true;
+
+    // Check Redis if configured
+    if (this.redisClient) {
+      try {
+        await this.redisClient.ping();
+        dependencies.redis = true;
+      } catch (err) {
+        dependencies.redis = false;
+        allHealthy = false;
+      }
+    }
+
+    // Check backend services in parallel
+    const backendChecks = Object.entries(this.backendServices).map(
+      async ([name, url]) => {
+        dependencies[name] = await this.checkBackend(url);
+        if (!dependencies[name]) {
+          allHealthy = false;
+        }
+      }
+    );
+
+    await Promise.all(backendChecks);
+
+    return {
+      status: allHealthy ? 'ok' : 'degraded',
+      version: this.version,
+      timestamp: new Date().toISOString(),
+      dependencies
+    };
+  }
+
+  /**
+   * Check if a backend service is healthy
+   * Tries common health check endpoints with a timeout
+   */
+  async checkBackend(baseUrl) {
+    const healthPaths = ['/health', '/healthz', '/health/readiness'];
+    
+    for (const path of healthPaths) {
+      try {
+        const response = await axios.get(`${baseUrl}${path}`, {
+          timeout: 2000,
+          validateStatus: (status) => status === 200
+        });
+        
+        if (response.status === 200) {
+          return true;
+        }
+      } catch (err) {
+        // Continue to next path
+        continue;
+      }
+    }
+    
+    return false;
+  }
+}
+
+module.exports = HealthChecker;
+

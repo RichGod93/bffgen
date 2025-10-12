@@ -16,12 +16,12 @@ const (
 
 // LanguageConfig holds configuration for different languages
 type LanguageConfig struct {
-	Type            LanguageType
-	Name            string
-	Framework       string
-	DepsPath        string
-	MainFile        string
-	TemplatePath    string
+	Type         LanguageType
+	Name         string
+	Framework    string
+	DepsPath     string
+	MainFile     string
+	TemplatePath string
 }
 
 // GetLanguageConfig returns configuration for a language type
@@ -40,7 +40,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 		return LanguageConfig{
 			Type:         LanguageNodeExpress,
 			Name:         "Node.js (Express)",
-			Framework:   "express",
+			Framework:    "express",
 			DepsPath:     "package.json",
 			MainFile:     "index.js",
 			TemplatePath: "templates/nodejs-express",
@@ -49,7 +49,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 		return LanguageConfig{
 			Type:         LanguageNodeFastify,
 			Name:         "Node.js (Fastify)",
-			Framework:   "fastify",
+			Framework:    "fastify",
 			DepsPath:     "package.json",
 			MainFile:     "index.js",
 			TemplatePath: "templates/nodejs-fastify",
@@ -58,7 +58,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 		return LanguageConfig{
 			Type:         LanguageGo,
 			Name:         "Go",
-			Framework:   "chi",
+			Framework:    "chi",
 			DepsPath:     "go.mod",
 			MainFile:     "main.go",
 			TemplatePath: "templates/go",

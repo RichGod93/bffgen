@@ -25,6 +25,21 @@ var initCmd = &cobra.Command{
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 		skipDocs, _ := cmd.Flags().GetBool("skip-docs")
 
+		// Infrastructure flags
+		includeCI, _ := cmd.Flags().GetBool("include-ci")
+		includeDocker, _ := cmd.Flags().GetBool("include-docker")
+		includeHealth, _ := cmd.Flags().GetBool("include-health")
+		includeCompose, _ := cmd.Flags().GetBool("include-compose")
+		includeAllInfra, _ := cmd.Flags().GetBool("include-all-infra")
+
+		// If include-all-infra is set, enable all infrastructure features
+		if includeAllInfra {
+			includeCI = true
+			includeDocker = true
+			includeHealth = true
+			includeCompose = true
+		}
+
 		languageType := scaffolding.LanguageGo
 		framework := "chi"
 
@@ -59,6 +74,11 @@ var initCmd = &cobra.Command{
 			SkipTests:        skipTests,
 			SkipDocs:         skipDocs,
 			LanguageExplicit: langFlag != "" || runtimeFlag != "",
+			// Infrastructure options
+			IncludeCI:      includeCI,
+			IncludeDocker:  includeDocker,
+			IncludeHealth:  includeHealth,
+			IncludeCompose: includeCompose,
 		}
 
 		languageType, framework, backendServices, err := initializeProjectWithOptions(projectName, languageType, framework, opts)
@@ -104,4 +124,11 @@ func init() {
 	initCmd.Flags().String("controller-type", "both", "Controller type for Node.js projects (basic,aggregator,both)")
 	initCmd.Flags().Bool("skip-tests", false, "Skip test file generation")
 	initCmd.Flags().Bool("skip-docs", false, "Skip API documentation generation")
+
+	// Infrastructure scaffolding flags
+	initCmd.Flags().Bool("include-ci", false, "Generate GitHub Actions CI/CD workflow")
+	initCmd.Flags().Bool("include-docker", false, "Generate production Dockerfile and .dockerignore")
+	initCmd.Flags().Bool("include-health", false, "Generate enhanced health checks with dependency checking")
+	initCmd.Flags().Bool("include-compose", false, "Generate development docker-compose.yml")
+	initCmd.Flags().Bool("include-all-infra", false, "Generate all infrastructure files (CI, Docker, health checks, docker-compose)")
 }

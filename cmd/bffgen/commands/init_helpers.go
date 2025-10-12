@@ -829,7 +829,7 @@ func createLoggerUtility(projectName string, langType scaffolding.LanguageType, 
 func createAggregationUtilities(projectName string, langType scaffolding.LanguageType, framework string) error {
 	loader := templates.NewTemplateLoader(langType)
 	utilsDir := filepath.Join(projectName, "src", "utils")
-	
+
 	data := &templates.TemplateData{
 		Framework: framework,
 	}
@@ -865,7 +865,7 @@ func createAggregationUtilities(projectName string, langType scaffolding.Languag
 func createExampleControllers(projectName string, langType scaffolding.LanguageType, framework string) error {
 	loader := templates.NewTemplateLoader(langType)
 	examplesDir := filepath.Join(projectName, "src", "examples")
-	
+
 	if err := os.MkdirAll(examplesDir, 0755); err != nil {
 		return err
 	}
@@ -903,7 +903,7 @@ func createExampleControllers(projectName string, langType scaffolding.LanguageT
 // createRedisSetupFiles creates optional Redis and script files
 func createRedisSetupFiles(projectName string, langType scaffolding.LanguageType, framework string) error {
 	loader := templates.NewTemplateLoader(langType)
-	
+
 	data := &templates.TemplateData{
 		ProjectName: filepath.Base(projectName),
 		Framework:   framework,
