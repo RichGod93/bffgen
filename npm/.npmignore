@@ -1,0 +1,22 @@
+# Don't include binaries in published package
+# Binaries are downloaded during postinstall
+bin/bffgen-*
+
+# Development files
+*.log
+*.tgz
+.DS_Store
+node_modules/
+.npm/
+.cache/
+
+# Test files
+test/
+*.test.js
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
