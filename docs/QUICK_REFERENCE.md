@@ -1,5 +1,27 @@
 # bffgen Quick Reference Guide
 
+## 🆕 v2.0 Features
+
+```bash
+# Validate configuration
+bffgen config validate
+
+# Convert config formats
+bffgen convert config --from yaml --to json
+
+# Preview changes before applying
+bffgen generate --dry-run
+
+# Force regeneration
+bffgen generate --force
+
+# Override runtime detection
+bffgen --runtime nodejs-express generate
+
+# Add infrastructure to existing project
+bffgen add-infra --ci --docker --compose --health
+```
+
 ## Commands at a Glance
 
 ```bash
@@ -32,6 +54,15 @@ bffgen dev
 bffgen doctor
 ```
 
+## Global Flags (All Commands)
+
+```bash
+--runtime string     Override runtime detection (go, nodejs-express, nodejs-fastify)
+--verbose, -v        Enable verbose output
+--no-color           Disable colored output
+--config-path        Path to global config (default: ~/.bffgen/config.yaml)
+```
+
 ## Init Flags
 
 ```bash
@@ -48,6 +79,22 @@ bffgen doctor
 --controller-type   basic, aggregator, both [default: both]
 --skip-tests        Don't generate test files
 --skip-docs         Don't generate API docs
+
+# Infrastructure (v2.0)
+--include-ci        Generate GitHub Actions workflow
+--include-docker    Generate Dockerfile and .dockerignore
+--include-health    Generate health check endpoints
+--include-compose   Generate docker-compose.yml
+--include-all-infra Generate all infrastructure files
+```
+
+## Generate Flags (v2.0)
+
+```bash
+--dry-run           Show colorized diff without applying changes
+--check             Check mode (alias for --dry-run)
+--force             Force overwrite existing files (ignore state tracking)
+--verbose           Show detailed generation steps
 ```
 
 ## Quick Start Recipes

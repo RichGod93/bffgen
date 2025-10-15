@@ -15,7 +15,7 @@ func TestSetupProxyRoutes(t *testing.T) {
 		// Note: The proxy headers are set by the reverse proxy, not the backend
 		// We'll just verify the request reaches the backend
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"backend": "response"}`))
+		_, _ = w.Write([]byte(`{"backend": "response"}`))
 	}))
 	defer backendServer.Close()
 
@@ -138,7 +138,7 @@ func TestSetupProxyRoutes_UnsupportedMethod(t *testing.T) {
 func TestSetupProxyRoutes_MultipleMethods(t *testing.T) {
 	backendServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"method": "` + r.Method + `"}`))
+		_, _ = w.Write([]byte(`{"method": "` + r.Method + `"}`))
 	}))
 	defer backendServer.Close()
 

@@ -33,6 +33,11 @@ Global Installation:
 			globalConfig.ConfigPath = configPath
 		}
 
+		// Set runtime override if specified
+		if runtime, _ := cmd.Flags().GetString("runtime"); runtime != "" {
+			globalConfig.RuntimeOverride = runtime
+		}
+
 		return nil
 	},
 }
@@ -75,9 +80,11 @@ func init() {
 	rootCmd.PersistentFlags().String("config-path", "", "Path to configuration file (default: ~/.bffgen/config.yaml)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored output")
+	rootCmd.PersistentFlags().String("runtime", "", "Override runtime detection (go, nodejs-express, nodejs-fastify)")
 
 	// Bind flags to viper
 	viper.BindPFlag("config_path", rootCmd.PersistentFlags().Lookup("config-path"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 	viper.BindPFlag("no_color", rootCmd.PersistentFlags().Lookup("no-color"))
+	viper.BindPFlag("runtime", rootCmd.PersistentFlags().Lookup("runtime"))
 }

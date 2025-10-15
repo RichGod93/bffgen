@@ -129,7 +129,7 @@ func (sv *SchemaValidator) ValidateFromURL(url string) (*types.BFFGenV1Config, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch config from URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)

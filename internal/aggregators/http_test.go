@@ -37,7 +37,7 @@ func TestHTTPClient_Get(t *testing.T) {
 			t.Errorf("Expected User-Agent: bffgen-aggregator/1.0, got %s", r.Header.Get("User-Agent"))
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "ok"}`))
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
 	}))
 	defer server.Close()
 
@@ -47,7 +47,7 @@ func TestHTTPClient_Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
@@ -64,7 +64,7 @@ func TestHTTPClient_Post(t *testing.T) {
 			t.Errorf("Expected Content-Type: application/json, got %s", r.Header.Get("Content-Type"))
 		}
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id": "123"}`))
+		_, _ = w.Write([]byte(`{"id": "123"}`))
 	}))
 	defer server.Close()
 
@@ -75,7 +75,7 @@ func TestHTTPClient_Post(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		t.Errorf("Expected status 201, got %d", resp.StatusCode)
@@ -99,13 +99,13 @@ func TestParallelCaller_CallServices(t *testing.T) {
 	// Create test servers
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"service": "user"}`))
+		_, _ = w.Write([]byte(`{"service": "user"}`))
 	}))
 	defer server1.Close()
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"service": "orders"}`))
+		_, _ = w.Write([]byte(`{"service": "orders"}`))
 	}))
 	defer server2.Close()
 

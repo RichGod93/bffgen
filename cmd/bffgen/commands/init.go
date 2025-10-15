@@ -87,12 +87,15 @@ var initCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		fmt.Println()
 		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
+		fmt.Println()
+
+		// Check tools and show personalized guidance
+		showPostInitGuidance(projectName, string(languageType), framework, backendServices)
 
 		showBackendConfigSummary(backendServices)
 		showSetupInstructions(backendServices, projectName)
-		fmt.Printf("📁 Navigate to the project: cd %s\n", projectName)
-		fmt.Printf("🚀 Start development server: bffgen dev\n")
 
 		if framework == "chi" || framework == "echo" {
 			fmt.Println()

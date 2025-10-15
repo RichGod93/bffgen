@@ -37,9 +37,9 @@ func TestLoadBFFGenConfig_NoFile(t *testing.T) {
 
 	// Temporarily change the config directory
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
-	os.Setenv("HOME", tempDir)
+	_ = os.Setenv("HOME", tempDir)
 
 	// Load config when file doesn't exist
 	config, err := LoadBFFGenConfig()
@@ -63,9 +63,9 @@ func TestLoadBFFGenConfig_WithFile(t *testing.T) {
 
 	// Temporarily change the config directory
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
-	os.Setenv("HOME", tempDir)
+	_ = os.Setenv("HOME", tempDir)
 
 	// Create a test config file
 	testConfig := &types.BFFGenConfig{
@@ -137,9 +137,9 @@ func TestSaveBFFGenConfig(t *testing.T) {
 
 	// Temporarily change the config directory
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
-	os.Setenv("HOME", tempDir)
+	_ = os.Setenv("HOME", tempDir)
 
 	config := &types.BFFGenConfig{
 		Defaults: types.Defaults{
@@ -202,9 +202,9 @@ func TestUpdateRecentProject(t *testing.T) {
 
 	// Temporarily change the config directory
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
-	os.Setenv("HOME", tempDir)
+	_ = os.Setenv("HOME", tempDir)
 
 	// Test adding first project
 	err := UpdateRecentProject("project-1")
@@ -290,9 +290,9 @@ func TestUpdateRecentProject_Limit(t *testing.T) {
 
 	// Temporarily change the config directory
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
-	os.Setenv("HOME", tempDir)
+	_ = os.Setenv("HOME", tempDir)
 
 	// Add more than 10 projects to test the limit
 	for i := 1; i <= 12; i++ {

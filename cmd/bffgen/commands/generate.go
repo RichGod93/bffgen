@@ -32,12 +32,14 @@ var (
 	checkMode bool
 	dryRun    bool
 	verbose   bool
+	forceMode bool
 )
 
 func init() {
 	generateCmd.Flags().BoolVar(&checkMode, "check", false, "Check mode: show what would be changed without making changes")
 	generateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Dry run: show what would be changed without making changes")
 	generateCmd.Flags().BoolVar(&verbose, "verbose", false, "Verbose output")
+	generateCmd.Flags().BoolVar(&forceMode, "force", false, "Force overwrite of existing files without markers")
 }
 
 func generate() error {
@@ -65,11 +67,18 @@ func generate() error {
 func generateGo() error {
 	LogVerbose("Starting code generation from bff.config.yaml")
 
+	// Load generation state
+	state, err := utils.LoadState()
+	if err != nil {
+		return fmt.Errorf("failed to load generation state: %w", err)
+	}
+
 	// Create generator with regeneration-safe capabilities
 	generator := scaffolding.NewGenerator()
 	generator.SetCheckMode(checkMode)
 	generator.SetDryRun(dryRun)
 	generator.SetVerbose(verbose)
+	generator.SetBackupDir(utils.GetBackupDir())
 
 	if checkMode {
 		fmt.Println("🔍 Check mode: Analyzing what would be changed")
@@ -101,21 +110,58 @@ func generateGo() error {
 
 	LogVerbose("Found %d services to generate", len(config.Services))
 
+	// Track routes and check for duplicates
+	newRoutes := 0
+	skippedRoutes := 0
+	for serviceName, service := range config.Services {
+		for _, endpoint := range service.Endpoints {
+			routeKey := fmt.Sprintf("%s:%s:%s", serviceName, endpoint.Method, endpoint.ExposeAs)
+
+			// Check if route already generated (unless force mode)
+			if !forceMode && state.IsRouteGenerated(serviceName, endpoint.Method, endpoint.ExposeAs) {
+				LogVerbose("Skipping already generated route: %s", routeKey)
+				skippedRoutes++
+				continue
+			}
+
+			// Track the route
+			state.TrackRoute(serviceName, endpoint.Method, endpoint.Path, endpoint.ExposeAs)
+			newRoutes++
+		}
+	}
+
+	if !forceMode && skippedRoutes > 0 {
+		fmt.Printf("ℹ️  Skipped %d already generated routes (use --force to regenerate)\n", skippedRoutes)
+	}
+
 	// Generate main.go with routes using regeneration-safe scaffolding
 	if err := generateMainGoWithScaffolding(config, generator); err != nil {
 		return fmt.Errorf("failed to generate main.go: %w", err)
 	}
+	state.TrackGeneratedFile("main.go", "", true)
 
 	// Generate server entry point using regeneration-safe scaffolding
 	if err := generateServerMainWithScaffolding(config, generator); err != nil {
 		return fmt.Errorf("failed to generate server main: %w", err)
 	}
+	state.TrackGeneratedFile("cmd/server/main.go", "", true)
+
+	// Save generation state
+	if !checkMode && !dryRun {
+		state.ProjectType = "go"
+		if err := utils.SaveState(state); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to save generation state: %v\n", err)
+		}
+	}
 
 	if !checkMode && !dryRun {
 		fmt.Println("✅ Code generation completed!")
-		fmt.Println("📁 Updated files:")
+		fmt.Printf("📁 Updated files:\n")
 		fmt.Println("   - main.go (with proxy routes)")
 		fmt.Println("   - cmd/server/main.go (server entry point)")
+		if newRoutes > 0 {
+			fmt.Printf("   - Added %d new routes\n", newRoutes)
+		}
 		fmt.Println()
 		fmt.Println("🚀 Run 'go run main.go' to start your BFF server")
 		fmt.Println()
@@ -203,10 +249,35 @@ func generateProxyHandlerFunction() string {
 	return `// createProxyHandler creates a reverse proxy handler for the given backend URL and path
 func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Simple proxy implementation - in production, use httputil.ReverseProxy
-		// This is a placeholder for the actual proxy logic
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Proxy to %s%s not implemented yet", backendURL, backendPath)
+		// Parse the backend URL
+		target, err := url.Parse(backendURL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid backend URL: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Create reverse proxy
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		
+		// Configure proxy behavior
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		// Modify the request to use the backend path
+		originalPath := r.URL.Path
+		r.URL.Path = backendPath
+		r.URL.Host = target.Host
+		r.URL.Scheme = target.Scheme
+		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+		r.Host = target.Host
+
+		// Log the proxy request
+		log.Printf("Proxying %s %s -> %s%s", r.Method, originalPath, backendURL, backendPath)
+
+		// Serve the proxy request
+		proxy.ServeHTTP(w, r)
 	}
 }`
 }
@@ -218,6 +289,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -260,10 +333,35 @@ func main() {
 // createProxyHandler creates a reverse proxy handler for the given backend URL and path
 func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Simple proxy implementation - in production, use httputil.ReverseProxy
-		// This is a placeholder for the actual proxy logic
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Proxy to %s%s not implemented yet", backendURL, backendPath)
+		// Parse the backend URL
+		target, err := url.Parse(backendURL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid backend URL: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Create reverse proxy
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		
+		// Configure proxy behavior
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		// Modify the request to use the backend path
+		originalPath := r.URL.Path
+		r.URL.Path = backendPath
+		r.URL.Host = target.Host
+		r.URL.Scheme = target.Scheme
+		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+		r.Host = target.Host
+
+		// Log the proxy request
+		log.Printf("Proxying %s %s -> %s%s", r.Method, originalPath, backendURL, backendPath)
+
+		// Serve the proxy request
+		proxy.ServeHTTP(w, r)
 	}
 }`
 
@@ -283,7 +381,7 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return tmpl.Execute(file, config)
 }
@@ -295,6 +393,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -337,10 +437,35 @@ func main() {
 // createProxyHandler creates a reverse proxy handler for the given backend URL and path
 func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Simple proxy implementation - in production, use httputil.ReverseProxy
-		// This is a placeholder for the actual proxy logic
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Proxy to %s%s not implemented yet", backendURL, backendPath)
+		// Parse the backend URL
+		target, err := url.Parse(backendURL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid backend URL: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Create reverse proxy
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		
+		// Configure proxy behavior
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		// Modify the request to use the backend path
+		originalPath := r.URL.Path
+		r.URL.Path = backendPath
+		r.URL.Host = target.Host
+		r.URL.Scheme = target.Scheme
+		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+		r.Host = target.Host
+
+		// Log the proxy request
+		log.Printf("Proxying %s %s -> %s%s", r.Method, originalPath, backendURL, backendPath)
+
+		// Serve the proxy request
+		proxy.ServeHTTP(w, r)
 	}
 }`
 
@@ -365,7 +490,7 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return tmpl.Execute(file, config)
 }
@@ -398,6 +523,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -447,10 +574,35 @@ func main() {
 // createProxyHandler creates a reverse proxy handler for the given backend URL and path
 func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Simple proxy implementation - in production, use httputil.ReverseProxy
-		// This is a placeholder for the actual proxy logic
-		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintf(w, "Proxy to %%s%%s not implemented yet", backendURL, backendPath)
+		// Parse the backend URL
+		target, err := url.Parse(backendURL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid backend URL: %%v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Create reverse proxy
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		
+		// Configure proxy behavior
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error: %%v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		// Modify the request to use the backend path
+		originalPath := r.URL.Path
+		r.URL.Path = backendPath
+		r.URL.Host = target.Host
+		r.URL.Scheme = target.Scheme
+		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+		r.Host = target.Host
+
+		// Log the proxy request
+		log.Printf("Proxying %%s %%s -> %%s%%s", r.Method, originalPath, backendURL, backendPath)
+
+		// Serve the proxy request
+		proxy.ServeHTTP(w, r)
 	}
 }`, config.Settings.Port, config.Settings.Port))
 
@@ -481,6 +633,9 @@ func chiMethod(method string) string {
 
 // generateNodeJS generates code for Node.js projects
 func generateNodeJS() error {
+	// Create progress tracker
+	progress := utils.NewQuietProgress(verbose)
+
 	if checkMode {
 		fmt.Println("🔍 Check mode: Analyzing what would be changed")
 	} else if dryRun {
@@ -489,6 +644,8 @@ func generateNodeJS() error {
 		fmt.Println("🔧 Generating Node.js routes from bffgen.config.json")
 	}
 	fmt.Println()
+
+	progress.Start("Loading configuration")
 
 	// Check if config file exists
 	if _, err := os.Stat("bffgen.config.json"); os.IsNotExist(err) {
@@ -526,7 +683,10 @@ func generateNodeJS() error {
 		}
 	}
 
+	progress.Success("Configuration loaded")
+
 	fmt.Printf("📝 Generating routes for %s\n", framework)
+	progress.Start(fmt.Sprintf("Generating files for %d backends", len(backends)))
 
 	// Generate route files, controllers, and services for each backend
 	routesGenerated := 0
@@ -580,7 +740,19 @@ func generateNodeJS() error {
 		}
 	}
 
+	// Auto-register routes in index.js
 	if !checkMode && !dryRun {
+		if err := autoRegisterRoutes(framework, backends); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to auto-register routes: %v\n", err)
+			fmt.Println("💡 You can manually import routes in src/index.js")
+		} else {
+			fmt.Println("✅ Auto-registered routes in src/index.js")
+		}
+	}
+
+	if !checkMode && !dryRun {
+		progress.Success("All files generated")
+
 		fmt.Println()
 		fmt.Printf("✅ Code generation completed!\n")
 		fmt.Printf("   📁 Generated %d route files in src/routes/\n", routesGenerated)
@@ -1020,4 +1192,67 @@ func renderServiceTemplate(loader *templates.TemplateLoader, framework, template
 	}
 
 	return buf.String(), nil
+}
+
+// autoRegisterRoutes automatically imports and registers routes in the main index.js file
+func autoRegisterRoutes(framework string, backends []interface{}) error {
+	indexPath := filepath.Join("src", "index.js")
+
+	// Read existing index.js
+	content, err := os.ReadFile(indexPath)
+	if err != nil {
+		return fmt.Errorf("failed to read index.js: %w", err)
+	}
+
+	contentStr := string(content)
+
+	// Generate route imports and registrations
+	var routeContent strings.Builder
+
+	for _, b := range backends {
+		backend, ok := b.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		serviceName, _ := backend["name"].(string)
+		if serviceName == "" {
+			continue
+		}
+
+		endpoints, ok := backend["endpoints"].([]interface{})
+		if !ok || len(endpoints) == 0 {
+			continue
+		}
+
+		// Add import and registration
+		if framework == "fastify" {
+			routeContent.WriteString(fmt.Sprintf("    // %s routes\n", serviceName))
+			routeContent.WriteString(fmt.Sprintf("    await fastify.register(require('./routes/%s'));\n", serviceName))
+		} else {
+			routeContent.WriteString(fmt.Sprintf("// %s routes\n", serviceName))
+			routeContent.WriteString(fmt.Sprintf("app.use(require('./routes/%s'));\n", serviceName))
+		}
+	}
+
+	// Find and replace the route registration section using markers
+	marker := scaffolding.CustomMarkers("routes")
+	sections, err := scaffolding.FindSections(contentStr, marker)
+	if err != nil || len(sections) == 0 {
+		// Markers not found, skip auto-registration
+		return nil
+	}
+
+	// Replace the section with new content
+	updatedContent, err := scaffolding.ReplaceSection(contentStr, sections[0], routeContent.String())
+	if err != nil {
+		return fmt.Errorf("failed to replace section: %w", err)
+	}
+
+	// Write updated index.js
+	if err := os.WriteFile(indexPath, []byte(updatedContent), 0644); err != nil {
+		return fmt.Errorf("failed to write index.js: %w", err)
+	}
+
+	return nil
 }

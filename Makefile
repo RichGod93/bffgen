@@ -42,6 +42,40 @@ test:
 	go test -race ./...
 	@echo "✅ Tests completed"
 
+# Run tests with race detector
+.PHONY: test-race
+test-race:
+	@echo "Running tests with race detector..."
+	go test -race -v ./...
+	@echo "✅ Race detection completed"
+
+# Run memory profiling tests
+.PHONY: test-memory
+test-memory:
+	@echo "Running memory profiling tests..."
+	@go test -run=Memory ./internal/utils -v
+	@go test -run=Memory ./cmd/bffgen/commands -v
+	@go test -memprofile=mem.prof -run=Memory ./internal/utils || true
+	@if [ -f mem.prof ]; then \
+		echo "Memory profile generated: mem.prof"; \
+		go tool pprof -top mem.prof | head -20; \
+		rm mem.prof; \
+	fi
+	@echo "✅ Memory profiling completed"
+
+# Run security scanners
+.PHONY: security
+security:
+	@echo "Running security scanners..."
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@gosec -quiet -exclude=G104,G304,G306,G301,G114,G107 -exclude-dir=test-project ./...
+	@echo "✅ Security scan completed"
+
+# Run all CI checks locally
+.PHONY: ci
+ci: lint test-race test-memory security build
+	@echo "✅ All CI checks passed"
+
 # Run linter
 .PHONY: lint
 lint:
@@ -133,6 +167,10 @@ help:
 	@echo "  build        - Build the binary"
 	@echo "  build-all    - Build for multiple platforms"
 	@echo "  test         - Run tests"
+	@echo "  test-race    - Run tests with race detector"
+	@echo "  test-memory  - Run memory profiling tests"
+	@echo "  security     - Run security scanners"
+	@echo "  ci           - Run all CI checks locally"
 	@echo "  lint         - Run linter"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  install      - Install locally"
@@ -147,6 +185,9 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build"
+	@echo "  make ci                    # Run all CI checks"
+	@echo "  make test-race             # Check for race conditions"
+	@echo "  make test-memory           # Profile memory usage"
 	@echo "  make tag VERSION=v0.1.0"
 	@echo "  make release-prep"
 	@echo "  make npm-package VERSION=v1.2.0"

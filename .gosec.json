@@ -1,0 +1,19 @@
+{
+  "global": {
+    "nosec": false,
+    "audit": false,
+    "exclude-generated": true
+  },
+  "severity": "medium",
+  "confidence": "medium",
+  "exclude": {
+    "G104": "Already handled by errcheck linter",
+    "G304": "File inclusion necessary for config loading in CLI tool",
+    "G306": "Standard 0644 file permissions are appropriate for generated code",
+    "G301": "Standard 0755 directory permissions are appropriate",
+    "G114": "HTTP timeout not needed for development servers",
+    "G107": "Variable URL necessary for proxy functionality"
+  },
+  "exclude-dirs": ["vendor", "node_modules", "dist", "test-project"],
+  "tests": false
+}

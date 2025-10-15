@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -82,14 +83,46 @@ func (uda *UserDashboardAggregator) Aggregate(w http.ResponseWriter, r *http.Req
 
 // fetchUserData retrieves user information
 func (uda *UserDashboardAggregator) fetchUserData(userID string) map[string]interface{} {
-	// In a real implementation, this would make HTTP calls to the user service
-	// For now, return mock data
+	// Use HTTP client to fetch from user service
+	client := NewHTTPClient(5 * time.Second)
+	userServiceURL := os.Getenv("USER_SERVICE_URL")
+
+	if userServiceURL == "" {
+		// Fallback to mock data if service URL not configured
+		return map[string]interface{}{
+			"id":    userID,
+			"name":  "John Doe",
+			"email": "john@example.com",
+			"role":  "user",
+		}
+	}
+
+	url := fmt.Sprintf("%s/users/%s", userServiceURL, userID)
+	resp, err := client.Get(url)
+	if err != nil || resp == nil {
+		// Return mock data on error
+		return map[string]interface{}{
+		"id":    userID,
+		"error": "Failed to fetch user data",
+	}
+}
+defer func() {
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		// Log error but don't fail the request
+		_ = closeErr
+	}
+}()
+
+// Parse response
+var userData map[string]interface{}
+if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
 	return map[string]interface{}{
 		"id":    userID,
-		"name":  "John Doe",
-		"email": "john@example.com",
-		"role":  "user",
+		"error": "Failed to parse user data",
 	}
+}
+
+return userData
 }
 
 // fetchOrdersData retrieves user orders

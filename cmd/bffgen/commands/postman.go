@@ -26,13 +26,25 @@ var postmanCmd = &cobra.Command{
 }
 
 func generatePostmanCollection() error {
-	fmt.Println("📮 Generating Postman collection from bff.config.yaml")
+	// Detect project type
+	projectType := detectProjectType()
+
+	var configFile string
+	if projectType == "go" {
+		configFile = "bff.config.yaml"
+	} else if strings.HasPrefix(projectType, "nodejs") {
+		configFile = "bffgen.config.json"
+	} else {
+		configFile = "bff.config.yaml" // fallback
+	}
+
+	fmt.Printf("📮 Generating Postman collection from %s\n", configFile)
 	fmt.Println()
 	fmt.Println("🔍 Step 1: Checking for BFF configuration...")
 
 	// Check if config file exists
-	if _, err := os.Stat("bff.config.yaml"); os.IsNotExist(err) {
-		fmt.Println("❌ bff.config.yaml not found in current directory")
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		fmt.Printf("❌ %s not found in current directory\n", configFile)
 		fmt.Println()
 		fmt.Println("🚀 To get started with BFF generation:")
 		fmt.Println("   1. Run: bffgen init <your-project-name>")
@@ -44,13 +56,21 @@ func generatePostmanCollection() error {
 		return fmt.Errorf("config file not found")
 	}
 
-	fmt.Println("✅ Found bff.config.yaml")
+	fmt.Printf("✅ Found %s\n", configFile)
 	fmt.Println("🔍 Step 2: Loading and validating configuration...")
 
-	// Load configuration
-	config, err := utils.LoadConfig("bff.config.yaml")
+	// Load configuration based on project type
+	var config *types.BFFConfig
+	var err error
+
+	if strings.HasPrefix(projectType, "nodejs") {
+		config, err = loadNodeJSConfigForPostman(configFile)
+	} else {
+		config, err = utils.LoadConfig(configFile)
+	}
+
 	if err != nil {
-		fmt.Println("❌ Failed to load bff.config.yaml")
+		fmt.Printf("❌ Failed to load %s\n", configFile)
 		fmt.Println()
 		fmt.Println("🔧 Common issues and solutions:")
 		fmt.Println("   • Invalid YAML syntax - check indentation and quotes")
@@ -298,7 +318,7 @@ func generateCollectionJSON(config *types.BFFConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Write data with error handling
 	bytesWritten, err := file.Write(jsonData)
@@ -315,6 +335,88 @@ func generateCollectionJSON(config *types.BFFConfig) error {
 }
 
 // Helper functions
+func loadNodeJSConfigForPostman(configPath string) (*types.BFFConfig, error) {
+	// Read Node.js config (bffgen.config.json)
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Parse JSON
+	var nodeConfig map[string]interface{}
+	if err := json.Unmarshal(data, &nodeConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON config: %w", err)
+	}
+
+	// Convert to Go config format
+	config := &types.BFFConfig{
+		Services: make(map[string]types.Service),
+		Settings: types.Settings{
+			Port: 8080, // default
+		},
+	}
+
+	// Extract port from server section
+	if server, ok := nodeConfig["server"].(map[string]interface{}); ok {
+		if port, ok := server["port"].(float64); ok {
+			config.Settings.Port = int(port)
+		}
+	}
+
+	// Extract backends and convert to services
+	backends, ok := nodeConfig["backends"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("no backends found in config")
+	}
+
+	for _, b := range backends {
+		backend, ok := b.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		serviceName, _ := backend["name"].(string)
+		if serviceName == "" {
+			continue
+		}
+
+		baseURL, _ := backend["baseUrl"].(string)
+		endpoints, _ := backend["endpoints"].([]interface{})
+
+		service := types.Service{
+			BaseURL:   baseURL,
+			Endpoints: []types.Endpoint{},
+		}
+
+		for _, e := range endpoints {
+			endpoint, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, _ := endpoint["name"].(string)
+			path, _ := endpoint["path"].(string)
+			method, _ := endpoint["method"].(string)
+			exposeAs, _ := endpoint["exposeAs"].(string)
+
+			if name == "" || path == "" || method == "" || exposeAs == "" {
+				continue
+			}
+
+			service.Endpoints = append(service.Endpoints, types.Endpoint{
+				Name:     name,
+				Path:     path,
+				Method:   method,
+				ExposeAs: exposeAs,
+			})
+		}
+
+		config.Services[serviceName] = service
+	}
+
+	return config, nil
+}
+
 func generatePostmanID() string {
 	return "bff-collection-" + fmt.Sprintf("%d", time.Now().Unix())
 }

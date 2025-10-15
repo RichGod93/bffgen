@@ -130,16 +130,20 @@ func (pc *ParallelCaller) CallServices(calls []ServiceCall) []ServiceResponse {
 				response.StatusCode = resp.StatusCode
 				response.Headers = resp.Header
 
-				// Read response body
-				if resp.Body != nil {
-					defer resp.Body.Close()
-					body, readErr := io.ReadAll(resp.Body)
-					if readErr != nil {
-						response.Error = fmt.Errorf("failed to read response body: %w", readErr)
-					} else {
-						response.Body = body
+			// Read response body
+			if resp.Body != nil {
+				defer func() {
+					if closeErr := resp.Body.Close(); closeErr != nil {
+						response.Error = fmt.Errorf("failed to close response body: %w", closeErr)
 					}
+				}()
+				body, readErr := io.ReadAll(resp.Body)
+				if readErr != nil {
+					response.Error = fmt.Errorf("failed to read response body: %w", readErr)
+				} else {
+					response.Body = body
 				}
+			}
 			}
 
 			responseChan <- response

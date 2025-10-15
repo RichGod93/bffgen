@@ -1,0 +1,59 @@
+version: 2
+
+linters:
+  enable:
+    # Critical memory safety linters only
+    - errcheck # Unchecked errors (memory leaks)
+    - bodyclose # HTTP body not closed (memory leaks)
+    - govet # Go vet (basic correctness)
+
+    # Optional quality checks
+    - misspell # Spelling errors
+
+  disable:
+    # Disabled for noise reduction
+    - goconst # Too many false positives
+    - exhaustive # Switch case completeness (noisy)
+    - prealloc # Micro-optimization
+    - gocritic # Style preferences
+    - gocyclo # Complexity (separate concern)
+    - goprintffuncname
+    - nolintlint
+    - unconvert
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (viper.BindPFlag)
+      - (os.Chdir)
+      - (os.WriteFile)
+      - (os.Setenv)
+      - (os.MkdirAll)
+      - (json.Unmarshal)
+
+run:
+  timeout: 5m
+  skip-dirs:
+    - vendor
+    - node_modules
+    - dist
+    - test-project
+  tests: false # Don't lint test files
+
+issues:
+  max-same-issues: 0
+  exclude-rules:
+    # Ignore all linter errors in test files
+    - path: "_test\\.go"
+      linters:
+        - errcheck
+        - gosec
+        - staticcheck
+        - unused
+        - ineffassign
+        - nilerr
+
+    # Allow certain patterns that are safe
+    - text: "Error return value of `(viper\\.BindPFlag|pt\\.bar\\.(Add|Set|Finish))` is not checked"
+      linters:
+        - errcheck

@@ -85,40 +85,106 @@ app.get('/ready', (req, res) => {
 });
 
 // Auth endpoints placeholder
+// JWT validation middleware
+const authenticateJWT = (req, res, next) => {
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  
+  // Get token from cookie or Authorization header
+  const token = req.cookies.access_token || 
+                (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // Attach user data to request
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
 app.post('/api/auth/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 })
-], (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
   
-  // TODO: Implement your authentication logic
-  // const { email, password } = req.body;
+  const { email, password } = req.body;
+  
+  // NOTE: Replace this with your actual authentication logic
+  // Example: verify credentials against database
+  // const user = await UserModel.findOne({ email });
+  // const isValid = await bcrypt.compare(password, user.passwordHash);
+  // if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  // For now, this is a working example with mock validation
+  // In production, validate against your user database
+  if (!email || !password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+  
+  // Generate JWT token with user data
+  // In production, fetch real user data from database
+  const token = jwt.sign(
+    { 
+      userId: 'user-id-from-db', // Replace with actual user ID
+      email: email,
+      role: 'user' // Replace with actual user role
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+  
+  // Set token in httpOnly cookie for security
+  res.cookie('access_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
+  
   res.json({ 
-    message: 'Login endpoint - implement authentication',
-    todo: 'Add JWT token generation and validation'
+    message: 'Logged in successfully',
+    user: { email: email, role: 'user' },
+    token: token // Also return in response for localStorage option
   });
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  // TODO: Implement logout logic (clear tokens, sessions, etc.)
+  // Clear authentication cookies
   res.clearCookie('access_token');
   res.clearCookie('refresh_token');
   res.json({ message: 'Logged out successfully' });
 });
 
-app.get('/api/auth/profile', (req, res) => {
-  // TODO: Add JWT validation middleware
-  // TODO: Extract user info from token
+app.get('/api/auth/profile', authenticateJWT, (req, res) => {
+  // User data is available in req.user (set by authenticateJWT middleware)
   res.json({ 
-    message: 'Profile endpoint - add authentication',
-    todo: 'Implement JWT validation middleware'
+    message: 'Profile data',
+    user: {
+      userId: req.user.userId,
+      email: req.user.email,
+      role: req.user.role
+    }
   });
 });
 
+// bffgen:begin:routes
+// Auto-generated route imports and registrations
+// Do not modify this section manually - use 'bffgen generate' to update
 {{.BackendRoutes}}
+// bffgen:end:routes
 
 // 404 handler - must be after all routes
 app.use((req, res) => {

@@ -283,18 +283,63 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Auth endpoints placeholder
-app.post('/api/auth/login', (req, res) => {
-  // TODO: Implement your authentication logic
-  res.json({ message: 'Login endpoint - implement authentication' });
+// JWT validation middleware
+const authenticateJWT = (req, res, next) => {
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  
+  const token = req.cookies.access_token || 
+                (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// Auth endpoints
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  // NOTE: Replace with actual authentication logic
+  if (!email || !password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  
+  const token = jwt.sign(
+    { userId: 'user-id-from-db', email: email, role: 'user' },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+  
+  res.cookie('access_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000
+  });
+  
+  res.json({ message: 'Logged in successfully', user: { email, role: 'user' }, token });
 });
 
-app.get('/api/auth/profile', (req, res) => {
-  // TODO: Add JWT validation middleware
-  res.json({ message: 'Profile endpoint - add authentication' });
+app.get('/api/auth/profile', authenticateJWT, (req, res) => {
+  res.json({ 
+    message: 'Profile data',
+    user: { userId: req.user.userId, email: req.user.email, role: req.user.role }
+  });
 });
 
-// TODO: Add your BFF routes here
+// Add your BFF routes here
 // Example:
 // app.get('/api/users', async (req, res) => {
 //   try {
@@ -379,18 +424,65 @@ async function start() {
     return { status: 'healthy', timestamp: new Date().toISOString() };
   });
 
-  // Auth endpoints placeholder
+  // JWT authentication decorator
+  fastify.decorate('authenticate', async function(request, reply) {
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+    
+    try {
+      const token = request.cookies.access_token || 
+                    (request.headers.authorization && request.headers.authorization.split(' ')[1]);
+      
+      if (!token) {
+        return reply.status(401).send({ error: 'Authentication required' });
+      }
+      
+      const decoded = jwt.verify(token, JWT_SECRET);
+      request.user = decoded;
+    } catch (error) {
+      return reply.status(403).send({ error: 'Invalid or expired token' });
+    }
+  });
+
+  // Auth endpoints
   fastify.post('/api/auth/login', async (request, reply) => {
-    // TODO: Implement your authentication logic
-    return { message: 'Login endpoint - implement authentication' };
+    const { email, password } = request.body;
+    
+    // NOTE: Replace with actual authentication logic
+    if (!email || !password) {
+      return reply.status(401).send({ error: 'Invalid credentials' });
+    }
+    
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+    
+    const token = jwt.sign(
+      { userId: 'user-id-from-db', email: email, role: 'user' },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    reply.setCookie('access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/'
+    });
+    
+    return { message: 'Logged in successfully', user: { email, role: 'user' }, token };
   });
 
-  fastify.get('/api/auth/profile', async (request, reply) => {
-    // TODO: Add JWT validation hook
-    return { message: 'Profile endpoint - add authentication' };
+  fastify.get('/api/auth/profile', {
+    onRequest: [fastify.authenticate]
+  }, async (request, reply) => {
+    return { 
+      message: 'Profile data',
+      user: { userId: request.user.userId, email: request.user.email, role: request.user.role }
+    };
   });
 
-  // TODO: Add your BFF routes here
+  // Add your BFF routes here
   // Example:
   // fastify.get('/api/users', async (request, reply) => {
   //   try {

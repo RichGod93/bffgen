@@ -84,9 +84,10 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 
 	// Common templates (shared between Express and Fastify)
 	commonFiles := []string{
-		"env.tmpl", "gitignore.tmpl", "bffgen.config.json.tmpl",
+		"env.tmpl", "env.test.tmpl", "gitignore.tmpl", "bffgen.config.json.tmpl",
 		"service-base.js.tmpl", "service-template.js.tmpl",
 		"jest.config.js.tmpl", "setup-tests.js.tmpl",
+		"test-fixtures.js.tmpl", "test-integration.template.js.tmpl",
 		"swagger-config.js.tmpl", "logger.js.tmpl",
 		// New aggregation utilities
 		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",

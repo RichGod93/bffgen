@@ -143,6 +143,11 @@ update_run.awk
 
 # Internal development documentation (not for repository)
 IMPLEMENTATION_SUMMARY.md
+MEMORY_SAFETY_CI_IMPLEMENTATION.md
+NODEJS_BFF_ENHANCEMENT_SUMMARY.md
+NPM*.md
+RELEASE*.md
 RELEASE_PREP*.md
+TESTING_CHECKLIST*.md
 *.plan.md
 .bffgen-config

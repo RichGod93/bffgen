@@ -308,14 +308,20 @@ func (sa *SecureAuth) RevokeAllUserSessions(userID string) {
 // generateSessionID generates a secure session ID
 func generateSessionID() string {
 	bytes := make([]byte, 32)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to time-based if crypto fails (should never happen)
+		return fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
 	return base64.URLEncoding.EncodeToString(bytes)
 }
 
 // generateRefreshToken generates a secure refresh token
 func generateRefreshToken() string {
 	bytes := make([]byte, 32)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to time-based if crypto fails (should never happen)
+		return fmt.Sprintf("refresh-%d", time.Now().UnixNano())
+	}
 	return base64.URLEncoding.EncodeToString(bytes)
 }
 
