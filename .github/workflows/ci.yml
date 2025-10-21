@@ -27,10 +27,13 @@ jobs:
       - name: Run tests with race detector
         run: go test -race -v -coverprofile=coverage.out ./...
 
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Run linter
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: latest
+        run: golangci-lint run --timeout=5m ./...
 
       - name: Security scan
         run: |
