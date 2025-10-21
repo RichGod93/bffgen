@@ -160,6 +160,7 @@ NPM*.md
 RELEASE*.md
 RELEASE_PREP*.md
 TESTING_CHECKLIST*.md
+CLAUDE.MD
 *.plan.md
 .bffgen-config
 
