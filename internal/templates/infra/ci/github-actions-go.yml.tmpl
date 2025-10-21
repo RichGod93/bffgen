@@ -30,10 +30,22 @@ jobs:
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.out ./...
 
+    - name: Run memory profiling
+      run: |
+        go test -memprofile=mem.prof -run=Memory ./... || true
+        if [ -f mem.prof ]; then
+          go tool pprof -top mem.prof | head -20
+        fi
+
     - name: Run linter
       uses: golangci/golangci-lint-action@v4
       with:
         version: latest
+
+    - name: Security scan
+      run: |
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        gosec -quiet ./...
 
     - name: Build
       run: go build -v ./...

@@ -46,7 +46,7 @@ cd my-project && npm run dev
 - **Node.js Fastify** - Fast, schema-based framework
 - **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
 
-### 🚀 **Production-Ready Aggregation (v1.2.0)**
+### 🚀 **Production-Ready Aggregation**
 
 - **Parallel Service Calls** - Fetch from multiple backends simultaneously
 - **Redis Caching** - Built-in caching with automatic fallback
@@ -54,6 +54,7 @@ cd my-project && npm run dev
 - **Request Batching** - Avoid N+1 queries
 - **Response Transformation** - Filter and optimize API responses
 - **Field Selection** - GraphQL-like field filtering for REST
+- **Go & Node.js Parity** - Same utilities available in both runtimes (v2.0+)
 
 ### 🔒 **Security Features**
 
@@ -69,6 +70,18 @@ cd my-project && npm run dev
 - **Code Generation** - Auto-generate routes, controllers, services
 - **Hot Reload** - Development mode with auto-restart
 - **Comprehensive Tests** - Jest setup with sample tests
+
+### ⚡ **v2.0 Enhancements** (NEW)
+
+- **Idempotent Generation** - Safe to run `generate` multiple times
+- **Config Validation** - `bffgen config validate` catches errors pre-generation
+- **Colorized Diffs** - Preview changes with `--dry-run`
+- **Progress Indicators** - Visual feedback during operations
+- **Auto-Route Registration** - Routes automatically imported
+- **Runtime Override** - `--runtime` flag for explicit control
+- **Transaction Rollback** - Failed operations automatically rollback
+- **Smart Tool Detection** - Auto-detects missing dependencies
+- **Memory Safety CI** - Automated leak detection and security scanning
 
 ---
 
@@ -86,6 +99,21 @@ bffgen add-template auth
 
 # Generate routes, controllers, and services
 bffgen generate
+
+# Generate with preview (v2.0)
+bffgen generate --dry-run
+
+# Force regeneration (v2.0)
+bffgen generate --force
+
+# Validate configuration (v2.0)
+bffgen config validate
+
+# Convert config formats (v2.0)
+bffgen convert --from yaml --to json
+
+# Add infrastructure (v2.0)
+bffgen add-infra --ci --docker --compose
 
 # Generate API documentation
 bffgen generate-docs
@@ -121,10 +149,12 @@ my-express-bff/
 │   ├── controllers/          # Business logic with aggregation
 │   ├── services/             # HTTP clients
 │   ├── middleware/           # Auth, validation, logging
-│   ├── utils/                # Aggregation utilities (NEW v1.2.0)
+│   ├── utils/                # Aggregation utilities
 │   │   ├── aggregator.js     # Parallel requests
 │   │   ├── cache-manager.js  # Redis caching
 │   │   ├── circuit-breaker.js # Fault tolerance
+│   │   ├── response-transformer.js # Data transformation (v2.0)
+│   │   ├── request-batcher.js     # Request batching (v2.0)
 │   │   └── ...
 │   └── examples/             # Working aggregation examples
 ├── tests/                    # Jest tests
@@ -133,25 +163,34 @@ my-express-bff/
 └── bffgen.config.json        # BFF configuration
 ```
 
-### Aggregation Example (v1.2.0)
+### Aggregation Example (v2.0)
 
 ```javascript
 const ParallelAggregator = require("./utils/aggregator");
 const CacheManager = require("./utils/cache-manager");
+const CircuitBreaker = require("./utils/circuit-breaker");
+const ResponseTransformer = require("./utils/response-transformer");
 
 const aggregator = new ParallelAggregator({ timeout: 5000 });
 const cache = new CacheManager({ ttl: 300 });
+const breaker = new CircuitBreaker({ failureThreshold: 5 });
+const transformer = new ResponseTransformer();
 
-// Fetch from multiple services in parallel
+// Fetch from multiple services in parallel with circuit breaker
 const results = await aggregator.fetchParallel([
-  { name: "user", fetch: () => UserService.getProfile(userId) },
+  {
+    name: "user",
+    fetch: () => breaker.execute(() => UserService.getProfile(userId)),
+  },
   { name: "orders", fetch: () => OrdersService.getOrders(userId) },
   { name: "preferences", fetch: () => PreferencesService.get(userId) },
 ]);
 
-// Combine results with graceful degradation
+// Transform and sanitize responses
 const dashboard = {
-  user: results.find((r) => r.service === "user" && r.success)?.data,
+  user: transformer.sanitize(
+    results.find((r) => r.service === "user" && r.success)?.data
+  ),
   orders: results.find((r) => r.service === "orders" && r.success)?.data || [],
   preferences:
     results.find((r) => r.service === "preferences" && r.success)?.data || {},

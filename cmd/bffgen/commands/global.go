@@ -10,9 +10,10 @@ import (
 
 // GlobalConfig holds global CLI configuration
 type GlobalConfig struct {
-	ConfigPath string
-	Verbose    bool
-	NoColor    bool
+	ConfigPath      string
+	Verbose         bool
+	NoColor         bool
+	RuntimeOverride string // Explicit runtime override (go, nodejs-express, nodejs-fastify)
 }
 
 var globalConfig GlobalConfig

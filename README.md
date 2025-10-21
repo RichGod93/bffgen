@@ -69,16 +69,20 @@ npm install && npm run dev
 
 ## 🛠️ Commands
 
-| Command         | Description                                                     | Go  | Node.js |
-| --------------- | --------------------------------------------------------------- | --- | ------- |
-| `init`          | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
-| `add-route`     | Add backend endpoint interactively                              | ✅  | ✅      |
-| `add-template`  | Add auth/ecommerce/content templates                            | ✅  | ✅      |
-| `generate`      | Generate routes, controllers, and services from config          | ✅  | ✅      |
-| `generate-docs` | Generate OpenAPI/Swagger documentation                          | -   | ✅      |
-| `postman`       | Create Postman collection                                       | ✅  | ✅      |
-| `dev`           | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
-| `config`        | Manage global configuration                                     | ✅  | ✅      |
+| Command           | Description                                                     | Go  | Node.js |
+| ----------------- | --------------------------------------------------------------- | --- | ------- |
+| `init`            | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
+| `add-route`       | Add backend endpoint interactively                              | ✅  | ✅      |
+| `add-template`    | Add auth/ecommerce/content templates                            | ✅  | ✅      |
+| `generate`        | Generate routes, controllers, and services from config          | ✅  | ✅      |
+| `generate-docs`   | Generate OpenAPI/Swagger documentation                          | -   | ✅      |
+| `postman`         | Create Postman collection                                       | ✅  | ✅      |
+| `dev`             | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
+| `config`          | Manage global configuration and validation                      | ✅  | ✅      |
+| `config validate` | Validate project configuration (NEW v2.0)                       | ✅  | ✅      |
+| `convert`         | Convert config between YAML and JSON (NEW v2.0)                 | ✅  | ✅      |
+| `add-infra`       | Add infrastructure to existing project (NEW v2.0)               | ✅  | ✅      |
+| `doctor`          | Check project health and configuration                          | ✅  | ✅      |
 
 ---
 
@@ -116,6 +120,17 @@ npm install && npm run dev
 - **Hot Reload** - Development mode with auto-restart (nodemon for Node.js)
 - **Professional Structure** - `src/` directory, tests, middleware
 - **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
+- **Idempotent Generation** - Safely run `generate` multiple times with `--force` flag
+- **Config Validation** - `bffgen config validate` catches errors before generation
+- **Smart Tool Detection** - Auto-detects missing tools with install instructions
+- **Auto npm install** - Optionally runs dependency installation after init
+- **Colorized Diffs** - Preview changes with `--dry-run` before applying
+- **Progress Indicators** - Visual feedback during multi-step operations
+- **Runtime Override** - `--runtime` flag to override automatic detection
+- **Auto-Route Registration** - Routes automatically imported in index files
+- **Transaction Rollback** - Failed operations rollback automatically
+- **Config Converter** - Convert between YAML (Go) and JSON (Node.js) formats
+- **Add Infrastructure** - Add CI/CD, Docker, health checks to existing projects
 
 ### ✨ **Enhanced Node.js Scaffolding**
 
@@ -300,6 +315,10 @@ bffgen init my-api --lang nodejs-express --include-ci --include-docker
 
 # Just health checks and graceful shutdown
 bffgen init my-service --lang nodejs-fastify --include-health
+
+# Add infrastructure to existing project (NEW v2.0)
+cd existing-project
+bffgen add-infra --ci --docker --compose
 ```
 
 **Available Flags:**
@@ -653,6 +672,36 @@ bffgen init my-bff \
 
 - OpenAPI spec (`docs/openapi.yaml`)
 
+### v2.0 Workflow Enhancements (NEW)
+
+```bash
+# Validate configuration before generation
+bffgen config validate
+
+# Preview changes before applying
+bffgen generate --dry-run
+
+# Force regeneration of all files
+bffgen generate --force
+
+# Convert config formats
+bffgen convert config --from yaml --to json
+
+# Override runtime detection
+bffgen --runtime nodejs-express generate
+
+# Add infrastructure to existing project
+bffgen add-infra --all
+```
+
+**Key Improvements:**
+
+- Routes auto-register in `src/index.js` (no manual imports needed)
+- JWT auth is fully implemented (no TODO comments)
+- Generation is idempotent (safe to run multiple times)
+- Failed operations automatically rollback
+- Real `httputil.ReverseProxy` for Go (no more "not implemented" stubs)
+
 ### Quick Links
 
 - 📖 [Enhanced Scaffolding Guide](docs/ENHANCED_SCAFFOLDING.md)
@@ -660,6 +709,7 @@ bffgen init my-bff \
 - 📋 [Quick Reference](docs/QUICK_REFERENCE.md)
 - 🏗️ [Architecture](docs/ARCHITECTURE.md)
 - 🧪 [Node.js Testing](docs/NODEJS_TESTING.md)
+- 🆕 [v2.0 Features & Migration](docs/V2_MIGRATION.md)
 
 ---
 

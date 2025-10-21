@@ -68,7 +68,7 @@ func runDevServer() error {
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "BFF server is running!")
+		_, _ = fmt.Fprint(w, "BFF server is running!")
 	})
 
 	// Setup proxy routes

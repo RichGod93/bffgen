@@ -12,6 +12,13 @@ bffgen.exe
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage.out
+coverage/
+
+# Memory profiling output
+mem.prof
+*.prof
+cpu.prof
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -81,6 +88,9 @@ test-main/
 test-*/
 bff-postman-collection.json
 bff.config.yaml
+bffgen.config.json
+.bffgen/
+.bffgen-config
 
 # Build artifacts
 dist/
@@ -143,6 +153,18 @@ update_run.awk
 
 # Internal development documentation (not for repository)
 IMPLEMENTATION_SUMMARY.md
+INFRASTRUCTURE_IMPLEMENTATION_SUMMARY.md
+MEMORY_SAFETY_CI_IMPLEMENTATION.md
+NODEJS_BFF_ENHANCEMENT_SUMMARY.md
+NPM*.md
+RELEASE*.md
 RELEASE_PREP*.md
+TESTING_CHECKLIST*.md
+CLAUDE.MD
 *.plan.md
 .bffgen-config
+
+# Generated README files (internal documentation)
+.github/README.md
+scripts/README.md
+internal/aggregation/README.md

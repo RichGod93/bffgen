@@ -48,15 +48,51 @@ module.exports = {
   // Verbose output
   verbose: true,
 
-  // Test timeout
+  // Test timeout (10s for unit, 30s for integration)
   testTimeout: 10000,
 
   // Module paths
   modulePaths: ['<rootDir>/src'],
 
+  // Global setup/teardown
+  globalSetup: undefined,
+  globalTeardown: undefined,
+
+  // Max workers (parallel test execution)
+  maxWorkers: '50%',
+
+  // Detect open handles (helps find async issues)
+  detectOpenHandles: false,
+
+  // Force exit after tests complete
+  forceExit: true,
+
   // Transform (if using ES modules or TypeScript)
   // transform: {
   //   '^.+\\.js$': 'babel-jest'
-  // }
+  // },
+
+  // Module name mapper (for aliases)
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+    '^@services/(.*)$': '<rootDir>/src/services/$1',
+    '^@controllers/(.*)$': '<rootDir>/src/controllers/$1',
+  },
+
+  // Test result processor (for custom reporting)
+  // testResultsProcessor: undefined,
+
+  // Bail after n failures
+  bail: 0,
+
+  // Notify on completion
+  notify: false,
+
+  // Watch plugins (for watch mode)
+  watchPlugins: [
+    'jest-watch-typeahead/filename',
+    'jest-watch-typeahead/testname',
+  ],
 };
 

@@ -434,7 +434,7 @@ func createTestRouter() *chi.Mux {
 	// Add health endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("BFF server is running!"))
+		_, _ = w.Write([]byte("BFF server is running!"))
 	})
 
 	return r

@@ -85,7 +85,7 @@ func main() {
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "BFF server is running!")
+		_, _ = fmt.Fprint(w, "BFF server is running!")
 	})
 
 	// Generated routes will be added here by bffgen generate command

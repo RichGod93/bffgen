@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -274,13 +275,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	_, err = destFile.ReadFrom(sourceFile)
 	return err
@@ -539,6 +540,132 @@ func showSetupInstructions(backendServices []BackendService, projectName string)
 	fmt.Println("   2. Run the BFF server:")
 	fmt.Printf("      cd %s && bffgen dev\n", projectName)
 	fmt.Println("   3. Test: curl http://localhost:8080/health")
+}
+
+// showPostInitGuidance shows personalized post-initialization guidance
+func showPostInitGuidance(projectName, runtime, framework string, backendServices []BackendService) {
+	// Check required tools
+	required, optional := utils.CheckRequiredTools(runtime)
+
+	missingRequired := []utils.ToolInfo{}
+	for _, tool := range required {
+		if !tool.Installed {
+			missingRequired = append(missingRequired, tool)
+		}
+	}
+
+	// Show tool status
+	if len(missingRequired) > 0 {
+		fmt.Println("⚠️  Missing Required Tools:")
+		for _, tool := range missingRequired {
+			fmt.Printf("   ❌ %s: Not installed\n", tool.Name)
+		}
+		fmt.Println()
+		fmt.Println("📖 Installation Instructions:")
+		for _, tool := range missingRequired {
+			fmt.Println(utils.GetToolInstallInstructions(tool.Name))
+			fmt.Println()
+		}
+		fmt.Println("💡 After installing tools, navigate to the project:")
+		fmt.Printf("   cd %s\n", projectName)
+		fmt.Println()
+		return
+	}
+
+	fmt.Println("✅ All required tools are installed")
+	fmt.Println()
+
+	// Show optional tools status
+	if len(optional) > 0 {
+		installedOptional := []string{}
+		missingOptional := []string{}
+
+		for _, tool := range optional {
+			if tool.Installed {
+				installedOptional = append(installedOptional, tool.Name)
+			} else {
+				missingOptional = append(missingOptional, tool.Name)
+			}
+		}
+
+		if len(installedOptional) > 0 {
+			fmt.Printf("ℹ️  Optional tools available: %s\n", strings.Join(installedOptional, ", "))
+		}
+		if len(missingOptional) > 0 {
+			fmt.Printf("ℹ️  Optional tools not installed: %s\n", strings.Join(missingOptional, ", "))
+		}
+		fmt.Println()
+	}
+
+	// Personalized next steps based on runtime
+	fmt.Println("📋 Next Steps:")
+	fmt.Printf("   1. Navigate to project: [bold]cd %s[reset]\n", projectName)
+
+	if strings.HasPrefix(runtime, "nodejs") {
+		fmt.Println("   2. Install dependencies: npm install")
+
+		// Check if user wants to run npm install now
+		fmt.Print("\n💡 Run 'npm install' now? (Y/n): ")
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		if response == "" || response == "y" || response == "yes" {
+			fmt.Println()
+			fmt.Println("📦 Running npm install...")
+
+			// Run npm install
+			cmd := exec.Command("npm", "install")
+			cmd.Dir = projectName
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("⚠️  npm install failed: %v\n", err)
+				fmt.Printf("💡 You can run it manually: cd %s && npm install\n", projectName)
+			} else {
+				fmt.Println("✅ Dependencies installed successfully")
+			}
+			fmt.Println()
+		}
+
+		fmt.Println("   3. Configure environment: cp .env.example .env")
+		fmt.Println("   4. Edit .env with your backend URLs")
+		fmt.Println("   5. Start development: npm run dev")
+		fmt.Println("   6. View API docs: http://localhost:8080/api-docs")
+
+	} else {
+		// Go project
+		fmt.Println("   2. Download dependencies: go mod download")
+		fmt.Println("   3. Set environment variables:")
+		fmt.Println("      export JWT_SECRET=your-secret-key")
+		fmt.Println("      export ENCRYPTION_KEY=your-encryption-key")
+		fmt.Println("   4. Start development: go run main.go")
+		fmt.Println("   5. Or use: bffgen dev")
+	}
+
+	fmt.Println()
+	fmt.Println("🎯 Quick Commands:")
+	fmt.Printf("   Add routes:        cd %s && bffgen add-route\n", projectName)
+	fmt.Printf("   Use template:      cd %s && bffgen add-template auth\n", projectName)
+	fmt.Printf("   Generate code:     cd %s && bffgen generate\n", projectName)
+	fmt.Printf("   Validate config:   cd %s && bffgen config validate\n", projectName)
+	fmt.Printf("   Check health:      cd %s && bffgen doctor\n", projectName)
+
+	fmt.Println()
+	fmt.Println("📚 Documentation:")
+	fmt.Println("   - README.md in your project")
+	fmt.Println("   - GitHub: https://github.com/RichGod93/bffgen")
+	if strings.HasPrefix(runtime, "nodejs") {
+		fmt.Println("   - Node.js Guide: docs/NODEJS_AGGREGATION.md")
+	}
+
+	fmt.Println()
+	fmt.Println("🔍 Troubleshooting:")
+	fmt.Println("   - If dependencies fail: delete node_modules and re-run npm install")
+	fmt.Println("   - If ports conflict: set PORT environment variable")
+	fmt.Println("   - For issues: https://github.com/RichGod93/bffgen/issues")
+	fmt.Println()
 }
 
 // promptMiddlewareSelection prompts user to select additional middleware
