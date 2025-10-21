@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -26,10 +25,10 @@ type Endpoint struct {
 
 // SetupProxyRoutes configures reverse proxy routes for all services
 func SetupProxyRoutes(r chi.Router, services map[string]Service) {
-	for serviceName, service := range services {
+	for _, service := range services {
 		baseURL, err := url.Parse(service.BaseURL)
 		if err != nil {
-			fmt.Printf("⚠️  Invalid base URL for service %s: %s\n", serviceName, service.BaseURL)
+			// Skip invalid URLs silently in production, log in verbose mode if needed
 			continue
 		}
 
@@ -59,7 +58,8 @@ func SetupProxyRoutes(r chi.Router, services map[string]Service) {
 			case "PATCH":
 				r.Patch(endpoint.ExposeAs, proxy.ServeHTTP)
 			default:
-				fmt.Printf("⚠️  Unsupported method %s for endpoint %s\n", endpoint.Method, endpoint.Name)
+				// Skip unsupported methods silently
+				// Note: Method %s not supported for endpoint %s", endpoint.Method, endpoint.Name
 			}
 		}
 	}

@@ -241,7 +241,8 @@ func TestGenerator(t *testing.T) {
 	filePath := filepath.Join(tempDir, "test.go")
 
 	generator := NewGenerator()
-	generator.SetVerbose(true)
+	// Verbose mode disabled in tests to avoid cluttering CI output
+	generator.SetVerbose(false)
 
 	// Test generating a new file
 	newContent := `func generatedFunction() {
@@ -303,7 +304,7 @@ func TestGeneratorDryRun(t *testing.T) {
 
 	generator := NewGenerator()
 	generator.SetDryRun(true)
-	generator.SetVerbose(true)
+	generator.SetVerbose(false) // Disabled to avoid cluttering CI output
 
 	// Test dry run
 	newContent := `func generatedFunction() {
@@ -328,7 +329,7 @@ func TestGeneratorCheckMode(t *testing.T) {
 
 	generator := NewGenerator()
 	generator.SetCheckMode(true)
-	generator.SetVerbose(true)
+	generator.SetVerbose(false) // Disabled to avoid cluttering CI output
 
 	// Test check mode
 	newContent := `func generatedFunction() {
