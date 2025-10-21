@@ -27,16 +27,6 @@ jobs:
       - name: Run tests with race detector
         run: go test -race -v -coverprofile=coverage.out ./...
 
-      - name: Run memory profiling tests
-        run: go test -memprofile=mem.prof -run=Memory ./...
-
-      - name: Check for memory leaks
-        run: |
-          go test -memprofilerate=1 -run=TestLongRunning ./... || true
-          if [ -f mem.prof ]; then
-            go tool pprof -top mem.prof | head -20
-          fi
-
       - name: Run linter
         uses: golangci/golangci-lint-action@v4
         with:
