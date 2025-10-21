@@ -30,7 +30,7 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v4
         with:
-          version: v2
+          version: latest
 
       - name: Security scan
         run: |
