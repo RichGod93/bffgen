@@ -252,7 +252,7 @@ jobs:
         working-directory: npm
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          
+
           # Check if version already exists on npm
           if npm view bffgen@$VERSION version >/dev/null 2>&1; then
             echo "⚠️  Version $VERSION already exists on npm"
@@ -260,7 +260,7 @@ jobs:
             echo "📦 View package: https://www.npmjs.com/package/bffgen/v/$VERSION"
             exit 0
           fi
-          
+
           # Publish to npm
           npm publish
           echo "✅ Published bffgen@$VERSION to npm"
