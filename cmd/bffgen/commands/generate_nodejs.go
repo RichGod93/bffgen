@@ -643,4 +643,3 @@ func autoRegisterRoutes(framework string, backends []interface{}) error {
 
 	return nil
 }
-

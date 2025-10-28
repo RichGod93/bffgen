@@ -159,7 +159,7 @@ func TestMemory_ConfigConverterNoLeak(t *testing.T) {
 // Benchmark to track memory allocations over time
 func BenchmarkMemory_Transaction(b *testing.B) {
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		tx := NewTransaction()
 		tx.AddCreate("test.txt", []byte("content"))

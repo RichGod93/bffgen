@@ -238,15 +238,15 @@ type RuntimeDetector struct {
 func NewRuntimeDetector() *RuntimeDetector {
 	return &RuntimeDetector{
 		validRuntimes: map[string]bool{
-			"go":                 true,
-			"nodejs":             true,
-			"nodejs-express":     true,
-			"nodejs-fastify":     true,
-			"node":               true,
-			"node-express":       true,
-			"node-fastify":       true,
-			"express":            true,
-			"fastify":            true,
+			"go":             true,
+			"nodejs":         true,
+			"nodejs-express": true,
+			"nodejs-fastify": true,
+			"node":           true,
+			"node-express":   true,
+			"node-fastify":   true,
+			"express":        true,
+			"fastify":        true,
 		},
 	}
 }

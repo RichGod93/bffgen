@@ -175,19 +175,19 @@ jobs:
         id: create_release
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          
+
           # Check if release already exists
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "⚠️  Release $VERSION already exists, deleting and recreating..."
             gh release delete "$VERSION" --yes
           fi
-          
+
           # Create release using GitHub CLI
           gh release create "$VERSION" \
             --title "Release $VERSION" \
             --notes-file release_notes.md \
             --draft=false
-          
+
           echo "✅ Release $VERSION created"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

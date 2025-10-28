@@ -9,9 +9,9 @@ import (
 
 const (
 	// File and directory permissions
-	BackupDirPerm  = 0o700 // User only: read, write, execute
-	BackupFilePerm = 0o600 // User only: read, write
-	ProjectDirPerm = 0o755 // Standard directory permissions
+	BackupDirPerm   = 0o700 // User only: read, write, execute
+	BackupFilePerm  = 0o600 // User only: read, write
+	ProjectDirPerm  = 0o755 // Standard directory permissions
 	ProjectFilePerm = 0o644 // Standard file permissions (source code)
 
 	// Backup retention policy

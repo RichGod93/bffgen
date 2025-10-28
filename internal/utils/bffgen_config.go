@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	ConfigDir     = ".bffgen"
-	ConfigFile    = "bffgen.yaml"
-	ConfigDirPerm = 0o700  // User only: read, write, execute
-	ConfigFilePerm = 0o600  // User only: read, write
+	ConfigDir      = ".bffgen"
+	ConfigFile     = "bffgen.yaml"
+	ConfigDirPerm  = 0o700 // User only: read, write, execute
+	ConfigFilePerm = 0o600 // User only: read, write
 )
 
 // GetConfigPath returns the path to the bffgen configuration file

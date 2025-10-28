@@ -582,4 +582,3 @@ func chiMethod(method string) string {
 		return "Get" // Default to Get for unknown methods
 	}
 }
-

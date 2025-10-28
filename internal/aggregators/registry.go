@@ -102,27 +102,27 @@ func (uda *UserDashboardAggregator) fetchUserData(userID string) map[string]inte
 	if err != nil || resp == nil {
 		// Return mock data on error
 		return map[string]interface{}{
-		"id":    userID,
-		"error": "Failed to fetch user data",
+			"id":    userID,
+			"error": "Failed to fetch user data",
+		}
 	}
-}
-defer func() {
-	if closeErr := resp.Body.Close(); closeErr != nil {
-		// Log error but don't fail the request
-		_ = closeErr
-	}
-}()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			// Log error but don't fail the request
+			_ = closeErr
+		}
+	}()
 
-// Parse response
-var userData map[string]interface{}
-if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
-	return map[string]interface{}{
-		"id":    userID,
-		"error": "Failed to parse user data",
+	// Parse response
+	var userData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
+		return map[string]interface{}{
+			"id":    userID,
+			"error": "Failed to parse user data",
+		}
 	}
-}
 
-return userData
+	return userData
 }
 
 // fetchOrdersData retrieves user orders

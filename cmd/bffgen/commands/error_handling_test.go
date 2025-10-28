@@ -19,7 +19,7 @@ func TestGenerateProxyRoutesCode_NilConfig(t *testing.T) {
 			t.Error("Expected panic for nil config")
 		}
 	}()
-	
+
 	generateProxyRoutesCode(nil)
 }
 
@@ -40,7 +40,7 @@ func TestChiMethod_EdgeCases(t *testing.T) {
 
 func TestConvertToEndpointData_EmptyInput(t *testing.T) {
 	result := convertToEndpointData([]map[string]interface{}{})
-	
+
 	if len(result) != 0 {
 		t.Errorf("Expected empty result for empty input, got %d items", len(result))
 	}
@@ -48,11 +48,11 @@ func TestConvertToEndpointData_EmptyInput(t *testing.T) {
 
 func TestConvertToEndpointData_NilInput(t *testing.T) {
 	result := convertToEndpointData(nil)
-	
+
 	if result == nil {
 		t.Error("Expected non-nil result for nil input")
 	}
-	
+
 	if len(result) != 0 {
 		t.Errorf("Expected empty result for nil input, got %d items", len(result))
 	}
@@ -60,12 +60,12 @@ func TestConvertToEndpointData_NilInput(t *testing.T) {
 
 func TestGenerateGoModContent_EmptyProjectName(t *testing.T) {
 	result := generateGoModContent("", "chi")
-	
+
 	// Should still generate valid go.mod structure
 	if result == "" {
 		t.Error("Expected non-empty result for empty project name")
 	}
-	
+
 	// Should contain go version
 	if !strings.Contains(result, "go 1.21") {
 		t.Error("Expected go version even with empty project name")
@@ -74,7 +74,7 @@ func TestGenerateGoModContent_EmptyProjectName(t *testing.T) {
 
 func TestGeneratePackageJsonContent_EmptyProjectName(t *testing.T) {
 	result := generatePackageJsonContent("", scaffolding.LanguageNodeExpress, "express")
-	
+
 	// Should still generate structure with empty name
 	if !strings.Contains(result, `"name"`) {
 		t.Error("Expected name field even with empty project name")
@@ -83,7 +83,7 @@ func TestGeneratePackageJsonContent_EmptyProjectName(t *testing.T) {
 
 func TestGenerateCORSConfig_EmptyFramework(t *testing.T) {
 	result := generateCORSConfig([]string{"http://localhost:3000"}, "")
-	
+
 	// Should return empty or default for unknown framework
 	_ = result // Just verify it doesn't panic
 }
@@ -94,7 +94,7 @@ func TestRenderControllerTemplate_InvalidFramework(t *testing.T) {
 		ServiceName: "test",
 		Endpoints:   []templates.EndpointData{},
 	}
-	
+
 	// Try with invalid template name
 	_, err := renderControllerTemplate(loader, "invalid-framework", "invalid-template.js", data)
 	if err == nil {
@@ -108,7 +108,7 @@ func TestRenderServiceTemplate_InvalidFramework(t *testing.T) {
 		ServiceName: "test",
 		BaseURL:     "http://localhost:4000",
 	}
-	
+
 	// Try with invalid template name
 	_, err := renderServiceTemplate(loader, "invalid-framework", "invalid-template.js", data)
 	if err == nil {
@@ -127,9 +127,9 @@ func TestGenerateProxyRoutesCode_EmptyServices(t *testing.T) {
 	config := &types.BFFConfig{
 		Services: map[string]types.Service{},
 	}
-	
+
 	result := generateProxyRoutesCode(config)
-	
+
 	// Should have header but no routes
 	if !strings.Contains(result, "Generated proxy routes") {
 		t.Error("Expected header comment")
@@ -145,9 +145,9 @@ func TestGenerateProxyRoutesCode_ServiceWithNoEndpoints(t *testing.T) {
 			},
 		},
 	}
-	
+
 	result := generateProxyRoutesCode(config)
-	
+
 	// Should handle service with no endpoints
 	if !strings.Contains(result, "empty service routes") {
 		t.Error("Expected service comment even with no endpoints")
@@ -166,7 +166,7 @@ func TestChiMethod_AllHTTPMethods(t *testing.T) {
 		"CONNECT": "Get", // Unknown
 		"TRACE":   "Get", // Unknown
 	}
-	
+
 	for input, expected := range methods {
 		result := chiMethod(input)
 		if result != expected {
@@ -181,9 +181,9 @@ func TestGenerateCORSConfig_SpecialCharactersInOrigins(t *testing.T) {
 		"https://example.com:8443",
 		"http://192.168.1.1:3000",
 	}
-	
+
 	result := generateCORSConfig(origins, "chi")
-	
+
 	// Should handle all origins
 	for _, origin := range origins {
 		if !strings.Contains(result, origin) {
@@ -200,7 +200,7 @@ func TestGenerateGoModContent_SpecialCharactersInProjectName(t *testing.T) {
 		"test.project",
 		"test/project",
 	}
-	
+
 	for _, name := range projectNames {
 		result := generateGoModContent(name, "chi")
 		if result == "" {
@@ -225,18 +225,18 @@ func TestConvertToEndpointData_MixedTypes(t *testing.T) {
 			"Method": []string{"GET"}, // Wrong type
 		},
 	}
-	
+
 	result := convertToEndpointData(input)
-	
+
 	if len(result) != 3 {
 		t.Errorf("Expected 3 results, got %d", len(result))
 	}
-	
+
 	// First should be valid
 	if result[0].Path != "/valid" {
 		t.Error("First endpoint should have valid path")
 	}
-	
+
 	// Second should have empty path (type mismatch)
 	if result[1].Path != "" {
 		t.Error("Second endpoint should have empty path due to type mismatch")
@@ -250,7 +250,7 @@ func TestGeneratePackageJsonContent_UnsupportedFramework(t *testing.T) {
 		"hapi",
 		"",
 	}
-	
+
 	for _, fw := range frameworks {
 		result := generatePackageJsonContent("test", scaffolding.LanguageNodeExpress, fw)
 		// Unknown frameworks return empty string
@@ -266,14 +266,14 @@ func TestGenerateCORSConfig_ManyOrigins(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		origins[i] = fmt.Sprintf("http://localhost:%d", 3000+i)
 	}
-	
+
 	result := generateCORSConfig(origins, "chi")
-	
+
 	// Should handle many origins without error
 	if result == "" {
 		t.Error("Expected non-empty result for many origins")
 	}
-	
+
 	// Check some origins are present
 	if !strings.Contains(result, "http://localhost:3000") {
 		t.Error("Expected first origin in result")
@@ -282,4 +282,3 @@ func TestGenerateCORSConfig_ManyOrigins(t *testing.T) {
 		t.Error("Expected last origin in result")
 	}
 }
-

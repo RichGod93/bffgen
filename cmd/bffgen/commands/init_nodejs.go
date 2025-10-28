@@ -949,4 +949,3 @@ func createAdditionalMiddleware(projectName string, langType scaffolding.Languag
 
 	return nil
 }
-

@@ -11,11 +11,11 @@ import (
 
 func TestGenerateGoModContent(t *testing.T) {
 	tests := []struct {
-		name      string
+		name        string
 		projectName string
-		framework  string
-		expectChi  bool
-		expectEcho bool
+		framework   string
+		expectChi   bool
+		expectEcho  bool
 		expectFiber bool
 	}{
 		{"Chi", "test-project", "chi", true, false, false},
@@ -131,7 +131,7 @@ func TestGeneratePackageJsonContent_Fastify(t *testing.T) {
 
 func TestGenerateCORSConfig_EmptyOrigins(t *testing.T) {
 	result := generateCORSConfig([]string{}, "chi")
-	
+
 	// Should still produce valid CORS config even with no origins
 	if result == "" {
 		t.Error("Expected non-empty CORS config")
@@ -194,7 +194,7 @@ func TestGenerateCORSConfig_FiberSpecific(t *testing.T) {
 
 func TestGenerateCORSConfigWithLang(t *testing.T) {
 	origins := []string{"http://localhost:3000"}
-	
+
 	// Test with different language types
 	tests := []struct {
 		name      string
@@ -225,10 +225,10 @@ func TestCreateProjectDirectories_Go(t *testing.T) {
 	// This test checks directory creation for Go projects
 	// We'll verify the expected directories are included
 	// Note: This requires actual file system, so we test the logic
-	
+
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-go-project")
-	
+
 	err := createProjectDirectories(projectName, scaffolding.LanguageGo)
 	if err != nil {
 		t.Fatalf("Failed to create directories: %v", err)
@@ -253,7 +253,7 @@ func TestCreateProjectDirectories_Go(t *testing.T) {
 func TestCreateProjectDirectories_NodeJS(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-nodejs-project")
-	
+
 	err := createProjectDirectories(projectName, scaffolding.LanguageNodeExpress)
 	if err != nil {
 		t.Fatalf("Failed to create directories: %v", err)
@@ -315,10 +315,9 @@ func TestGeneratePackageJsonContent_Dependencies(t *testing.T) {
 
 func TestGeneratePackageJsonContent_InvalidFramework(t *testing.T) {
 	result := generatePackageJsonContent("test", scaffolding.LanguageNodeExpress, "invalid")
-	
+
 	// Invalid framework returns empty string (fallback behavior)
 	if result != "" {
 		t.Error("Expected empty string for invalid framework")
 	}
 }
-

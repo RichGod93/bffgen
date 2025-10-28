@@ -15,26 +15,26 @@ import (
 func TestCreateGoModFile_Integration(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-go-project")
-	
+
 	// Create project directory
 	err := os.MkdirAll(projectName, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
 	}
-	
+
 	// Create go.mod file
 	err = createGoModFile(projectName, "chi")
 	if err != nil {
 		t.Fatalf("Failed to create go.mod: %v", err)
 	}
-	
+
 	// Verify file exists and has content
 	goModPath := filepath.Join(projectName, "go.mod")
 	content, err := os.ReadFile(goModPath)
 	if err != nil {
 		t.Fatalf("Failed to read go.mod: %v", err)
 	}
-	
+
 	contentStr := string(content)
 	if !strings.Contains(contentStr, "module") {
 		t.Error("go.mod should contain module directive")
@@ -47,25 +47,25 @@ func TestCreateGoModFile_Integration(t *testing.T) {
 func TestCreatePackageJsonFile_Integration(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-node-project")
-	
+
 	err := os.MkdirAll(projectName, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
 	}
-	
+
 	// Create package.json file
 	err = createPackageJsonFile(projectName, scaffolding.LanguageNodeExpress, "express")
 	if err != nil {
 		t.Fatalf("Failed to create package.json: %v", err)
 	}
-	
+
 	// Verify file exists
 	packagePath := filepath.Join(projectName, "package.json")
 	content, err := os.ReadFile(packagePath)
 	if err != nil {
 		t.Fatalf("Failed to read package.json: %v", err)
 	}
-	
+
 	contentStr := string(content)
 	if !strings.Contains(contentStr, `"express"`) {
 		t.Error("package.json should contain express dependency")
@@ -78,19 +78,19 @@ func TestCreatePackageJsonFile_Integration(t *testing.T) {
 func TestCreateProjectDirectories_Integration_Go(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-go-project")
-	
+
 	err := createProjectDirectories(projectName, scaffolding.LanguageGo)
 	if err != nil {
 		t.Fatalf("Failed to create directories: %v", err)
 	}
-	
+
 	// Check expected directories exist
 	expectedDirs := []string{
 		"internal/routes",
 		"internal/aggregators",
 		"cmd/server",
 	}
-	
+
 	for _, dir := range expectedDirs {
 		fullPath := filepath.Join(projectName, dir)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -102,12 +102,12 @@ func TestCreateProjectDirectories_Integration_Go(t *testing.T) {
 func TestCreateProjectDirectories_Integration_NodeJS(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-node-project")
-	
+
 	err := createProjectDirectories(projectName, scaffolding.LanguageNodeExpress)
 	if err != nil {
 		t.Fatalf("Failed to create directories: %v", err)
 	}
-	
+
 	// Check expected directories exist
 	expectedDirs := []string{
 		"src",
@@ -116,7 +116,7 @@ func TestCreateProjectDirectories_Integration_NodeJS(t *testing.T) {
 		"src/controllers",
 		"tests",
 	}
-	
+
 	for _, dir := range expectedDirs {
 		fullPath := filepath.Join(projectName, dir)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -127,7 +127,7 @@ func TestCreateProjectDirectories_Integration_NodeJS(t *testing.T) {
 
 func TestGenerateProxyHandlerFunction_OutputFormat(t *testing.T) {
 	result := generateProxyHandlerFunction()
-	
+
 	// Verify it contains expected Go code patterns
 	expectedPatterns := []string{
 		"func createProxyHandler",
@@ -136,7 +136,7 @@ func TestGenerateProxyHandlerFunction_OutputFormat(t *testing.T) {
 		"proxy.ServeHTTP",
 		"url.Parse",
 	}
-	
+
 	for _, pattern := range expectedPatterns {
 		if !strings.Contains(result, pattern) {
 			t.Errorf("Expected pattern %q not found in output", pattern)
@@ -156,9 +156,9 @@ func TestGenerateServerContent_OutputFormat(t *testing.T) {
 		},
 		Settings: types.Settings{Port: 8080},
 	}
-	
+
 	result := generateServerContent(config)
-	
+
 	// Verify server code patterns
 	expectedPatterns := []string{
 		"package main",
@@ -166,7 +166,7 @@ func TestGenerateServerContent_OutputFormat(t *testing.T) {
 		"http.ListenAndServe",
 		":8080",
 	}
-	
+
 	for _, pattern := range expectedPatterns {
 		if !strings.Contains(result, pattern) {
 			t.Errorf("Expected pattern %q not found in server content", pattern)
@@ -177,17 +177,17 @@ func TestGenerateServerContent_OutputFormat(t *testing.T) {
 func TestCreateDependencyFiles_Go(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-project")
-	
+
 	err := os.MkdirAll(projectName, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
 	}
-	
+
 	err = createDependencyFiles(projectName, scaffolding.LanguageGo, "chi")
 	if err != nil {
 		t.Fatalf("createDependencyFiles failed: %v", err)
 	}
-	
+
 	// Verify go.mod was created
 	goModPath := filepath.Join(projectName, "go.mod")
 	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
@@ -198,17 +198,17 @@ func TestCreateDependencyFiles_Go(t *testing.T) {
 func TestCreateDependencyFiles_NodeJS(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := filepath.Join(tempDir, "test-project")
-	
+
 	err := os.MkdirAll(projectName, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
 	}
-	
+
 	err = createDependencyFiles(projectName, scaffolding.LanguageNodeExpress, "express")
 	if err != nil {
 		t.Fatalf("createDependencyFiles failed: %v", err)
 	}
-	
+
 	// Verify package.json was created
 	packagePath := filepath.Join(projectName, "package.json")
 	if _, err := os.Stat(packagePath); os.IsNotExist(err) {
@@ -218,11 +218,11 @@ func TestCreateDependencyFiles_NodeJS(t *testing.T) {
 
 func TestGenerateGoModContent_AllFrameworks(t *testing.T) {
 	frameworks := []string{"chi", "echo", "fiber", "unknown"}
-	
+
 	for _, fw := range frameworks {
 		t.Run(fw, func(t *testing.T) {
 			result := generateGoModContent("test-project", fw)
-			
+
 			// All should have basic structure
 			if !strings.Contains(result, "module test-project") {
 				t.Error("Should contain module directive")
@@ -230,7 +230,7 @@ func TestGenerateGoModContent_AllFrameworks(t *testing.T) {
 			if !strings.Contains(result, "go 1.21") {
 				t.Error("Should contain go version")
 			}
-			
+
 			// Framework-specific checks
 			switch fw {
 			case "chi":
@@ -258,11 +258,11 @@ func TestGeneratePackageJsonContent_AllFrameworks(t *testing.T) {
 		{"express", scaffolding.LanguageNodeExpress},
 		{"fastify", scaffolding.LanguageNodeFastify},
 	}
-	
+
 	for _, fw := range frameworks {
 		t.Run(fw.name, func(t *testing.T) {
 			result := generatePackageJsonContent("test-project", fw.langType, fw.name)
-			
+
 			// Basic structure
 			if !strings.Contains(result, `"name"`) {
 				t.Error("Should have name field")
@@ -273,7 +273,7 @@ func TestGeneratePackageJsonContent_AllFrameworks(t *testing.T) {
 			if !strings.Contains(result, `"scripts"`) {
 				t.Error("Should have scripts")
 			}
-			
+
 			// Framework-specific
 			switch fw.name {
 			case "express":
@@ -324,22 +324,22 @@ func TestDetectProjectType_Integration(t *testing.T) {
 			expectedType: "nodejs",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
-			
+
 			oldWd, _ := os.Getwd()
 			os.Chdir(tempDir)
 			defer os.Chdir(oldWd)
-			
+
 			if tt.setupFunc != nil {
 				err := tt.setupFunc(tempDir)
 				if err != nil {
 					t.Fatalf("Setup failed: %v", err)
 				}
 			}
-			
+
 			result := detectProjectType()
 			if result != tt.expectedType {
 				t.Errorf("Expected project type %q, got %q", tt.expectedType, result)
@@ -351,22 +351,22 @@ func TestDetectProjectType_Integration(t *testing.T) {
 func TestGenerateCORSConfig_AllFrameworks_Integration(t *testing.T) {
 	origins := []string{"http://localhost:3000", "https://example.com"}
 	frameworks := []string{"chi", "echo", "fiber"}
-	
+
 	for _, fw := range frameworks {
 		t.Run(fw, func(t *testing.T) {
 			result := generateCORSConfig(origins, fw)
-			
+
 			if result == "" {
 				t.Error("Expected non-empty CORS config")
 			}
-			
+
 			// All should contain the origins
 			for _, origin := range origins {
 				if !strings.Contains(result, origin) {
 					t.Errorf("Expected origin %s in config", origin)
 				}
 			}
-			
+
 			// All should have standard HTTP methods
 			methods := []string{"GET", "POST", "PUT", "DELETE"}
 			for _, method := range methods {
@@ -377,4 +377,3 @@ func TestGenerateCORSConfig_AllFrameworks_Integration(t *testing.T) {
 		})
 	}
 }
-

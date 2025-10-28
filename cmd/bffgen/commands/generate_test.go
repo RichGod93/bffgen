@@ -99,19 +99,19 @@ func TestChiMethod(t *testing.T) {
 func TestConvertToEndpointData(t *testing.T) {
 	input := []map[string]interface{}{
 		{
-			"Path":             "/users",
-			"Method":           "GET",
-			"BackendPath":      "/users",
-			"RequiresAuth":     false,
-			"HandlerName":      "getUsers",
+			"Path":              "/users",
+			"Method":            "GET",
+			"BackendPath":       "/users",
+			"RequiresAuth":      false,
+			"HandlerName":       "getUsers",
 			"HandlerNamePascal": "GetUsers",
 		},
 		{
-			"Path":             "/users/:id",
-			"Method":           "GET",
-			"BackendPath":      "/users/:id",
-			"RequiresAuth":     true,
-			"HandlerName":      "getUserById",
+			"Path":              "/users/:id",
+			"Method":            "GET",
+			"BackendPath":       "/users/:id",
+			"RequiresAuth":      true,
+			"HandlerName":       "getUserById",
 			"HandlerNamePascal": "GetUserById",
 		},
 	}
@@ -172,9 +172,9 @@ func TestConvertToEndpointDataWithMissingFields(t *testing.T) {
 func TestConvertToEndpointDataWithWrongTypes(t *testing.T) {
 	input := []map[string]interface{}{
 		{
-			"Path":       123, // Wrong type
-			"Method":     []string{"GET"}, // Wrong type
-			"BackendPath": true, // Wrong type
+			"Path":        123,             // Wrong type
+			"Method":      []string{"GET"}, // Wrong type
+			"BackendPath": true,            // Wrong type
 		},
 	}
 
@@ -287,4 +287,3 @@ func TestGenerateProxyRoutesCode_MultipleServices(t *testing.T) {
 		t.Error("Expected r.Put")
 	}
 }
-

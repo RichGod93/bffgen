@@ -152,4 +152,3 @@ func generateCORSConfigWithLang(origins []string, framework string, langType sca
 		return ""
 	}
 }
-
