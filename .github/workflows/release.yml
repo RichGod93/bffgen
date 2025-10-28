@@ -110,15 +110,15 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Get previous tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          # Get previous tag (excluding the current one)
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^$VERSION$" | head -n 1)
 
           if [ -n "$PREVIOUS_TAG" ]; then
             echo "Generating release notes from $PREVIOUS_TAG to $VERSION"
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+            CHANGELOG=$(git log --pretty=format:"- %s" "$PREVIOUS_TAG..HEAD")
           else
             echo "Generating initial release notes"
-            CHANGELOG=$(git log --pretty=format:"- %s" --reverse)
+            CHANGELOG=$(git log --pretty=format:"- %s" --reverse | head -n 20)
           fi
 
           # Create release notes
@@ -174,11 +174,21 @@ jobs:
       - name: Create Release
         id: create_release
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          # Check if release already exists
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "⚠️  Release $VERSION already exists, deleting and recreating..."
+            gh release delete "$VERSION" --yes
+          fi
+          
           # Create release using GitHub CLI
-          gh release create ${{ steps.version.outputs.version }} \
-            --title "Release ${{ steps.version.outputs.version }}" \
+          gh release create "$VERSION" \
+            --title "Release $VERSION" \
             --notes-file release_notes.md \
             --draft=false
+          
+          echo "✅ Release $VERSION created"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
