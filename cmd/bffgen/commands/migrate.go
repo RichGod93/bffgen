@@ -64,7 +64,7 @@ func migrateConfig(source, target string) error {
 
 func migrateToYAML(config *types.BFFConfig, target string) error {
 	// Ensure target directory exists
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create target directory: %w", err)
 	}
 
@@ -79,7 +79,7 @@ func migrateToYAML(config *types.BFFConfig, target string) error {
 
 func migrateToJSON(config *types.BFFConfig, target string) error {
 	// Ensure target directory exists
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create target directory: %w", err)
 	}
 
@@ -90,7 +90,7 @@ func migrateToJSON(config *types.BFFConfig, target string) error {
 	}
 
 	// Write JSON file
-	if err := os.WriteFile(target, jsonData, 0644); err != nil {
+	if err := os.WriteFile(target, jsonData, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write JSON file: %w", err)
 	}
 

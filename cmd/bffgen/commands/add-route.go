@@ -328,7 +328,7 @@ func addRouteNodeJS() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile("bffgen.config.json", updatedData, 0644); err != nil {
+	if err := os.WriteFile("bffgen.config.json", updatedData, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 

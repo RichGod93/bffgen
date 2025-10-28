@@ -220,7 +220,7 @@ func addProxyRoutesToMainGo(config *types.BFFConfig) error {
 	}
 
 	// Write updated main.go
-	if err := os.WriteFile("main.go", []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile("main.go", []byte(newContent), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write main.go: %w", err)
 	}
 
@@ -477,7 +477,7 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 
 	// Ensure cmd/server directory exists
-	if err := os.MkdirAll("cmd/server", 0755); err != nil {
+	if err := os.MkdirAll("cmd/server", utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -780,7 +780,7 @@ func generateNodeJS() error {
 func generateNodeJSRouteFile(serviceName string, backend map[string]interface{}, framework string) error {
 	// Create routes directory if it doesn't exist
 	routesDir := filepath.Join("src", "routes")
-	if err := os.MkdirAll(routesDir, 0755); err != nil {
+	if err := os.MkdirAll(routesDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -937,7 +937,7 @@ router.%s('%s', %sasyncHandler(async (req, res) => {
 
 	// Write route file
 	filename := filepath.Join(routesDir, fmt.Sprintf("%s.js", serviceName))
-	if err := os.WriteFile(filename, []byte(content.String()), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(content.String()), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -948,7 +948,7 @@ router.%s('%s', %sasyncHandler(async (req, res) => {
 func generateNodeJSControllerFile(serviceName string, backend map[string]interface{}, framework, controllerType string) error {
 	// Create controllers directory if it doesn't exist
 	controllersDir := filepath.Join("src", "controllers")
-	if err := os.MkdirAll(controllersDir, 0755); err != nil {
+	if err := os.MkdirAll(controllersDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -1026,7 +1026,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 
 	// Write controller file
 	filename := filepath.Join(controllersDir, fmt.Sprintf("%s.controller.js", serviceName))
-	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(content), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -1038,7 +1038,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 		}
 
 		basicFilename := filepath.Join(controllersDir, fmt.Sprintf("%s.controller.basic.js", serviceName))
-		if err := os.WriteFile(basicFilename, []byte(basicContent), 0644); err != nil {
+		if err := os.WriteFile(basicFilename, []byte(basicContent), utils.ProjectFilePerm); err != nil {
 			return err
 		}
 	}
@@ -1050,7 +1050,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 func generateNodeJSServiceFile(serviceName string, backend map[string]interface{}, framework string) error {
 	// Create services directory if it doesn't exist
 	servicesDir := filepath.Join("src", "services")
-	if err := os.MkdirAll(servicesDir, 0755); err != nil {
+	if err := os.MkdirAll(servicesDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -1119,7 +1119,7 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 
 	// Write service file
 	filename := filepath.Join(servicesDir, fmt.Sprintf("%s.service.js", serviceName))
-	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(content), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -1250,7 +1250,7 @@ func autoRegisterRoutes(framework string, backends []interface{}) error {
 	}
 
 	// Write updated index.js
-	if err := os.WriteFile(indexPath, []byte(updatedContent), 0644); err != nil {
+	if err := os.WriteFile(indexPath, []byte(updatedContent), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write index.js: %w", err)
 	}
 

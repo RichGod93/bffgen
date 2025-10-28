@@ -75,7 +75,7 @@ func getStoredRuntime() string {
 // storeRuntime stores runtime information in project metadata
 func storeRuntime(runtime string) error {
 	metadataDir := utils.GetStateDir()
-	if err := os.MkdirAll(metadataDir, 0755); err != nil {
+	if err := os.MkdirAll(metadataDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -91,7 +91,7 @@ func storeRuntime(runtime string) error {
 		return err
 	}
 
-	return os.WriteFile(metadataPath, data, 0644)
+	return os.WriteFile(metadataPath, data, utils.ProjectFilePerm)
 }
 
 // normalizeRuntime normalizes runtime strings to standard format

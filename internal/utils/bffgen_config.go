@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	ConfigDir  = ".bffgen"
-	ConfigFile = "bffgen.yaml"
+	ConfigDir     = ".bffgen"
+	ConfigFile    = "bffgen.yaml"
+	ConfigDirPerm = 0o700  // User only: read, write, execute
+	ConfigFilePerm = 0o600  // User only: read, write
 )
 
 // GetConfigPath returns the path to the bffgen configuration file
@@ -21,7 +23,7 @@ func GetConfigPath() (string, error) {
 	}
 
 	configDir := filepath.Join(homeDir, ConfigDir)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, ConfigDirPerm); err != nil {
 		return "", err
 	}
 
@@ -53,7 +55,7 @@ func LoadBFFGenConfig() (*types.BFFGenConfig, error) {
 	return &config, nil
 }
 
-// SaveBFFGenConfig saves the bffgen configuration to file
+// SaveBFFGenConfig saves the bffgen configuration to file with restricted permissions
 func SaveBFFGenConfig(config *types.BFFGenConfig) error {
 	configPath, err := GetConfigPath()
 	if err != nil {
@@ -65,7 +67,7 @@ func SaveBFFGenConfig(config *types.BFFGenConfig) error {
 		return err
 	}
 
-	return os.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, ConfigFilePerm)
 }
 
 // UpdateRecentProject adds a project to the recent projects list

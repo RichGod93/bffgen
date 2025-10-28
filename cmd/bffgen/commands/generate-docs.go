@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RichGod93/bffgen/internal/utils"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -73,7 +74,7 @@ func generateDocs() error {
 
 	// Create docs directory if it doesn't exist
 	docsDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(docsDir, 0755); err != nil {
+	if err := os.MkdirAll(docsDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create docs directory: %w", err)
 	}
 
@@ -91,7 +92,7 @@ func generateDocs() error {
 		}
 	}
 
-	if err := os.WriteFile(outputPath, outputData, 0644); err != nil {
+	if err := os.WriteFile(outputPath, outputData, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
 

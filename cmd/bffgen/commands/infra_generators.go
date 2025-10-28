@@ -10,6 +10,7 @@ import (
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/internal/utils"
 )
 
 // InfraTemplateData holds data for infrastructure templates
@@ -33,7 +34,7 @@ type BackendServiceData struct {
 func generateCIWorkflow(projectName string, langType scaffolding.LanguageType, includeDocker bool) error {
 	// Create .github/workflows directory
 	workflowDir := filepath.Join(projectName, ".github", "workflows")
-	if err := os.MkdirAll(workflowDir, 0755); err != nil {
+	if err := os.MkdirAll(workflowDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create workflows directory: %w", err)
 	}
 
@@ -68,7 +69,7 @@ func generateCIWorkflow(projectName string, langType scaffolding.LanguageType, i
 
 	// Write workflow file
 	workflowPath := filepath.Join(workflowDir, "ci.yml")
-	if err := os.WriteFile(workflowPath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(workflowPath, buf.Bytes(), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write CI workflow: %w", err)
 	}
 
@@ -111,7 +112,7 @@ func generateDockerfile(projectName string, langType scaffolding.LanguageType, f
 
 	// Write Dockerfile
 	dockerfileDest := filepath.Join(projectName, "Dockerfile")
-	if err := os.WriteFile(dockerfileDest, dockerBuf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(dockerfileDest, dockerBuf.Bytes(), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
@@ -122,7 +123,7 @@ func generateDockerfile(projectName string, langType scaffolding.LanguageType, f
 	}
 
 	dockerignoreDest := filepath.Join(projectName, ".dockerignore")
-	if err := os.WriteFile(dockerignoreDest, dockerignoreContent, 0644); err != nil {
+	if err := os.WriteFile(dockerignoreDest, dockerignoreContent, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write .dockerignore: %w", err)
 	}
 
@@ -141,7 +142,7 @@ func generateHealthChecks(projectName string, langType scaffolding.LanguageType,
 func generateGoHealthChecks(projectName string, backends []BackendService) error {
 	// Create health package directory
 	healthDir := filepath.Join(projectName, "internal", "health")
-	if err := os.MkdirAll(healthDir, 0755); err != nil {
+	if err := os.MkdirAll(healthDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create health directory: %w", err)
 	}
 
@@ -153,7 +154,7 @@ func generateGoHealthChecks(projectName string, backends []BackendService) error
 
 	// Write health.go file
 	healthPath := filepath.Join(healthDir, "health.go")
-	if err := os.WriteFile(healthPath, content, 0644); err != nil {
+	if err := os.WriteFile(healthPath, content, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write health.go: %w", err)
 	}
 
@@ -165,7 +166,7 @@ func generateNodeHealthChecks(projectName string, framework string, backends []B
 	// Health check utility already exists in node/common/health.js.tmpl
 	// It's created during init, so we just ensure it exists
 	utilsDir := filepath.Join(projectName, "src", "utils")
-	if err := os.MkdirAll(utilsDir, 0755); err != nil {
+	if err := os.MkdirAll(utilsDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create utils directory: %w", err)
 	}
 
@@ -177,7 +178,7 @@ func generateNodeHealthChecks(projectName string, framework string, backends []B
 
 	// Write health.js file
 	healthPath := filepath.Join(utilsDir, "health.js")
-	if err := os.WriteFile(healthPath, content, 0644); err != nil {
+	if err := os.WriteFile(healthPath, content, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write health.js: %w", err)
 	}
 
@@ -196,7 +197,7 @@ func generateGracefulShutdown(projectName string, langType scaffolding.LanguageT
 func generateGoGracefulShutdown(projectName string) error {
 	// Create shutdown package directory
 	shutdownDir := filepath.Join(projectName, "internal", "shutdown")
-	if err := os.MkdirAll(shutdownDir, 0755); err != nil {
+	if err := os.MkdirAll(shutdownDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create shutdown directory: %w", err)
 	}
 
@@ -208,7 +209,7 @@ func generateGoGracefulShutdown(projectName string) error {
 
 	// Write graceful.go file
 	shutdownPath := filepath.Join(shutdownDir, "graceful.go")
-	if err := os.WriteFile(shutdownPath, content, 0644); err != nil {
+	if err := os.WriteFile(shutdownPath, content, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write graceful.go: %w", err)
 	}
 
@@ -219,7 +220,7 @@ func generateGoGracefulShutdown(projectName string) error {
 func generateNodeGracefulShutdown(projectName string, framework string) error {
 	// Create utils directory if it doesn't exist
 	utilsDir := filepath.Join(projectName, "src", "utils")
-	if err := os.MkdirAll(utilsDir, 0755); err != nil {
+	if err := os.MkdirAll(utilsDir, utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to create utils directory: %w", err)
 	}
 
@@ -231,7 +232,7 @@ func generateNodeGracefulShutdown(projectName string, framework string) error {
 
 	// Write graceful-shutdown.js file
 	shutdownPath := filepath.Join(utilsDir, "graceful-shutdown.js")
-	if err := os.WriteFile(shutdownPath, content, 0644); err != nil {
+	if err := os.WriteFile(shutdownPath, content, utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write graceful-shutdown.js: %w", err)
 	}
 
@@ -283,7 +284,7 @@ func generateDockerCompose(projectName string, langType scaffolding.LanguageType
 
 	// Write docker-compose.yml file
 	composePath := filepath.Join(projectName, "docker-compose.yml")
-	if err := os.WriteFile(composePath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(composePath, buf.Bytes(), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
 	}
 

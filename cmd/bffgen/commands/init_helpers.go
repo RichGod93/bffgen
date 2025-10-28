@@ -7,6 +7,7 @@ import (
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/internal/utils"
 )
 
 // createProjectDirectories creates directories based on language type
@@ -38,7 +39,7 @@ func createProjectDirectories(projectName string, langType scaffolding.LanguageT
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, utils.ProjectDirPerm); err != nil {
 			return err
 		}
 	}
@@ -61,13 +62,13 @@ func createDependencyFiles(projectName string, langType scaffolding.LanguageType
 // createGoModFile creates go.mod file for Go projects
 func createGoModFile(projectName, framework string) error {
 	content := generateGoModContent(projectName, framework)
-	return os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(projectName, "go.mod"), []byte(content), utils.ProjectFilePerm)
 }
 
 // createPackageJsonFile creates package.json file for Node.js projects
 func createPackageJsonFile(projectName string, langType scaffolding.LanguageType, framework string) error {
 	content := generatePackageJsonContent(projectName, langType, framework)
-	return os.WriteFile(filepath.Join(projectName, "package.json"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(projectName, "package.json"), []byte(content), utils.ProjectFilePerm)
 }
 
 // createMainFile creates the main server file based on language/framework
@@ -232,7 +233,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 `
-	return os.WriteFile(filepath.Join(projectName, "main.go"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(projectName, "main.go"), []byte(content), utils.ProjectFilePerm)
 }
 
 // createNodeExpressMainFile creates Express.js index.js file
@@ -370,7 +371,7 @@ app.listen(PORT, () => {
 
 module.exports = app;
 `
-	return os.WriteFile(filepath.Join(projectName, "index.js"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(projectName, "index.js"), []byte(content), utils.ProjectFilePerm)
 }
 
 // createNodeFastifyMainFile creates Fastify index.js file
@@ -519,7 +520,7 @@ async function start() {
 
 start();
 `
-	return os.WriteFile(filepath.Join(projectName, "index.js"), []byte(content), 0644)
+	return os.WriteFile(filepath.Join(projectName, "index.js"), []byte(content), utils.ProjectFilePerm)
 }
 
 // generateCORSConfig generates CORS config for Go frameworks (legacy wrapper for tests)
@@ -642,23 +643,23 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []Bac
 	}
 
 	// Write files to src/
-	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -771,23 +772,23 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []Bac
 	}
 
 	// Write files to src/
-	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "src", "index.js"), []byte(indexContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "package.json"), []byte(packageContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, ".env.example"), []byte(envContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "bffgen.config.json"), []byte(bffgenConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -857,11 +858,11 @@ func createExpressMiddleware(projectName string, loader *templates.TemplateLoade
 	}
 
 	// Write middleware files
-	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -885,11 +886,11 @@ func createFastifyMiddleware(projectName string, loader *templates.TemplateLoade
 	}
 
 	// Write middleware files
-	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -910,11 +911,11 @@ func createLoggerUtility(projectName string, langType scaffolding.LanguageType, 
 	}
 
 	utilsDir := filepath.Join(projectName, "src", "utils")
-	if err := os.MkdirAll(utilsDir, 0755); err != nil {
+	if err := os.MkdirAll(utilsDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(utilsDir, "logger.js"), []byte(loggerContent), 0644)
+	return os.WriteFile(filepath.Join(utilsDir, "logger.js"), []byte(loggerContent), utils.ProjectFilePerm)
 }
 
 // createAggregationUtilities creates the aggregation utility files
@@ -945,7 +946,7 @@ func createAggregationUtilities(projectName string, langType scaffolding.Languag
 			return fmt.Errorf("failed to render %s: %w", util.template, err)
 		}
 
-		if err := os.WriteFile(filepath.Join(utilsDir, util.filename), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(utilsDir, util.filename), []byte(content), utils.ProjectFilePerm); err != nil {
 			return fmt.Errorf("failed to write %s: %w", util.filename, err)
 		}
 	}
@@ -958,7 +959,7 @@ func createExampleControllers(projectName string, langType scaffolding.LanguageT
 	loader := templates.NewTemplateLoader(langType)
 	examplesDir := filepath.Join(projectName, "src", "examples")
 
-	if err := os.MkdirAll(examplesDir, 0755); err != nil {
+	if err := os.MkdirAll(examplesDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -983,7 +984,7 @@ func createExampleControllers(projectName string, langType scaffolding.LanguageT
 			continue
 		}
 
-		if err := os.WriteFile(filepath.Join(examplesDir, example.filename), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(examplesDir, example.filename), []byte(content), utils.ProjectFilePerm); err != nil {
 			fmt.Printf("Warning: failed to write %s: %v\n", example.filename, err)
 			continue
 		}
@@ -1007,13 +1008,13 @@ func createRedisSetupFiles(projectName string, langType scaffolding.LanguageType
 		return fmt.Errorf("failed to render docker-compose.yml: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "docker-compose.yml"), []byte(dockerComposeContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "docker-compose.yml"), []byte(dockerComposeContent), utils.ProjectFilePerm); err != nil {
 		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
 	}
 
 	// Create scripts directory and clear-cache.js
 	scriptsDir := filepath.Join(projectName, "scripts")
-	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+	if err := os.MkdirAll(scriptsDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
@@ -1022,7 +1023,7 @@ func createRedisSetupFiles(projectName string, langType scaffolding.LanguageType
 		return fmt.Errorf("failed to render clear-cache.js: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(scriptsDir, "clear-cache.js"), []byte(clearCacheContent), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(scriptsDir, "clear-cache.js"), []byte(clearCacheContent), utils.ProjectDirPerm); err != nil {
 		return fmt.Errorf("failed to write clear-cache.js: %w", err)
 	}
 
@@ -1040,11 +1041,11 @@ func createServiceFiles(projectName string, langType scaffolding.LanguageType, f
 	}
 
 	servicesDir := filepath.Join(projectName, "src", "services")
-	if err := os.MkdirAll(servicesDir, 0755); err != nil {
+	if err := os.MkdirAll(servicesDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(servicesDir, "httpClient.js"), []byte(httpClientContent), 0644)
+	return os.WriteFile(filepath.Join(servicesDir, "httpClient.js"), []byte(httpClientContent), utils.ProjectFilePerm)
 }
 
 // createTestFiles creates Jest configuration and sample test files
@@ -1057,7 +1058,7 @@ func createTestFiles(projectName string, langType scaffolding.LanguageType, fram
 		return fmt.Errorf("failed to render jest config: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(projectName, "jest.config.js"), []byte(jestConfigContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectName, "jest.config.js"), []byte(jestConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -1068,7 +1069,7 @@ func createTestFiles(projectName string, langType scaffolding.LanguageType, fram
 	}
 
 	testsDir := filepath.Join(projectName, "tests")
-	if err := os.WriteFile(filepath.Join(testsDir, "setup.js"), []byte(setupTestsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(testsDir, "setup.js"), []byte(setupTestsContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -1079,11 +1080,11 @@ func createTestFiles(projectName string, langType scaffolding.LanguageType, fram
 	}
 
 	integrationDir := filepath.Join(testsDir, "integration")
-	if err := os.MkdirAll(integrationDir, 0755); err != nil {
+	if err := os.MkdirAll(integrationDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(integrationDir, "health.test.js"), []byte(routeTestContent), 0644)
+	return os.WriteFile(filepath.Join(integrationDir, "health.test.js"), []byte(routeTestContent), utils.ProjectFilePerm)
 }
 
 // createSwaggerFiles creates Swagger configuration files
@@ -1101,11 +1102,11 @@ func createSwaggerFiles(projectName string, langType scaffolding.LanguageType, f
 	}
 
 	configDir := filepath.Join(projectName, "src", "config")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, utils.ProjectDirPerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(configDir, "swagger-config.js"), []byte(swaggerConfigContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "swagger-config.js"), []byte(swaggerConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -1115,7 +1116,7 @@ func createSwaggerFiles(projectName string, langType scaffolding.LanguageType, f
 		return fmt.Errorf("failed to render swagger setup: %w", err)
 	}
 
-	return os.WriteFile(filepath.Join(configDir, "swagger-setup.js"), []byte(swaggerSetupContent), 0644)
+	return os.WriteFile(filepath.Join(configDir, "swagger-setup.js"), []byte(swaggerSetupContent), utils.ProjectFilePerm)
 }
 
 // createAdditionalMiddleware creates optional middleware files based on selection
@@ -1146,7 +1147,7 @@ func createAdditionalMiddleware(projectName string, langType scaffolding.Languag
 			return fmt.Errorf("failed to render %s middleware: %w", mwType, err)
 		}
 
-		if err := os.WriteFile(filepath.Join(middlewareDir, fileName), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(middlewareDir, fileName), []byte(content), utils.ProjectFilePerm); err != nil {
 			return err
 		}
 	}

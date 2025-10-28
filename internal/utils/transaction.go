@@ -7,6 +7,18 @@ import (
 	"time"
 )
 
+const (
+	// File and directory permissions
+	BackupDirPerm  = 0o700 // User only: read, write, execute
+	BackupFilePerm = 0o600 // User only: read, write
+	ProjectDirPerm = 0o755 // Standard directory permissions
+	ProjectFilePerm = 0o644 // Standard file permissions (source code)
+
+	// Backup retention policy
+	BackupRetentionDays = 30
+	MaxBackupsToKeep    = 5
+)
+
 // Transaction represents a set of file operations that can be rolled back
 type Transaction struct {
 	operations []FileOperation
@@ -72,9 +84,15 @@ func (t *Transaction) AddDelete(path string, data []byte) {
 
 // Execute executes all operations in the transaction
 func (t *Transaction) Execute() error {
-	// Create backup directory
-	if err := os.MkdirAll(t.backupDir, 0755); err != nil {
+	// Create backup directory with restricted permissions
+	if err := os.MkdirAll(t.backupDir, BackupDirPerm); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Clean up old backups before executing new operations
+	if err := cleanupOldBackups(); err != nil {
+		// Log but don't fail on cleanup errors
+		fmt.Printf("⚠️  Warning: failed to cleanup old backups: %v\n", err)
 	}
 
 	// Execute each operation
@@ -100,31 +118,31 @@ func (t *Transaction) executeOperation(op *FileOperation) error {
 	case OpCreate:
 		// Create parent directory if it doesn't exist
 		dir := filepath.Dir(op.Path)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, ProjectDirPerm); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", op.Path, err)
 		}
 
-		// Write new file
-		if err := os.WriteFile(op.Path, op.NewData, 0644); err != nil {
+		// Write new file with standard permissions (not sensitive data)
+		if err := os.WriteFile(op.Path, op.NewData, ProjectFilePerm); err != nil {
 			return fmt.Errorf("failed to create file %s: %w", op.Path, err)
 		}
 
 	case OpUpdate:
-		// Backup original file
+		// Backup original file with restricted permissions
 		backupPath := filepath.Join(t.backupDir, filepath.Base(op.Path))
-		if err := os.WriteFile(backupPath, op.OriginalData, 0644); err != nil {
+		if err := os.WriteFile(backupPath, op.OriginalData, BackupFilePerm); err != nil {
 			return fmt.Errorf("failed to backup file %s: %w", op.Path, err)
 		}
 
-		// Write updated file
-		if err := os.WriteFile(op.Path, op.NewData, 0644); err != nil {
+		// Write updated file with standard permissions
+		if err := os.WriteFile(op.Path, op.NewData, ProjectFilePerm); err != nil {
 			return fmt.Errorf("failed to update file %s: %w", op.Path, err)
 		}
 
 	case OpDelete:
-		// Backup original file
+		// Backup original file with restricted permissions
 		backupPath := filepath.Join(t.backupDir, filepath.Base(op.Path))
-		if err := os.WriteFile(backupPath, op.OriginalData, 0644); err != nil {
+		if err := os.WriteFile(backupPath, op.OriginalData, BackupFilePerm); err != nil {
 			return fmt.Errorf("failed to backup file %s: %w", op.Path, err)
 		}
 
@@ -173,14 +191,14 @@ func (t *Transaction) rollbackOperation(op *FileOperation) error {
 		}
 
 	case OpUpdate:
-		// Restore from original data
-		if err := os.WriteFile(op.Path, op.OriginalData, 0644); err != nil {
+		// Restore from original data with standard permissions
+		if err := os.WriteFile(op.Path, op.OriginalData, ProjectFilePerm); err != nil {
 			return fmt.Errorf("failed to restore file: %w", err)
 		}
 
 	case OpDelete:
-		// Restore from backup
-		if err := os.WriteFile(op.Path, op.OriginalData, 0644); err != nil {
+		// Restore from backup with standard permissions
+		if err := os.WriteFile(op.Path, op.OriginalData, ProjectFilePerm); err != nil {
 			return fmt.Errorf("failed to restore deleted file: %w", err)
 		}
 
@@ -296,4 +314,82 @@ func WrapOperation(fn func(*FileTransaction) error) error {
 	}
 
 	return tx.ExecuteAndCommit()
+}
+
+// cleanupOldBackups removes old backup directories based on retention policy
+func cleanupOldBackups() error {
+	stateDir := GetStateDir()
+	backupDir := filepath.Join(stateDir, "backup")
+
+	// If backup directory doesn't exist, nothing to clean
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		return fmt.Errorf("failed to read backup directory: %w", err)
+	}
+
+	// Collect all backup directories with timestamps
+	type backupInfo struct {
+		name    string
+		path    string
+		modTime time.Time
+	}
+	var backups []backupInfo
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		path := filepath.Join(backupDir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		backups = append(backups, backupInfo{
+			name:    entry.Name(),
+			path:    path,
+			modTime: info.ModTime(),
+		})
+	}
+
+	// Sort by modification time (newest first)
+	for i := 0; i < len(backups); i++ {
+		for j := i + 1; j < len(backups); j++ {
+			if backups[j].modTime.After(backups[i].modTime) {
+				backups[i], backups[j] = backups[j], backups[i]
+			}
+		}
+	}
+
+	now := time.Now()
+	cutoffTime := now.AddDate(0, 0, -BackupRetentionDays)
+
+	// Remove old backups exceeding retention days or keeping more than max
+	for i, backup := range backups {
+		shouldDelete := false
+
+		// Delete if older than retention days
+		if backup.modTime.Before(cutoffTime) {
+			shouldDelete = true
+		}
+
+		// Delete if we have more than max backups to keep
+		if i >= MaxBackupsToKeep {
+			shouldDelete = true
+		}
+
+		if shouldDelete {
+			if err := os.RemoveAll(backup.path); err != nil {
+				fmt.Printf("⚠️  Warning: failed to remove old backup %s: %v\n", backup.name, err)
+				// Continue with other backups even if one fails
+			}
+		}
+	}
+
+	return nil
 }

@@ -1,12 +1,57 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
+// TestHelper sets up test environment with required keys
+func setupTestKeys(t *testing.T) (teardown func()) {
+	// Generate valid 32-byte keys in base64 format
+	encKey := make([]byte, 32)
+	jwtKey := make([]byte, 32)
+
+	if _, err := rand.Read(encKey); err != nil {
+		t.Fatalf("Failed to generate encryption key: %v", err)
+	}
+	if _, err := rand.Read(jwtKey); err != nil {
+		t.Fatalf("Failed to generate JWT key: %v", err)
+	}
+
+	encKeyB64 := base64.StdEncoding.EncodeToString(encKey)
+	jwtKeyB64 := base64.StdEncoding.EncodeToString(jwtKey)
+
+	// Save originals
+	origEncKey := os.Getenv("ENCRYPTION_KEY")
+	origJWTSecret := os.Getenv("JWT_SECRET")
+
+	// Set test keys
+	os.Setenv("ENCRYPTION_KEY", encKeyB64)
+	os.Setenv("JWT_SECRET", jwtKeyB64)
+
+	// Return teardown function
+	return func() {
+		if origEncKey != "" {
+			os.Setenv("ENCRYPTION_KEY", origEncKey)
+		} else {
+			os.Unsetenv("ENCRYPTION_KEY")
+		}
+		if origJWTSecret != "" {
+			os.Setenv("JWT_SECRET", origJWTSecret)
+		} else {
+			os.Unsetenv("JWT_SECRET")
+		}
+	}
+}
+
 func TestNewSecureAuth(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -30,6 +75,8 @@ func TestNewSecureAuth(t *testing.T) {
 }
 
 func TestCreateEncryptedToken(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -83,6 +130,8 @@ func TestCreateEncryptedToken(t *testing.T) {
 }
 
 func TestValidateEncryptedToken(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -128,6 +177,8 @@ func TestValidateEncryptedToken(t *testing.T) {
 }
 
 func TestRefreshToken(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -165,6 +216,8 @@ func TestRefreshToken(t *testing.T) {
 }
 
 func TestRevokeSession(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -197,6 +250,8 @@ func TestRevokeSession(t *testing.T) {
 }
 
 func TestRevokeAllUserSessions(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -243,6 +298,8 @@ func TestRevokeAllUserSessions(t *testing.T) {
 }
 
 func TestTokenExpiration(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -357,6 +414,8 @@ func TestCreateSecureCookie(t *testing.T) {
 }
 
 func TestEncryptionDecryption(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -398,6 +457,8 @@ func TestEncryptionDecryption(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
+	teardown := setupTestKeys(t)
+	defer teardown()
 	auth, err := NewSecureAuth()
 	if err != nil {
 		t.Fatalf("Failed to create secure auth: %v", err)
@@ -441,5 +502,81 @@ func TestConcurrentAccess(t *testing.T) {
 	// Verify all sessions were created
 	if len(auth.sessionStore) != 10 {
 		t.Errorf("Expected 10 sessions, got %d", len(auth.sessionStore))
+	}
+}
+
+// TestGetOrGenerateKeySecurityFix tests that keys are not printed to stdout
+// This test verifies the security fix where keys are no longer auto-generated and printed
+func TestGetOrGenerateKeyMissingEnvironment(t *testing.T) {
+	// Save original env vars
+	origEncKey := os.Getenv("ENCRYPTION_KEY")
+	origJWTSecret := os.Getenv("JWT_SECRET")
+	defer func() {
+		// Restore original env vars
+		if origEncKey != "" {
+			os.Setenv("ENCRYPTION_KEY", origEncKey)
+		} else {
+			os.Unsetenv("ENCRYPTION_KEY")
+		}
+		if origJWTSecret != "" {
+			os.Setenv("JWT_SECRET", origJWTSecret)
+		} else {
+			os.Unsetenv("JWT_SECRET")
+		}
+	}()
+
+	// Clear environment variables to test missing key behavior
+	os.Unsetenv("ENCRYPTION_KEY")
+	os.Unsetenv("JWT_SECRET")
+
+	// Creating SecureAuth without environment variables should fail
+	auth, err := NewSecureAuth()
+	if err == nil {
+		t.Fatal("Expected error when ENCRYPTION_KEY and JWT_SECRET are not set")
+	}
+
+	if auth != nil {
+		t.Fatal("Expected auth to be nil when initialization fails")
+	}
+
+	// Verify error message mentions environment variable
+	if !strings.Contains(err.Error(), "ENCRYPTION_KEY") && !strings.Contains(err.Error(), "JWT_SECRET") {
+		t.Errorf("Expected error to mention missing environment variable, got: %v", err)
+	}
+}
+
+// TestValidKeyFormat tests that keys must be proper base64-encoded 32-byte values
+func TestGetOrGenerateKeyValidFormat(t *testing.T) {
+	// Save original env vars
+	origEncKey := os.Getenv("ENCRYPTION_KEY")
+	origJWTSecret := os.Getenv("JWT_SECRET")
+	defer func() {
+		if origEncKey != "" {
+			os.Setenv("ENCRYPTION_KEY", origEncKey)
+		} else {
+			os.Unsetenv("ENCRYPTION_KEY")
+		}
+		if origJWTSecret != "" {
+			os.Setenv("JWT_SECRET", origJWTSecret)
+		} else {
+			os.Unsetenv("JWT_SECRET")
+		}
+	}()
+
+	// Set invalid base64
+	os.Setenv("ENCRYPTION_KEY", "not-valid-base64!!!")
+	os.Setenv("JWT_SECRET", "dGVzdA==") // Valid base64 but wrong length
+
+	auth, err := NewSecureAuth()
+	if err == nil {
+		t.Fatal("Expected error with invalid key format")
+	}
+
+	if auth != nil {
+		t.Fatal("Expected auth to be nil")
+	}
+
+	if !strings.Contains(err.Error(), "invalid key") {
+		t.Errorf("Expected 'invalid key' in error message, got: %v", err)
 	}
 }

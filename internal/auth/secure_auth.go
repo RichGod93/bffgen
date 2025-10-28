@@ -63,30 +63,22 @@ func NewSecureAuth() (*SecureAuth, error) {
 	}, nil
 }
 
-// getOrGenerateKey gets a key from environment or generates a secure one
+// getOrGenerateKey gets a key from environment or returns an error if not set
+// SECURITY NOTE: Keys are never generated automatically to prevent exposure in logs
 func getOrGenerateKey(envVar string, size int) ([]byte, error) {
 	keyStr := os.Getenv(envVar)
 	if keyStr == "" {
-		// Generate a secure random key
-		key := make([]byte, size)
-		if _, err := rand.Read(key); err != nil {
-			return nil, fmt.Errorf("failed to generate random key: %w", err)
-		}
-		// Convert to base64 for storage
-		keyStr = base64.StdEncoding.EncodeToString(key)
-		fmt.Printf("⚠️  Generated new %s: %s\n", envVar, keyStr)
-		fmt.Printf("   Set this in your environment: export %s=%s\n", envVar, keyStr)
-		return key, nil
+		return nil, fmt.Errorf("missing required environment variable: %s (must be a base64-encoded key of %d bytes)", envVar, size)
 	}
 
 	// Decode base64 key
 	key, err := base64.StdEncoding.DecodeString(keyStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid key format: %w", err)
+		return nil, fmt.Errorf("invalid key format for %s: must be base64-encoded: %w", envVar, err)
 	}
 
 	if len(key) != size {
-		return nil, fmt.Errorf("key must be %d bytes", size)
+		return nil, fmt.Errorf("invalid key size for %s: expected %d bytes, got %d", envVar, size, len(key))
 	}
 
 	return key, nil
