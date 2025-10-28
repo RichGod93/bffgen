@@ -1,0 +1,54 @@
+{
+  "name": "test-nodejs-bff",
+  "version": "1.0.0",
+  "language": "nodejs",
+  "framework": "express",
+  "cors": {
+    "origins": ["http://localhost:3000"]
+  },
+  "backends": [
+    {
+      "name": "auth",
+      "baseURL": "http://localhost:4000/api",
+      "endpoints": [
+        {
+          "Path": "/auth/login",
+          "Method": "POST",
+          "BackendPath": "/auth/login",
+          "ExposeAs": "/api/auth/login",
+          "RequiresAuth": false
+        },
+        {
+          "Path": "/auth/logout",
+          "Method": "POST",
+          "BackendPath": "/auth/logout",
+          "ExposeAs": "/api/auth/logout",
+          "RequiresAuth": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "baseURL": "http://localhost:5000/api",
+      "endpoints": [
+        {
+          "Path": "/users",
+          "Method": "GET",
+          "BackendPath": "/users",
+          "ExposeAs": "/api/users",
+          "RequiresAuth": true
+        },
+        {
+          "Path": "/users/:id",
+          "Method": "GET",
+          "BackendPath": "/users/:id",
+          "ExposeAs": "/api/users/:id",
+          "RequiresAuth": true
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "port": 8080
+  }
+}

@@ -1,0 +1,6 @@
+name: invalid
+version: broken
+services:
+  - invalid: format
+  no: structure
+

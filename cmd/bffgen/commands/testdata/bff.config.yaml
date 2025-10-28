@@ -1,0 +1,36 @@
+name: test-bff
+version: 1.0.0
+language: go
+framework: chi
+
+cors:
+  origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+services:
+  users:
+    baseURL: http://localhost:4000/api
+    endpoints:
+      - path: /users
+        method: GET
+        exposeAs: /api/users
+      - path: /users/:id
+        method: GET
+        exposeAs: /api/users/:id
+      - path: /users
+        method: POST
+        exposeAs: /api/users
+
+  products:
+    baseURL: http://localhost:5000/api
+    endpoints:
+      - path: /products
+        method: GET
+        exposeAs: /api/products
+      - path: /products/:id
+        method: GET
+        exposeAs: /api/products/:id
+
+settings:
+  port: 8080
