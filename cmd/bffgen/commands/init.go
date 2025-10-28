@@ -16,6 +16,13 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
 
+		// Validate project name early
+		validator := NewProjectNameValidator()
+		if err := validator.Validate(projectName); err != nil {
+			ValidateError(err, "project-name")
+			os.Exit(1)
+		}
+
 		// Get flags
 		langFlag, _ := cmd.Flags().GetString("lang")
 		runtimeFlag, _ := cmd.Flags().GetString("runtime")
@@ -46,16 +53,14 @@ var initCmd = &cobra.Command{
 		// Determine language from flags
 		if langFlag != "" {
 			if !scaffolding.IsValidLanguage(langFlag) {
-				fmt.Printf("❌ Invalid language: %s. Supported: go, nodejs-express, nodejs-fastify\n", langFlag)
-				os.Exit(1)
+				HandleError(fmt.Errorf("invalid language '%s'. Supported: go, nodejs-express, nodejs-fastify", langFlag), "language validation")
 			}
 			languageType = scaffolding.LanguageType(langFlag)
 			config := scaffolding.GetLanguageConfig(languageType)
 			framework = config.Framework
 		} else if runtimeFlag != "" {
 			if !scaffolding.IsValidLanguage(runtimeFlag) {
-				fmt.Printf("❌ Invalid runtime: %s. Supported: go, nodejs-express, nodejs-fastify\n", runtimeFlag)
-				os.Exit(1)
+				HandleError(fmt.Errorf("invalid runtime '%s'. Supported: go, nodejs-express, nodejs-fastify", runtimeFlag), "runtime validation")
 			}
 			languageType = scaffolding.LanguageType(runtimeFlag)
 			config := scaffolding.GetLanguageConfig(languageType)
@@ -83,13 +88,10 @@ var initCmd = &cobra.Command{
 
 		languageType, framework, backendServices, err := initializeProjectWithOptions(projectName, languageType, framework, opts)
 		if err != nil {
-			fmt.Printf("❌ Error: %v\n", err)
-			os.Exit(1)
+			HandleError(err, "project initialization")
 		}
 
-		fmt.Println()
-		fmt.Printf("✅ BFF project '%s' initialized successfully!\n", projectName)
-		fmt.Println()
+		LogSuccess(fmt.Sprintf("BFF project '%s' initialized successfully", projectName))
 
 		// Check tools and show personalized guidance
 		showPostInitGuidance(projectName, string(languageType), framework, backendServices)

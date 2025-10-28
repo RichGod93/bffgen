@@ -20,8 +20,7 @@ var addRouteCmd = &cobra.Command{
 	Long:  `Interactively add a backend endpoint to your BFF configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := addRoute(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding route: %v\n", err)
-			os.Exit(1)
+			HandleError(err, "adding route")
 		}
 	},
 }
@@ -31,13 +30,12 @@ func addRoute() error {
 	projectType := detectProjectType()
 
 	if projectType == "unknown" {
-		fmt.Println("❌ No BFF project found in current directory")
-		fmt.Println("💡 Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
+		LogInfo("No BFF project found in current directory")
+		LogInfo("Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
 		return fmt.Errorf("no project configuration found")
 	}
 
-	fmt.Println("🔧 Adding a new route to your BFF")
-	fmt.Println()
+	PrintSection("Adding a new route to your BFF")
 
 	// Handle based on project type
 	if projectType == "nodejs" {

@@ -22,8 +22,7 @@ var generateCmd = &cobra.Command{
 	Long:  `Generate Go code for routes from bff.config.yaml configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := generate(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error generating code: %v\n", err)
-			os.Exit(1)
+			HandleError(err, "code generation")
 		}
 	},
 }
@@ -43,14 +42,14 @@ func init() {
 }
 
 func generate() error {
-	LogVerbose("Starting code generation")
+	LogVerboseCommand("Starting code generation")
 
 	// Detect project type
 	projectType := detectProjectType()
 
 	if projectType == "unknown" {
-		fmt.Println("❌ No BFF project found in current directory")
-		fmt.Println("💡 Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
+		LogInfo("No BFF project found in current directory")
+		LogInfo("Run 'bffgen init <project-name>' first or navigate to a BFF project directory")
 		return fmt.Errorf("no project configuration found")
 	}
 
@@ -65,7 +64,7 @@ func generate() error {
 
 // generateGo generates code for Go projects
 func generateGo() error {
-	LogVerbose("Starting code generation from bff.config.yaml")
+	LogVerboseCommand("Starting code generation from bff.config.yaml")
 
 	// Load generation state
 	state, err := utils.LoadState()
@@ -103,12 +102,12 @@ func generateGo() error {
 	}
 
 	if len(config.Services) == 0 {
-		fmt.Println("⚠️  No services configured in bff.config.yaml")
+		LogWarning("No services configured in bff.config.yaml")
 		fmt.Println("💡 Add services using 'bffgen add-route' or 'bffgen add-template'")
 		return nil
 	}
 
-	LogVerbose("Found %d services to generate", len(config.Services))
+	LogVerboseCommand("Found %d services to generate", len(config.Services))
 
 	// Track routes and check for duplicates
 	newRoutes := 0
@@ -119,7 +118,7 @@ func generateGo() error {
 
 			// Check if route already generated (unless force mode)
 			if !forceMode && state.IsRouteGenerated(serviceName, endpoint.Method, endpoint.ExposeAs) {
-				LogVerbose("Skipping already generated route: %s", routeKey)
+				LogVerboseCommand("Skipping already generated route: %s", routeKey)
 				skippedRoutes++
 				continue
 			}
@@ -169,7 +168,7 @@ func generateGo() error {
 		fmt.Println("   This creates a ready-to-import collection for testing your BFF endpoints")
 	}
 
-	LogVerbose("Code generation completed successfully")
+	LogVerboseCommand("Code generation completed successfully")
 
 	return nil
 }
@@ -196,7 +195,7 @@ func addProxyRoutesToMainGo(config *types.BFFConfig) error {
 
 	// Check if proxy routes already exist
 	if strings.Contains(contentStr, "// Generated proxy routes") {
-		LogVerbose("Proxy routes already exist in main.go, skipping")
+		LogVerboseCommand("Proxy routes already exist in main.go, skipping")
 		return nil
 	}
 
@@ -224,7 +223,7 @@ func addProxyRoutesToMainGo(config *types.BFFConfig) error {
 		return fmt.Errorf("failed to write main.go: %w", err)
 	}
 
-	LogVerbose("Added proxy routes to existing main.go")
+	LogVerboseCommand("Added proxy routes to existing main.go")
 	return nil
 }
 
@@ -668,12 +667,12 @@ func generateNodeJS() error {
 	// Get backends
 	backends, ok := config["backends"].([]interface{})
 	if !ok || len(backends) == 0 {
-		fmt.Println("⚠️  No backends configured in bffgen.config.json")
+		LogWarning("No backends configured in bffgen.config.json")
 		fmt.Println("💡 Add backends using 'bffgen add-route' or 'bffgen add-template'")
 		return nil
 	}
 
-	LogVerbose("Found %d backends to generate", len(backends))
+	LogVerboseCommand("Found %d backends to generate", len(backends))
 
 	// Detect framework (Express or Fastify)
 	framework := "express"
@@ -710,7 +709,7 @@ func generateNodeJS() error {
 		// Skip backends with no endpoints
 		endpoints, ok := backendMap["endpoints"].([]interface{})
 		if !ok || len(endpoints) == 0 {
-			LogVerbose("Skipping %s (no endpoints defined)", serviceName)
+			LogVerboseCommand("Skipping %s (no endpoints defined)", serviceName)
 			fmt.Printf("⏭️  Skipped service '%s' (no endpoints defined)\n", serviceName)
 			continue
 		}
@@ -771,7 +770,7 @@ func generateNodeJS() error {
 		fmt.Println("   4. Test your endpoints")
 	}
 
-	LogVerbose("Code generation completed successfully")
+	LogVerboseCommand("Code generation completed successfully")
 
 	return nil
 }
