@@ -1,6 +1,6 @@
 # bffgen
 
-**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express)**, or **Node.js (Fastify)** with JWT auth, rate limiting, CORS, and comprehensive logging.
+**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express/Fastify)**, or **Python (FastAPI)** with JWT auth, rate limiting, CORS, and comprehensive logging.
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
@@ -38,6 +38,16 @@ npm install && npm run dev
 bffgen init my-fastify-bff --lang nodejs-fastify
 cd my-fastify-bff
 npm install && npm run dev
+```
+
+### Python BFF (FastAPI)
+
+```bash
+# Create FastAPI BFF
+bffgen init my-python-bff --lang python-fastapi
+cd my-python-bff
+./setup.sh && source venv/bin/activate
+uvicorn main:app --reload
 ```
 
 **Example Output:**

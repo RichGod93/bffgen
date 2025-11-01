@@ -1,0 +1,230 @@
+// Generated Express.js BFF server for news-aggregator
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const { body, validationResult } = require('express-validator');
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+app.use(cookieParser());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.RATE_LIMIT || 100,
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
+
+// CORS configuration
+const corsOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',') 
+  : ['http://localhost:3000', 'http://localhost:3001'];
+
+app.use(cors({
+  origin: corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Accept', 'Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Requested-With'],
+  exposedHeaders: ['X-CSRF-Token'],
+}));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
+
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Readiness check endpoint
+app.get('/ready', (req, res) => {
+  // Add checks for database, redis, etc.
+  res.json({ status: 'ready', timestamp: new Date().toISOString() });
+});
+
+// Auth endpoints placeholder
+// JWT validation middleware
+const authenticateJWT = (req, res, next) => {
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  
+  // Get token from cookie or Authorization header
+  const token = req.cookies.access_token || 
+                (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // Attach user data to request
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
+app.post('/api/auth/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 })
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  
+  const { email, password } = req.body;
+  
+  // NOTE: Replace this with your actual authentication logic
+  // Example: verify credentials against database
+  // const user = await UserModel.findOne({ email });
+  // const isValid = await bcrypt.compare(password, user.passwordHash);
+  // if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  // For now, this is a working example with mock validation
+  // In production, validate against your user database
+  if (!email || !password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+  const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+  
+  // Generate JWT token with user data
+  // In production, fetch real user data from database
+  const token = jwt.sign(
+    { 
+      userId: 'user-id-from-db', // Replace with actual user ID
+      email: email,
+      role: 'user' // Replace with actual user role
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+  
+  // Set token in httpOnly cookie for security
+  res.cookie('access_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
+  
+  res.json({ 
+    message: 'Logged in successfully',
+    user: { email: email, role: 'user' },
+    token: token // Also return in response for localStorage option
+  });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  // Clear authentication cookies
+  res.clearCookie('access_token');
+  res.clearCookie('refresh_token');
+  res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/api/auth/profile', authenticateJWT, (req, res) => {
+  // User data is available in req.user (set by authenticateJWT middleware)
+  res.json({ 
+    message: 'Profile data',
+    user: {
+      userId: req.user.userId,
+      email: req.user.email,
+      role: req.user.role
+    }
+  });
+});
+
+// bffgen:begin:routes
+// nytimes routes
+app.use(require('./routes/nytimes'));
+// guardian routes
+app.use(require('./routes/guardian'));
+
+// bffgen:end:routes
+
+// 404 handler - must be after all routes
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
+});
+
+// Error handling middleware - must be last
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  
+  // Don't leak error details in production
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  res.status(err.status || 500).json({
+    error: isDevelopment ? err.message : 'Internal server error',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+// Start server
+const server = app.listen(PORT, () => {
+  console.log('🚀 news-aggregator BFF server running on port ' + PORT);
+  console.log('📋 Health check: http://localhost:' + PORT + '/health');
+  console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
+});
+
+module.exports = app;
+

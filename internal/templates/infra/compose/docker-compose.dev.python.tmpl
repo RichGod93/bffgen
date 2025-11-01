@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # FastAPI BFF Service (Development with hot reload)
+  bff:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - PYTHON_VERSION=3.11
+    container_name: {{.ProjectName}}-bff-dev
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - DEBUG=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+      - JWT_SECRET=dev-secret-key
+      - REDIS_URL=redis://redis:6379
+      - CACHE_ENABLED=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Exclude venv to use container's environment
+      - /app/venv
+    depends_on:
+      - redis
+    networks:
+      - bff-network
+    restart: unless-stopped
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: {{.ProjectName}}-redis-dev
+    ports:
+      - "6379:6379"
+    networks:
+      - bff-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: {{.ProjectName}}-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - bff-network
+
+networks:
+  bff-network:
+    driver: bridge
+

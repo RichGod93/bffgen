@@ -24,6 +24,9 @@ func createProjectDirectories(projectName string, langType scaffolding.LanguageT
 			filepath.Join(projectName, "internal", "templates"),
 			filepath.Join(projectName, "cmd", "server"),
 		}
+	} else if langType == scaffolding.LanguagePythonFastAPI {
+		// Python-specific directories
+		return createPythonDirectories(projectName)
 	} else {
 		// Node.js-specific directories with src/ structure
 		dirs = []string{
@@ -51,11 +54,18 @@ func createProjectDirectories(projectName string, langType scaffolding.LanguageT
 
 // createDependencyFiles creates language-specific dependency files
 func createDependencyFiles(projectName string, langType scaffolding.LanguageType, framework string) error {
+	return createDependencyFilesWithOptions(projectName, langType, framework, ProjectOptions{})
+}
+
+// createDependencyFilesWithOptions creates language-specific dependency files with options
+func createDependencyFilesWithOptions(projectName string, langType scaffolding.LanguageType, framework string, opts ProjectOptions) error {
 	switch langType {
 	case scaffolding.LanguageGo:
 		return createGoModFile(projectName, framework)
 	case scaffolding.LanguageNodeExpress, scaffolding.LanguageNodeFastify:
 		return createPackageJsonFile(projectName, langType, framework)
+	case scaffolding.LanguagePythonFastAPI:
+		return createPythonDependencyFiles(projectName, opts)
 	default:
 		return nil
 	}
@@ -75,6 +85,8 @@ func createMainFileWithOptions(projectName string, langType scaffolding.Language
 		return createNodeExpressMainFileWithOptions(projectName, backendServs, opts)
 	case scaffolding.LanguageNodeFastify:
 		return createNodeFastifyMainFileWithOptions(projectName, backendServs, opts)
+	case scaffolding.LanguagePythonFastAPI:
+		return createFastAPIMainFile(projectName, opts)
 	default:
 		return nil
 	}

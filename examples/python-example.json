@@ -1,0 +1,221 @@
+{
+  "project": {
+    "name": "fastapi-bff-example",
+    "version": "1.0.0",
+    "framework": "fastapi",
+    "async": true,
+    "packageManager": "pip"
+  },
+  "server": {
+    "port": 8000,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origins": ["http://localhost:3000", "http://localhost:5173"],
+      "credentials": true,
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    },
+    "rateLimit": {
+      "enabled": true,
+      "requestsPerMinute": 100
+    }
+  },
+  "backends": [
+    {
+      "name": "auth",
+      "baseUrl": "http://localhost:5000/api",
+      "timeout": 30,
+      "retries": 3,
+      "circuitBreaker": {
+        "enabled": true,
+        "failureThreshold": 5,
+        "recoveryTimeout": 60
+      },
+      "endpoints": [
+        {
+          "name": "login",
+          "method": "POST",
+          "path": "/api/auth/login",
+          "upstreamPath": "/auth/login",
+          "requiresAuth": false,
+          "description": "Authenticate user and return JWT token"
+        },
+        {
+          "name": "register",
+          "method": "POST",
+          "path": "/api/auth/register",
+          "upstreamPath": "/auth/register",
+          "requiresAuth": false,
+          "description": "Register a new user account"
+        },
+        {
+          "name": "logout",
+          "method": "POST",
+          "path": "/api/auth/logout",
+          "upstreamPath": "/auth/logout",
+          "requiresAuth": true,
+          "description": "Logout user and invalidate token"
+        },
+        {
+          "name": "profile",
+          "method": "GET",
+          "path": "/api/auth/profile",
+          "upstreamPath": "/auth/profile",
+          "requiresAuth": true,
+          "description": "Get current user profile"
+        },
+        {
+          "name": "refresh_token",
+          "method": "POST",
+          "path": "/api/auth/refresh",
+          "upstreamPath": "/auth/refresh",
+          "requiresAuth": false,
+          "description": "Refresh expired JWT token"
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "baseUrl": "http://localhost:5001/api",
+      "timeout": 30,
+      "retries": 3,
+      "cache": {
+        "enabled": true,
+        "ttl": 300
+      },
+      "endpoints": [
+        {
+          "name": "list_users",
+          "method": "GET",
+          "path": "/api/users",
+          "upstreamPath": "/users",
+          "requiresAuth": true,
+          "description": "List all users with pagination"
+        },
+        {
+          "name": "get_user",
+          "method": "GET",
+          "path": "/api/users/{user_id}",
+          "upstreamPath": "/users/{user_id}",
+          "requiresAuth": true,
+          "description": "Get user details by ID"
+        },
+        {
+          "name": "create_user",
+          "method": "POST",
+          "path": "/api/users",
+          "upstreamPath": "/users",
+          "requiresAuth": true,
+          "description": "Create a new user"
+        },
+        {
+          "name": "update_user",
+          "method": "PUT",
+          "path": "/api/users/{user_id}",
+          "upstreamPath": "/users/{user_id}",
+          "requiresAuth": true,
+          "description": "Update user information"
+        },
+        {
+          "name": "delete_user",
+          "method": "DELETE",
+          "path": "/api/users/{user_id}",
+          "upstreamPath": "/users/{user_id}",
+          "requiresAuth": true,
+          "description": "Delete a user account"
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "baseUrl": "http://localhost:5002/api",
+      "timeout": 30,
+      "retries": 2,
+      "cache": {
+        "enabled": true,
+        "ttl": 600
+      },
+      "endpoints": [
+        {
+          "name": "list_products",
+          "method": "GET",
+          "path": "/api/products",
+          "upstreamPath": "/products",
+          "requiresAuth": false,
+          "description": "Get all products with filters"
+        },
+        {
+          "name": "get_product",
+          "method": "GET",
+          "path": "/api/products/{product_id}",
+          "upstreamPath": "/products/{product_id}",
+          "requiresAuth": false,
+          "description": "Get detailed product information"
+        },
+        {
+          "name": "create_product",
+          "method": "POST",
+          "path": "/api/products",
+          "upstreamPath": "/products",
+          "requiresAuth": true,
+          "description": "Create a new product"
+        },
+        {
+          "name": "update_product",
+          "method": "PUT",
+          "path": "/api/products/{product_id}",
+          "upstreamPath": "/products/{product_id}",
+          "requiresAuth": true,
+          "description": "Update product details"
+        },
+        {
+          "name": "search_products",
+          "method": "GET",
+          "path": "/api/products/search",
+          "upstreamPath": "/products/search",
+          "requiresAuth": false,
+          "description": "Search products by query"
+        }
+      ]
+    }
+  ],
+  "features": {
+    "authentication": {
+      "enabled": true,
+      "type": "jwt",
+      "secretKey": "${JWT_SECRET}",
+      "algorithm": "HS256",
+      "tokenExpiry": 3600
+    },
+    "logging": {
+      "enabled": true,
+      "level": "INFO",
+      "format": "json",
+      "file": "logs/app.log"
+    },
+    "monitoring": {
+      "health": "/health",
+      "metrics": "/metrics"
+    },
+    "documentation": {
+      "enabled": true,
+      "openapi": {
+        "title": "FastAPI BFF Example",
+        "version": "1.0.0",
+        "description": "Backend-for-Frontend API built with FastAPI and bffgen"
+      }
+    }
+  },
+  "middleware": {
+    "requestLogging": true,
+    "authentication": true,
+    "rateLimit": true,
+    "cors": true
+  },
+  "development": {
+    "hotReload": true,
+    "debugMode": true,
+    "autoReload": true
+  }
+}
+

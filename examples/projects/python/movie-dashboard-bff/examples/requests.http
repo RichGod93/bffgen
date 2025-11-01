@@ -1,0 +1,180 @@
+### Movie Dashboard BFF - HTTP Request Examples
+### Use with VS Code REST Client extension or similar tools
+
+@baseUrl = http://localhost:8000
+@userServiceUrl = http://localhost:3001
+
+### ========================================
+### Health Checks
+### ========================================
+
+### Main BFF Health
+GET {{baseUrl}}/health
+
+### User Service Health
+GET {{userServiceUrl}}/health
+
+### ========================================
+### Dashboard Endpoints (Aggregated Data)
+### ========================================
+
+### Get Personalized Feed (Page 1)
+GET {{baseUrl}}/api/dashboard/feed?page=1
+
+### Get Personalized Feed (Page 2)
+GET {{baseUrl}}/api/dashboard/feed?page=2
+
+### Get Complete Dashboard
+GET {{baseUrl}}/api/dashboard/complete
+
+### Search Movies with User Context
+GET {{baseUrl}}/api/dashboard/search/enriched?query=inception
+
+### Get Enriched Movie Details - Fight Club
+GET {{baseUrl}}/api/dashboard/movie/550/enriched
+
+### Get Enriched Movie Details - The Dark Knight
+GET {{baseUrl}}/api/dashboard/movie/155/enriched
+
+### ========================================
+### TMDB Endpoints (Direct Proxy)
+### ========================================
+
+### Get Popular Movies
+GET {{baseUrl}}/api/movies/popular?page=1
+
+### Get Movie Details - Fight Club
+GET {{baseUrl}}/api/movies/550
+
+### Get Movie Details - The Dark Knight
+GET {{baseUrl}}/api/movies/155
+
+### Search Movies - "inception"
+GET {{baseUrl}}/api/movies/search?query=inception&page=1
+
+### Search Movies - "dark knight"
+GET {{baseUrl}}/api/movies/search?query=dark+knight&page=1
+
+### ========================================
+### User Service Endpoints (via BFF)
+### ========================================
+
+### Get User Favorites (via BFF)
+GET {{baseUrl}}/api/users/favorites
+
+### Add to Favorites (via BFF)
+POST {{baseUrl}}/api/users/favorites
+Content-Type: application/json
+
+{
+  "movie_id": 278,
+  "title": "The Shawshank Redemption",
+  "rating": 5,
+  "poster_path": "/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"
+}
+
+### Remove from Favorites (via BFF)
+DELETE {{baseUrl}}/api/users/favorites/278
+
+### Get Watchlist (via BFF)
+GET {{baseUrl}}/api/users/watchlist
+
+### Add to Watchlist (via BFF)
+POST {{baseUrl}}/api/users/watchlist
+Content-Type: application/json
+
+{
+  "movie_id": 27205,
+  "title": "Inception",
+  "release_date": "2010-07-16",
+  "poster_path": "/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg"
+}
+
+### ========================================
+### User Service Direct (Bypassing BFF)
+### ========================================
+
+### Get Favorites (Direct)
+GET {{userServiceUrl}}/favorites
+
+### Add to Favorites (Direct)
+POST {{userServiceUrl}}/favorites
+Content-Type: application/json
+
+{
+  "movie_id": 680,
+  "title": "Pulp Fiction",
+  "rating": 5,
+  "poster_path": "/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg"
+}
+
+### Get Specific Favorite
+GET {{userServiceUrl}}/favorites/680
+
+### Delete from Favorites (Direct)
+DELETE {{userServiceUrl}}/favorites/680
+
+### Get Watchlist (Direct)
+GET {{userServiceUrl}}/watchlist
+
+### Add to Watchlist (Direct)
+POST {{userServiceUrl}}/watchlist
+Content-Type: application/json
+
+{
+  "movie_id": 13,
+  "title": "Forrest Gump",
+  "release_date": "1994-07-06"
+}
+
+### Delete from Watchlist
+DELETE {{userServiceUrl}}/watchlist/13
+
+### Reset User Service Data
+POST {{userServiceUrl}}/reset
+
+### Clear All User Data
+DELETE {{userServiceUrl}}/clear
+
+### ========================================
+### Testing Error Handling
+### ========================================
+
+### Non-existent Movie
+GET {{baseUrl}}/api/movies/999999999
+
+### Invalid Search Query (empty)
+GET {{baseUrl}}/api/movies/search?query=
+
+### Invalid Favorite (no movie_id)
+POST {{userServiceUrl}}/favorites
+Content-Type: application/json
+
+{
+  "title": "Test Movie"
+}
+
+### ========================================
+### OpenAPI Documentation
+### ========================================
+
+### Get OpenAPI Schema
+GET {{baseUrl}}/openapi.json
+
+### ========================================
+### Notes
+### ========================================
+
+# Authentication:
+# - Currently disabled by default
+# - To enable, uncomment auth middleware in main.py
+# - Add: Authorization: Bearer <your-jwt-token>
+
+# Rate Limiting:
+# - Enabled by default (60 requests/minute)
+# - Configure in config.py
+
+# Caching:
+# - Disabled by default (requires Redis)
+# - Enable with CACHE_ENABLED=true in .env
+

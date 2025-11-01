@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  .-bff:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: .-bff
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-change-in-production
+      - ENCRYPTION_KEY=dev-encryption-key-change-in-production
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bff-network
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    command: ["go", "run", "cmd/server/main.go"]
+
+  redis:
+    image: redis:7-alpine
+    container_name: .-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bff-network
+
+  # Optional: Redis Commander for Redis management UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: .-redis-ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - bff-network
+    profiles:
+      - debug
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  bff-network:
+    driver: bridge
+
