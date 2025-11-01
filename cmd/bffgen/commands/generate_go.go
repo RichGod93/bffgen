@@ -125,7 +125,6 @@ func generateGo() error {
 	return nil
 }
 
-
 func generateProxyRoutesCode(config *types.BFFConfig) string {
 	var routes strings.Builder
 	routes.WriteString("\t// Generated proxy routes\n")
@@ -179,6 +178,7 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 }`
 }
+
 // generateMainGoWithScaffolding generates main.go using regeneration-safe scaffolding
 func generateMainGoWithScaffolding(config *types.BFFConfig, generator *scaffolding.Generator) error {
 	// Generate proxy routes content

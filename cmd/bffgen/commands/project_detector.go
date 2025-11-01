@@ -101,4 +101,3 @@ func normalizeRuntime(runtime string) string {
 		return "unknown"
 	}
 }
-
