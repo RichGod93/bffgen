@@ -211,67 +211,6 @@ jobs:
           echo "🎉 Release ${{ steps.version.outputs.version }} created successfully!"
           echo "📦 Assets uploaded to GitHub Releases"
           echo "🔗 View release: https://github.com/RichGod93/bffgen/releases/tag/${{ steps.version.outputs.version }}"
-
-  publish-npm:
-    name: Publish to npm
-    needs: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Get version from tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          # Remove 'v' prefix for npm
-          NPM_VERSION="${VERSION#v}"
-          echo "version=$NPM_VERSION" >> $GITHUB_OUTPUT
-          echo "Publishing npm package version: $NPM_VERSION"
-
-      - name: Update npm package version
-        working-directory: npm
-        run: |
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
-          echo "✅ npm package version updated to ${{ steps.version.outputs.version }}"
-
-      - name: Publish to npm
-        working-directory: npm
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Check if version already exists on npm
-          if npm view bffgen@$VERSION version >/dev/null 2>&1; then
-            echo "⚠️  Version $VERSION already exists on npm"
-            echo "Skipping npm publish (version already published)"
-            echo "📦 View package: https://www.npmjs.com/package/bffgen/v/$VERSION"
-            exit 0
-          fi
-
-          # Publish to npm
-          npm publish
-          echo "✅ Published bffgen@$VERSION to npm"
-          echo "📦 View package: https://www.npmjs.com/package/bffgen"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Notify npm publish success
-        run: |
-          echo "🎉 npm package release completed!"
-          echo "📦 Install with: npm install -g bffgen@${{ steps.version.outputs.version }}"
-          echo "🔗 View on npm: https://www.npmjs.com/package/bffgen"
           echo ""
-          echo "Note: If version already existed on npm, it was skipped (idempotent operation)"
+          echo "📝 Note: npm publishing is managed separately and not automated in CI/CD"
+          echo "To publish to npm, use: cd npm && npm publish --access public"
