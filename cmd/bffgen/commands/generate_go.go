@@ -126,17 +126,6 @@ func generateGo() error {
 	return nil
 }
 
-func generateMainGo(config *types.BFFConfig) error {
-	// Check if main.go already exists (created by init)
-	if _, err := os.Stat("main.go"); err == nil {
-		// main.go exists, just add proxy routes to it
-		return addProxyRoutesToMainGo(config)
-	}
-
-	// main.go doesn't exist, create a basic one
-	return createBasicMainGo(config)
-}
-
 func addProxyRoutesToMainGo(config *types.BFFConfig) error {
 	// Read existing main.go
 	content, err := os.ReadFile("main.go")
@@ -330,115 +319,6 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 
 	file, err := os.Create("main.go")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
-
-	return tmpl.Execute(file, config)
-}
-
-func generateServerMain(config *types.BFFConfig) error {
-	serverTemplate := `package main
-
-import (
-	"fmt"
-	"log"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-)
-
-func main() {
-	r := chi.NewRouter()
-
-	// Middleware
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
-
-	// Health check endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "BFF server is running!")
-	})
-
-	// Generated proxy routes
-{{range $serviceName, $service := .Services}}
-	// {{$serviceName}} service routes
-{{range $endpoint := $service.Endpoints}}
-	r.{{chiMethod $endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
-{{end}}
-{{end}}
-
-	fmt.Println("🚀 BFF server starting on :{{.Settings.Port}}")
-	log.Fatal(http.ListenAndServe(":{{.Settings.Port}}", r))
-}
-
-// createProxyHandler creates a reverse proxy handler for the given backend URL and path
-func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Parse the backend URL
-		target, err := url.Parse(backendURL)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid backend URL: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Create reverse proxy
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		
-		// Configure proxy behavior
-		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("Proxy error: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		}
-
-		// Modify the request to use the backend path
-		originalPath := r.URL.Path
-		r.URL.Path = backendPath
-		r.URL.Host = target.Host
-		r.URL.Scheme = target.Scheme
-		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-		r.Host = target.Host
-
-		// Log the proxy request
-		log.Printf("Proxying %s %s -> %s%s", r.Method, originalPath, backendURL, backendPath)
-
-		// Serve the proxy request
-		proxy.ServeHTTP(w, r)
-	}
-}`
-
-	tmpl, err := template.New("server").Funcs(template.FuncMap{
-		"chiMethod": chiMethod,
-	}).Parse(serverTemplate)
-	if err != nil {
-		return err
-	}
-
-	// Ensure cmd/server directory exists
-	if err := os.MkdirAll("cmd/server", utils.ProjectDirPerm); err != nil {
-		return err
-	}
-
-	// Set default port if not specified
-	if config.Settings.Port == 0 {
-		config.Settings.Port = 8080
-	}
-
-	file, err := os.Create("cmd/server/main.go")
 	if err != nil {
 		return err
 	}

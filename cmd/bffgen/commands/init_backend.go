@@ -41,10 +41,6 @@ type ProjectOptions struct {
 }
 
 // initializeProject initializes a new BFF project
-func initializeProject(projectName string, langType scaffolding.LanguageType, framework string) (scaffolding.LanguageType, string, []BackendService, error) {
-	return initializeProjectWithOptions(projectName, langType, framework, ProjectOptions{})
-}
-
 // initializeProjectWithOptions initializes a new BFF project with custom options
 func initializeProjectWithOptions(projectName string, langType scaffolding.LanguageType, framework string, opts ProjectOptions) (scaffolding.LanguageType, string, []BackendService, error) {
 	if err := os.MkdirAll(projectName, utils.ProjectDirPerm); err != nil {

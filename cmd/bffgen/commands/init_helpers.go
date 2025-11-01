@@ -72,10 +72,6 @@ func createDependencyFilesWithOptions(projectName string, langType scaffolding.L
 }
 
 // createMainFile creates the main server file based on language/framework
-func createMainFile(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []BackendService) error {
-	return createMainFileWithOptions(projectName, langType, framework, corsConfig, backendServs, ProjectOptions{})
-}
-
 // createMainFileWithOptions creates the main server file with options
 func createMainFileWithOptions(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []BackendService, opts ProjectOptions) error {
 	switch langType {

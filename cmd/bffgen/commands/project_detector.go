@@ -2,7 +2,6 @@ package commands
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,28 +84,6 @@ func getStoredRuntime() string {
 	return normalizeRuntime(runtime)
 }
 
-// storeRuntime stores runtime information in project metadata
-func storeRuntime(runtime string) error {
-	metadataDir := utils.GetStateDir()
-	if err := os.MkdirAll(metadataDir, utils.ProjectDirPerm); err != nil {
-		return err
-	}
-
-	metadataPath := filepath.Join(metadataDir, "metadata.json")
-
-	metadata := map[string]interface{}{
-		"runtime":   runtime,
-		"createdAt": utils.GetCurrentTimestamp(),
-	}
-
-	data, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(metadataPath, data, utils.ProjectFilePerm)
-}
-
 // normalizeRuntime normalizes runtime strings to standard format
 func normalizeRuntime(runtime string) string {
 	runtime = strings.ToLower(strings.TrimSpace(runtime))
@@ -123,22 +100,6 @@ func normalizeRuntime(runtime string) string {
 	default:
 		return "unknown"
 	}
-}
-
-// detectProjectTypeWithFeedback detects project type and provides feedback
-func detectProjectTypeWithFeedback() string {
-	projectType := detectProjectType()
-
-	if globalConfig.RuntimeOverride != "" && projectType != "unknown" {
-		// Check if override conflicts with detected type
-		detectedWithoutOverride := detectProjectTypeWithoutOverride()
-		if detectedWithoutOverride != "unknown" && detectedWithoutOverride != projectType {
-			fmt.Printf("⚠️  Runtime override (%s) differs from detected type (%s)\n",
-				globalConfig.RuntimeOverride, detectedWithoutOverride)
-		}
-	}
-
-	return projectType
 }
 
 // detectProjectTypeWithoutOverride detects project type ignoring override
