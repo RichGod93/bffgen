@@ -32,6 +32,15 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+      - name: Check code formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not formatted"
+            gofmt -s -l .
+            exit 1
+          fi
+          echo "✅ Code formatting is correct"
+
       - name: Run linter
         run: golangci-lint run --timeout=5m ./...
 
@@ -79,3 +88,10 @@ jobs:
           ./bffgen add-route --help
           ./bffgen config --help
           ./bffgen postman --help
+
+      - name: CI/CD Summary
+        if: success()
+        run: |
+          echo "✅ All CI/CD checks passed!"
+          echo "📊 Status: Tests, Linting, Security Scan, and Integration Tests successful"
+          echo "🚀 Ready for release or merge"
