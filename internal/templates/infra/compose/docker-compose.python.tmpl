@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # FastAPI BFF Service
+  bff:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{.ProjectName}}-bff
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - DEBUG=${DEBUG:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - REDIS_URL=redis://redis:6379
+      - CACHE_ENABLED=true
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bff-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: {{.ProjectName}}-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bff-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+networks:
+  bff-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+

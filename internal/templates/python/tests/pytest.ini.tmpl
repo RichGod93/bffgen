@@ -1,0 +1,29 @@
+[pytest]
+minversion = 7.0
+addopts = 
+    -ra
+    -q
+    --cov=.
+    --cov-report=term-missing
+    --cov-report=html
+    --cov-report=xml
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+asyncio_mode = auto
+
+[coverage:run]
+source = .
+omit =
+    */tests/*
+    */venv/*
+    */env/*
+    */__pycache__/*
+    */site-packages/*
+
+[coverage:report]
+precision = 2
+show_missing = True
+skip_covered = False
+

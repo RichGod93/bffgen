@@ -27,6 +27,11 @@ func detectProjectType() string {
 
 	// Priority: Config files > runtime files
 
+	// Check for bffgen.config.py.json (Python - highest priority)
+	if _, err := os.Stat("bffgen.config.py.json"); err == nil {
+		return "python"
+	}
+
 	// Check for bffgen.config.json (Node.js - highest priority)
 	if _, err := os.Stat("bffgen.config.json"); err == nil {
 		return "nodejs"
@@ -45,6 +50,14 @@ func detectProjectType() string {
 	// Check for go.mod (Go - lower priority)
 	if _, err := os.Stat("go.mod"); err == nil {
 		return "go"
+	}
+
+	// Check for requirements.txt or pyproject.toml (Python - lower priority)
+	if _, err := os.Stat("requirements.txt"); err == nil {
+		return "python"
+	}
+	if _, err := os.Stat("pyproject.toml"); err == nil {
+		return "python"
 	}
 
 	return "unknown"
@@ -105,6 +118,8 @@ func normalizeRuntime(runtime string) string {
 		return "nodejs"
 	case "nodejs-fastify", "fastify":
 		return "nodejs"
+	case "python", "python-fastapi", "fastapi-python":
+		return "python"
 	default:
 		return "unknown"
 	}

@@ -35,6 +35,9 @@ type ProjectOptions struct {
 	IncludeDocker  bool
 	IncludeHealth  bool
 	IncludeCompose bool
+	// Python-specific options
+	PkgManager     string
+	AsyncEndpoints bool
 }
 
 // initializeProject initializes a new BFF project
@@ -120,7 +123,7 @@ func initializeProjectWithOptions(projectName string, langType scaffolding.Langu
 		}
 	}
 
-	if err := createDependencyFiles(projectName, langType, framework); err != nil {
+	if err := createDependencyFilesWithOptions(projectName, langType, framework, opts); err != nil {
 		return langType, framework, nil, fmt.Errorf("failed to create dependency files: %w", err)
 	}
 
@@ -128,19 +131,61 @@ func initializeProjectWithOptions(projectName string, langType scaffolding.Langu
 		return langType, framework, nil, fmt.Errorf("failed to create main file: %w", err)
 	}
 
-	// Generate additional middleware files for Node.js projects
-	if (langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify) && len(selectedMiddleware) > 0 {
-		if err := createAdditionalMiddleware(projectName, langType, framework, selectedMiddleware); err != nil {
-			fmt.Printf("⚠️  Warning: Could not create additional middleware: %v\n", err)
+	// Generate additional files based on language
+	if langType == scaffolding.LanguagePythonFastAPI {
+		// Python-specific files
+		if err := createFastAPIConfig(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create config.py: %w", err)
 		}
-	}
+		if err := createFastAPIDependencies(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create dependencies.py: %w", err)
+		}
+		if err := createPythonEnvFile(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create .env: %w", err)
+		}
+		if err := createPythonGitignore(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create .gitignore: %w", err)
+		}
+		if err := createPythonLogger(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create logger: %w", err)
+		}
+		if err := createPythonCacheManager(projectName); err != nil {
+			fmt.Printf("⚠️  Warning: Could not create cache manager: %v\n", err)
+		}
+		if err := createPythonCircuitBreaker(projectName); err != nil {
+			fmt.Printf("⚠️  Warning: Could not create circuit breaker: %v\n", err)
+		}
+		if err := createPythonMiddleware(projectName); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create middleware: %w", err)
+		}
+		if err := createPythonTestFiles(projectName, opts); err != nil {
+			fmt.Printf("⚠️  Warning: Could not create test files: %v\n", err)
+		}
+		if err := createPythonBFFGenConfig(projectName, opts); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create bffgen.config.py.json: %w", err)
+		}
+		if err := createPythonSetupScript(projectName, opts); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create setup.sh: %w", err)
+		}
+		if err := createPythonREADME(projectName, opts); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create README.md: %w", err)
+		}
+		// Skip createBFFConfig and createReadme for Python as we have Python-specific versions
+	} else {
+		// Generate additional middleware files for Node.js projects
+		if (langType == scaffolding.LanguageNodeExpress || langType == scaffolding.LanguageNodeFastify) && len(selectedMiddleware) > 0 {
+			if err := createAdditionalMiddleware(projectName, langType, framework, selectedMiddleware); err != nil {
+				fmt.Printf("⚠️  Warning: Could not create additional middleware: %v\n", err)
+			}
+		}
 
-	if err := createBFFConfig(projectName, backendServices); err != nil {
-		return langType, framework, nil, fmt.Errorf("failed to create bff.config.yaml: %w", err)
-	}
+		if err := createBFFConfig(projectName, backendServices); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create bff.config.yaml: %w", err)
+		}
 
-	if err := createReadme(projectName, langType); err != nil {
-		return langType, framework, nil, fmt.Errorf("failed to create README.md: %w", err)
+		if err := createReadme(projectName, langType); err != nil {
+			return langType, framework, nil, fmt.Errorf("failed to create README.md: %w", err)
+		}
 	}
 
 	// Save controller type preference for generate command

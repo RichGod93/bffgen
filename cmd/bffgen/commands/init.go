@@ -31,6 +31,10 @@ var initCmd = &cobra.Command{
 		controllerType, _ := cmd.Flags().GetString("controller-type")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 		skipDocs, _ := cmd.Flags().GetBool("skip-docs")
+		
+		// Python-specific flags
+		pkgManager, _ := cmd.Flags().GetString("pkg-manager")
+		asyncFlag, _ := cmd.Flags().GetBool("async")
 
 		// Infrastructure flags
 		includeCI, _ := cmd.Flags().GetBool("include-ci")
@@ -53,14 +57,14 @@ var initCmd = &cobra.Command{
 		// Determine language from flags
 		if langFlag != "" {
 			if !scaffolding.IsValidLanguage(langFlag) {
-				HandleError(fmt.Errorf("invalid language '%s'. Supported: go, nodejs-express, nodejs-fastify", langFlag), "language validation")
+				HandleError(fmt.Errorf("invalid language '%s'. Supported: go, nodejs-express, nodejs-fastify, python-fastapi", langFlag), "language validation")
 			}
 			languageType = scaffolding.LanguageType(langFlag)
 			config := scaffolding.GetLanguageConfig(languageType)
 			framework = config.Framework
 		} else if runtimeFlag != "" {
 			if !scaffolding.IsValidLanguage(runtimeFlag) {
-				HandleError(fmt.Errorf("invalid runtime '%s'. Supported: go, nodejs-express, nodejs-fastify", runtimeFlag), "runtime validation")
+				HandleError(fmt.Errorf("invalid runtime '%s'. Supported: go, nodejs-express, nodejs-fastify, python-fastapi", runtimeFlag), "runtime validation")
 			}
 			languageType = scaffolding.LanguageType(runtimeFlag)
 			config := scaffolding.GetLanguageConfig(languageType)
@@ -84,6 +88,9 @@ var initCmd = &cobra.Command{
 			IncludeDocker:  includeDocker,
 			IncludeHealth:  includeHealth,
 			IncludeCompose: includeCompose,
+			// Python-specific options
+			PkgManager:     pkgManager,
+			AsyncEndpoints: asyncFlag,
 		}
 
 		languageType, framework, backendServices, err := initializeProjectWithOptions(projectName, languageType, framework, opts)
@@ -122,13 +129,17 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringP("lang", "l", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify)")
-	initCmd.Flags().StringP("runtime", "r", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify) - alias for --lang")
-	initCmd.Flags().StringP("framework", "f", "", "Framework (chi, echo, fiber for Go; express, fastify for Node.js)")
+	initCmd.Flags().StringP("lang", "l", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, python-fastapi)")
+	initCmd.Flags().StringP("runtime", "r", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, python-fastapi) - alias for --lang")
+	initCmd.Flags().StringP("framework", "f", "", "Framework (chi, echo, fiber for Go; express, fastify for Node.js; fastapi for Python)")
 	initCmd.Flags().String("middleware", "", "Comma-separated list of middleware to include (validation,logger,requestId,all,none)")
 	initCmd.Flags().String("controller-type", "both", "Controller type for Node.js projects (basic,aggregator,both)")
 	initCmd.Flags().Bool("skip-tests", false, "Skip test file generation")
 	initCmd.Flags().Bool("skip-docs", false, "Skip API documentation generation")
+
+	// Python-specific flags
+	initCmd.Flags().String("pkg-manager", "pip", "Python package manager (pip or poetry)")
+	initCmd.Flags().Bool("async", true, "Generate async FastAPI endpoints (default: true)")
 
 	// Infrastructure scaffolding flags
 	initCmd.Flags().Bool("include-ci", false, "Generate GitHub Actions CI/CD workflow")

@@ -1,0 +1,80 @@
+{
+  "project": {
+    "name": "movie-dashboard-bff",
+    "framework": "fastapi",
+    "async": true
+  },
+  "backends": [
+    {
+      "name": "movies",
+      "baseUrl": "https://api.themoviedb.org/3",
+      "timeout": 30,
+      "endpoints": [
+        {
+          "name": "get_popular",
+          "method": "GET",
+          "path": "/api/movies/popular",
+          "upstreamPath": "/movie/popular",
+          "description": "Get popular movies from TMDB"
+        },
+        {
+          "name": "get_movie_details",
+          "method": "GET",
+          "path": "/api/movies/{movie_id}",
+          "upstreamPath": "/movie/{movie_id}",
+          "description": "Get detailed information about a specific movie"
+        },
+        {
+          "name": "search_movies",
+          "method": "GET",
+          "path": "/api/movies/search",
+          "upstreamPath": "/search/movie",
+          "description": "Search for movies by query"
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "baseUrl": "http://localhost:3001",
+      "timeout": 10,
+      "endpoints": [
+        {
+          "name": "get_favorites",
+          "method": "GET",
+          "path": "/api/users/favorites",
+          "upstreamPath": "/favorites",
+          "description": "Get user's favorite movies"
+        },
+        {
+          "name": "add_favorite",
+          "method": "POST",
+          "path": "/api/users/favorites",
+          "upstreamPath": "/favorites",
+          "description": "Add a movie to favorites"
+        },
+        {
+          "name": "delete_favorite",
+          "method": "DELETE",
+          "path": "/api/users/favorites/{movie_id}",
+          "upstreamPath": "/favorites/{movie_id}",
+          "description": "Remove a movie from favorites"
+        },
+        {
+          "name": "get_watchlist",
+          "method": "GET",
+          "path": "/api/users/watchlist",
+          "upstreamPath": "/watchlist",
+          "description": "Get user's watchlist"
+        },
+        {
+          "name": "add_to_watchlist",
+          "method": "POST",
+          "path": "/api/users/watchlist",
+          "upstreamPath": "/watchlist",
+          "description": "Add a movie to watchlist"
+        }
+      ]
+    }
+  ]
+}
+

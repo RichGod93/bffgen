@@ -9,9 +9,10 @@ import (
 type LanguageType string
 
 const (
-	LanguageGo          LanguageType = "go"
-	LanguageNodeExpress LanguageType = "nodejs-express"
-	LanguageNodeFastify LanguageType = "nodejs-fastify"
+	LanguageGo            LanguageType = "go"
+	LanguageNodeExpress   LanguageType = "nodejs-express"
+	LanguageNodeFastify   LanguageType = "nodejs-fastify"
+	LanguagePythonFastAPI LanguageType = "python-fastapi"
 )
 
 // LanguageConfig holds configuration for different languages
@@ -54,6 +55,15 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			MainFile:     "index.js",
 			TemplatePath: "templates/nodejs-fastify",
 		}
+	case LanguagePythonFastAPI:
+		return LanguageConfig{
+			Type:         LanguagePythonFastAPI,
+			Name:         "Python (FastAPI)",
+			Framework:    "fastapi",
+			DepsPath:     "requirements.txt",
+			MainFile:     "main.py",
+			TemplatePath: "templates/python-fastapi",
+		}
 	default:
 		return LanguageConfig{
 			Type:         LanguageGo,
@@ -72,6 +82,7 @@ func GetSupportedLanguages() []LanguageConfig {
 		GetLanguageConfig(LanguageGo),
 		GetLanguageConfig(LanguageNodeExpress),
 		GetLanguageConfig(LanguageNodeFastify),
+		GetLanguageConfig(LanguagePythonFastAPI),
 	}
 }
 
@@ -95,6 +106,8 @@ func GetLanguageFromFramework(framework string) LanguageType {
 		return LanguageNodeExpress
 	case "fastify":
 		return LanguageNodeFastify
+	case "python-fastapi":
+		return LanguagePythonFastAPI
 	default:
 		return LanguageGo
 	}
@@ -109,6 +122,8 @@ func (g *Generator) GenerateProjectFile(projectName string, langConfig LanguageC
 		return g.generateNodeExpressProject(projectName, langConfig)
 	case LanguageNodeFastify:
 		return g.generateNodeFastifyProject(projectName, langConfig)
+	case LanguagePythonFastAPI:
+		return g.generatePythonFastAPIProject(projectName, langConfig)
 	default:
 		return fmt.Errorf("unsupported language type: %s", langConfig.Type)
 	}
@@ -133,6 +148,27 @@ func (g *Generator) generateNodeFastifyProject(projectName string, config Langua
 	// Create package.json
 	packageJson := g.generatePackageContent(projectName, "fastify")
 	return g.generateFile(filepath.Join(projectName, "package.json"), packageJson)
+}
+
+// generatePythonFastAPIProject creates Python FastAPI project structure
+func (g *Generator) generatePythonFastAPIProject(projectName string, config LanguageConfig) error {
+	// Create requirements.txt
+	requirements := g.generatePythonRequirements(projectName)
+	return g.generateFile(filepath.Join(projectName, "requirements.txt"), requirements)
+}
+
+// generatePythonRequirements creates requirements.txt content for Python projects
+func (g *Generator) generatePythonRequirements(projectName string) string {
+	return `fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+slowapi==0.1.9
+httpx==0.26.0
+redis==5.0.1
+`
 }
 
 // generatePackageContent creates package.json content for Node.js projects

@@ -28,6 +28,7 @@ bffgen add-infra --ci --docker --compose --health
 # Initialize new project
 bffgen init <name> --lang nodejs-express
 bffgen init <name> --lang nodejs-fastify
+bffgen init <name> --lang python-fastapi
 bffgen init <name> --lang go --framework chi
 
 # Generate code (routes, controllers, services)

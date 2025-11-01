@@ -52,6 +52,10 @@ func generate() error {
 		return generateNodeJS()
 	}
 
+	if projectType == "python" {
+		return generatePython()
+	}
+
 	// Default: Go project
 	return generateGo()
 }
