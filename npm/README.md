@@ -1,6 +1,6 @@
 # bffgen
 
-**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express)**, or **Node.js (Fastify)** with JWT auth, rate limiting, CORS, and comprehensive logging.
+**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express)**, **Node.js (Fastify)**, or **Python (FastAPI)** with JWT auth, rate limiting, CORS, and comprehensive logging.
 
 [![npm version](https://img.shields.io/npm/v/bffgen.svg)](https://www.npmjs.com/package/bffgen)
 [![Downloads](https://img.shields.io/npm/dm/bffgen.svg)](https://www.npmjs.com/package/bffgen)
@@ -20,9 +20,19 @@ npm install && npm run dev
 
 # Create Fastify BFF
 npx bffgen init my-fastify-bff --lang nodejs-fastify
+cd my-fastify-bff
+npm install && npm run dev
+
+# Create FastAPI BFF (Python)
+npx bffgen init my-python-bff --lang python-fastapi
+cd my-python-bff
+./setup.sh && source venv/bin/activate
+uvicorn main:app --reload
 
 # Create Go BFF
 npx bffgen init my-go-bff --lang go --framework chi
+cd my-go-bff
+go run main.go
 ```
 
 ### Global Installation
@@ -44,6 +54,7 @@ cd my-project && npm run dev
 
 - **Node.js Express** - Popular, flexible web framework
 - **Node.js Fastify** - Fast, schema-based framework
+- **Python FastAPI** - Modern, async-first web framework with automatic OpenAPI docs
 - **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
 
 ### 🚀 **Production-Ready Aggregation**
@@ -71,8 +82,10 @@ cd my-project && npm run dev
 - **Hot Reload** - Development mode with auto-restart
 - **Comprehensive Tests** - Jest setup with sample tests
 
-### ⚡ **v2.0 Enhancements** (NEW)
+### ⚡ **v2.2 Enhancements** (NEW - Python Support!)
 
+- **Python FastAPI Support** - Full async/await support with Pydantic validation
+- **Type-Safe Python Models** - Pydantic models for request/response validation
 - **Idempotent Generation** - Safe to run `generate` multiple times
 - **Config Validation** - `bffgen config validate` catches errors pre-generation
 - **Colorized Diffs** - Preview changes with `--dry-run`
@@ -135,6 +148,38 @@ bffgen version
 
 ## 📚 Examples
 
+### Python FastAPI Example (NEW!)
+
+```bash
+# Create project
+npx bffgen init my-python-bff --lang python-fastapi
+
+# Project structure:
+my-python-bff/
+├── main.py                 # FastAPI application
+├── config.py               # Settings and configuration
+├── dependencies.py         # FastAPI dependency injection
+├── routers/                # API route handlers (auto-generated)
+├── services/               # Backend service clients (auto-generated)
+├── models/                 # Pydantic data models
+├── middleware/             # Auth, logging middleware
+├── utils/                  # Utilities (logger, cache, circuit breaker)
+├── tests/                  # Pytest configuration and tests
+├── .env                    # Environment variables
+├── requirements.txt        # Python dependencies
+├── bffgen.config.py.json   # BFF configuration
+└── setup.sh               # Setup script
+```
+
+**Quick Start:**
+```bash
+cd my-python-bff
+./setup.sh                  # Create venv and install deps
+source venv/bin/activate
+uvicorn main:app --reload
+# Visit http://localhost:8000/docs for Swagger UI
+```
+
 ### Node.js Express Example
 
 ```bash
@@ -163,7 +208,38 @@ my-express-bff/
 └── bffgen.config.json        # BFF configuration
 ```
 
-### Aggregation Example (v2.0)
+### Aggregation Example - Python FastAPI (v2.2)
+
+```python
+from fastapi import APIRouter, Depends
+from services.tmdb_service import TMDBService
+from services.users_service import UsersService
+
+router = APIRouter()
+tmdb = TMDBService()
+users = UsersService()
+
+@router.get("/api/dashboard/feed")
+async def get_personalized_feed(user_id: str):
+    """Aggregate popular movies with user favorites and watchlist"""
+    # Fetch from multiple services in parallel
+    popular_movies = await tmdb.get_popular_movies()
+    favorites = await users.get_favorites(user_id)
+    watchlist = await users.get_watchlist(user_id)
+
+    # Enrich movie data with user context
+    for movie in popular_movies:
+        movie["is_favorite"] = movie["id"] in favorites
+        movie["is_in_watchlist"] = movie["id"] in watchlist
+
+    return {
+        "movies": popular_movies,
+        "favorites_count": len(favorites),
+        "watchlist_count": len(watchlist)
+    }
+```
+
+### Aggregation Example - Node.js (v2.0)
 
 ```javascript
 const ParallelAggregator = require("./utils/aggregator");

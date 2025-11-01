@@ -1,7 +1,7 @@
 {
   "name": "bffgen",
-  "version": "2.1.0",
-  "description": "Backend-for-Frontend (BFF) generator - Scaffold secure, production-ready BFF services in Go, Express, or Fastify",
+  "version": "2.2.0",
+  "description": "Backend-for-Frontend (BFF) generator - Scaffold secure, production-ready BFF services in Go, Node.js, or Python",
   "main": "lib/index.js",
   "bin": {
     "bffgen": "bin/bffgen.js"
@@ -20,6 +20,8 @@
     "express",
     "expressjs",
     "fastify",
+    "fastapi",
+    "python",
     "go",
     "golang",
     "microservices",
