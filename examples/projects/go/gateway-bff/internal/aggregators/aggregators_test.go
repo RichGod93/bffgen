@@ -119,4 +119,3 @@ func TestGetDashboard_OptionalServiceFailure(t *testing.T) {
 		t.Error("Expected nil notifications when service fails")
 	}
 }
-

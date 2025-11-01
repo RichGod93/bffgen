@@ -75,7 +75,7 @@ func getNotificationByID(id string) *Notification {
 
 func handleNotifications(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -91,7 +91,7 @@ func handleNotifications(w http.ResponseWriter, r *http.Request) {
 	// Filter by user_id if provided
 	userID := r.URL.Query().Get("user_id")
 	var filtered []Notification
-	
+
 	if userID != "" {
 		for _, notif := range notifications {
 			if notif.UserID == userID {
@@ -118,7 +118,7 @@ func handleNotifications(w http.ResponseWriter, r *http.Request) {
 
 func handleNotificationByID(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -150,7 +150,7 @@ func handleNotificationByID(w http.ResponseWriter, r *http.Request) {
 
 func handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -187,7 +187,7 @@ func handleMarkRead(w http.ResponseWriter, r *http.Request) {
 
 func handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -202,7 +202,7 @@ func handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 
 	// Get user_id from query or body
 	userID := r.URL.Query().Get("user_id")
-	
+
 	markedCount := 0
 	for i := range notifications {
 		if userID == "" || notifications[i].UserID == userID {
@@ -253,4 +253,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-

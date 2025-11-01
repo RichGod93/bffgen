@@ -142,10 +142,10 @@ func TestGeneratePythonWithConfig(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !contains(contentStr, "from routers import api_router") {
-		t.Error("main.py should import api_router")
+	if !contains(contentStr, "from routers.api_router import router as api_router") {
+		t.Error("main.py should import api_router from routers module")
 	}
-	if !contains(contentStr, "app.include_router(api_router.router)") {
+	if !contains(contentStr, "app.include_router(api_router)") {
 		t.Error("main.py should register api_router")
 	}
 }

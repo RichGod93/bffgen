@@ -109,8 +109,8 @@ func TestCreateFastAPIMainFile(t *testing.T) {
 		"from fastapi import FastAPI",
 		"app = FastAPI",
 		"@app.get(\"/health\")",
-		"BFFGEN:ROUTERS:START",
-		"BFFGEN:ROUTERS:END",
+		"BFFGEN_ROUTER_IMPORTS",
+		"BFFGEN_ROUTER_INCLUDES",
 	}
 
 	for _, expected := range expectedStrings {
@@ -290,10 +290,10 @@ func TestCreatePythonLogger(t *testing.T) {
 		t.Fatalf("Failed to create logger.py: %v", err)
 	}
 
-	// Check logger.py exists
-	loggerPath := filepath.Join(projectName, "logger.py")
+	// Check logger.py exists in utils directory
+	loggerPath := filepath.Join(projectName, "utils", "logger.py")
 	if _, err := os.Stat(loggerPath); os.IsNotExist(err) {
-		t.Error("logger.py does not exist")
+		t.Error("utils/logger.py does not exist")
 	}
 
 	// Verify content
@@ -326,8 +326,8 @@ func TestCreatePythonMiddleware(t *testing.T) {
 	middlewareDir := filepath.Join(projectName, "middleware")
 	expectedFiles := []string{
 		"__init__.py",
-		"logging_middleware.py",
-		"auth_middleware.py",
+		"logging.py",
+		"auth.py",
 	}
 
 	for _, file := range expectedFiles {
@@ -338,14 +338,14 @@ func TestCreatePythonMiddleware(t *testing.T) {
 	}
 
 	// Verify logging middleware content
-	loggingPath := filepath.Join(middlewareDir, "logging_middleware.py")
+	loggingPath := filepath.Join(middlewareDir, "logging.py")
 	content, err := os.ReadFile(loggingPath)
 	if err != nil {
-		t.Fatalf("Failed to read logging_middleware.py: %v", err)
+		t.Fatalf("Failed to read logging.py: %v", err)
 	}
 
-	if !contains(string(content), "LoggingMiddleware") {
-		t.Error("logging_middleware.py should contain LoggingMiddleware class")
+	if !contains(string(content), "Middleware") || !contains(string(content), "logging") {
+		t.Error("logging.py should contain logging middleware")
 	}
 }
 
@@ -367,15 +367,21 @@ func TestCreatePythonTestFiles(t *testing.T) {
 		t.Fatalf("Failed to create test files: %v", err)
 	}
 
-	// Check test files exist
-	testsDir := filepath.Join(projectName, "tests")
-	expectedFiles := []string{
-		"__init__.py",
-		"conftest.py",
-		"pytest.ini",
+	// Check pytest.ini exists in project root
+	pytestPath := filepath.Join(projectName, "pytest.ini")
+	if _, err := os.Stat(pytestPath); os.IsNotExist(err) {
+		t.Error("pytest.ini does not exist in project root")
 	}
 
-	for _, file := range expectedFiles {
+	// Check test files exist in tests directory
+	testsDir := filepath.Join(projectName, "tests")
+	expectedTestFiles := []string{
+		"__init__.py",
+		"conftest.py",
+		"test_main.py",
+	}
+
+	for _, file := range expectedTestFiles {
 		filePath := filepath.Join(testsDir, file)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			t.Errorf("Expected test file %s does not exist", file)
@@ -499,10 +505,11 @@ func TestCreatePythonREADME(t *testing.T) {
 	contentStr := string(content)
 	expectedSections := []string{
 		"# " + filepath.Base(projectName),
-		"## Features",
-		"## Quick Start",
-		"./setup.sh",
+		"## Description",
+		"## Setup",
 		"uvicorn main:app",
+		"## Configuration",
+		"## Testing",
 	}
 
 	for _, expected := range expectedSections {

@@ -53,7 +53,6 @@ func main() {
 	r.Post("/api/notifications/{id}/read", createProxyHandler("http://localhost:4002/api", "/notifications/{id}/read"))
 	r.Post("/api/notifications/read-all", createProxyHandler("http://localhost:4002/api", "/notifications/read-all"))
 
-
 	fmt.Println("🚀 BFF server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
@@ -70,7 +69,7 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 
 		// Create reverse proxy
 		proxy := httputil.NewSingleHostReverseProxy(target)
-		
+
 		// Configure proxy behavior
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("Proxy error: %v", err)
@@ -92,4 +91,5 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 		proxy.ServeHTTP(w, r)
 	}
 }
+
 // bffgen:end

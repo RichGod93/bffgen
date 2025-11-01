@@ -110,4 +110,3 @@ func GetDashboard(userID string, baseURLs map[string]string) (*DashboardResponse
 
 	return dashboard, nil
 }
-

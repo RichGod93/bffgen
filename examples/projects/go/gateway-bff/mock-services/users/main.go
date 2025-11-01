@@ -39,7 +39,7 @@ func getUserByID(id string) *User {
 
 func handleUsers(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -77,7 +77,7 @@ func handleUsers(w http.ResponseWriter, r *http.Request) {
 
 func handleUserByID(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -168,4 +168,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-

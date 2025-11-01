@@ -55,7 +55,7 @@ func enableCORS(w *http.ResponseWriter) {
 
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -86,7 +86,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 func handleEvents(w http.ResponseWriter, r *http.Request) {
 	enableCORS(&w)
-	
+
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -149,4 +149,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-

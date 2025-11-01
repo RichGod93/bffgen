@@ -31,7 +31,7 @@ var initCmd = &cobra.Command{
 		controllerType, _ := cmd.Flags().GetString("controller-type")
 		skipTests, _ := cmd.Flags().GetBool("skip-tests")
 		skipDocs, _ := cmd.Flags().GetBool("skip-docs")
-		
+
 		// Python-specific flags
 		pkgManager, _ := cmd.Flags().GetString("pkg-manager")
 		asyncFlag, _ := cmd.Flags().GetBool("async")

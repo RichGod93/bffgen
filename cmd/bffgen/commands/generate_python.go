@@ -196,12 +196,12 @@ func generateFastAPIRouter(serviceName string, endpoints []interface{}, baseURL 
 	}
 
 	data := map[string]interface{}{
-		"ServiceName":       serviceName,
-		"ServiceNameLower":  strings.ToLower(serviceName),
-		"ServiceNameCamel":  toCamelCase(serviceName),
-		"ServiceNameUpper":  strings.ToUpper(serviceName),
-		"Endpoints":         convertedEndpoints,
-		"Async":             async,
+		"ServiceName":      serviceName,
+		"ServiceNameLower": strings.ToLower(serviceName),
+		"ServiceNameCamel": toCamelCase(serviceName),
+		"ServiceNameUpper": strings.ToUpper(serviceName),
+		"Endpoints":        convertedEndpoints,
+		"Async":            async,
 	}
 
 	var buf bytes.Buffer
@@ -262,12 +262,12 @@ func generateFastAPIService(serviceName string, endpoints []interface{}, baseURL
 	}
 
 	data := map[string]interface{}{
-		"ServiceName":       serviceName,
-		"ServiceNameCamel":  toCamelCase(serviceName),
-		"ServiceNameUpper":  strings.ToUpper(serviceName),
-		"BaseURL":           baseURL,
-		"Endpoints":         convertedEndpoints,
-		"Async":             async,
+		"ServiceName":      serviceName,
+		"ServiceNameCamel": toCamelCase(serviceName),
+		"ServiceNameUpper": strings.ToUpper(serviceName),
+		"BaseURL":          baseURL,
+		"Endpoints":        convertedEndpoints,
+		"Async":            async,
 	}
 
 	var buf bytes.Buffer
@@ -383,4 +383,3 @@ func toSnakeCase(s string) string {
 
 	return strings.ToLower(strings.Trim(string(result), "_"))
 }
-

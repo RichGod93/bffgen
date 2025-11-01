@@ -10,10 +10,10 @@ import (
 
 // Status represents the health check response
 type Status struct {
-	Status       string            `json:"status"`
-	Version      string            `json:"version"`
-	Timestamp    time.Time         `json:"timestamp"`
-	Dependencies map[string]bool   `json:"dependencies,omitempty"`
+	Status       string          `json:"status"`
+	Version      string          `json:"version"`
+	Timestamp    time.Time       `json:"timestamp"`
+	Dependencies map[string]bool `json:"dependencies,omitempty"`
 }
 
 // Checker provides health check functionality
@@ -94,7 +94,7 @@ func checkBackend(url string) bool {
 
 	// Try common health check endpoints
 	healthPaths := []string{"/health", "/healthz", "/health/readiness"}
-	
+
 	for _, path := range healthPaths {
 		req, err := http.NewRequestWithContext(ctx, "GET", url+path, nil)
 		if err != nil {
@@ -114,4 +114,3 @@ func checkBackend(url string) bool {
 
 	return false
 }
-
