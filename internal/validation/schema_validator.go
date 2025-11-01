@@ -184,8 +184,8 @@ func (sv *SchemaValidator) mergeConfigs(defaults, config *types.BFFGenV1Config) 
 
 	// Parse back to get merged result
 	var merged types.BFFGenV1Config
-	json.Unmarshal(defaultsJSON, &merged)
-	json.Unmarshal(configJSON, &merged)
+	_ = json.Unmarshal(defaultsJSON, &merged)
+	_ = json.Unmarshal(configJSON, &merged)
 
 	return &merged
 }

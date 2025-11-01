@@ -92,7 +92,7 @@ func PromptUser(message string) bool {
 	fmt.Printf("%s?%s %s (y/n): ", colorCyan, colorReset, message)
 
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response)
 
 	return response == "y" || response == "Y" || response == "yes" || response == "YES"
 }

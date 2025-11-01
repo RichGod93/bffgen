@@ -349,6 +349,14 @@ func sanitizeFunctionName(name, path, method string) string {
 	return toSnakeCase(strings.Join(parts, "_"))
 }
 
+// capitalizeWord capitalizes the first letter of a word (replaces deprecated strings.Title)
+func capitalizeWord(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+}
+
 // toCamelCase converts string to CamelCase
 func toCamelCase(s string) string {
 	words := strings.FieldsFunc(s, func(r rune) bool {
@@ -356,7 +364,7 @@ func toCamelCase(s string) string {
 	})
 
 	for i, word := range words {
-		words[i] = strings.Title(strings.ToLower(word))
+		words[i] = capitalizeWord(word)
 	}
 
 	return strings.Join(words, "")

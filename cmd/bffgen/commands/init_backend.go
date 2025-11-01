@@ -784,5 +784,5 @@ func parseMiddlewareFlag(flag string) []string {
 func saveControllerTypePreference(projectName, controllerType string) {
 	configPath := filepath.Join(projectName, ".bffgen-config")
 	content := fmt.Sprintf("controller_type=%s\n", controllerType)
-	os.WriteFile(configPath, []byte(content), utils.ProjectFilePerm)
+	_ = os.WriteFile(configPath, []byte(content), utils.ProjectFilePerm)
 }
