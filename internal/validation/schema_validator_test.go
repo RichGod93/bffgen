@@ -61,6 +61,7 @@ project:
 	}
 	if config == nil {
 		t.Error("Config should not be nil")
+		return
 	}
 	if config.Project.Name != "test-bff" {
 		t.Errorf("Expected project name 'test-bff', got '%s'", config.Project.Name)
@@ -202,6 +203,7 @@ func TestSchemaValidator_ValidateJSONFile(t *testing.T) {
 	}
 	if config == nil {
 		t.Error("Config should not be nil")
+		return
 	}
 	if config.Project.Name != "test-bff" {
 		t.Errorf("Expected project name 'test-bff', got '%s'", config.Project.Name)

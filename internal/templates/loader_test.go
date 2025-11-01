@@ -30,6 +30,7 @@ func TestNewTemplateLoader(t *testing.T) {
 			loader := NewTemplateLoader(tt.langType)
 			if loader == nil {
 				t.Error("Expected non-nil loader")
+				return
 			}
 			if loader.langType != tt.langType {
 				t.Errorf("Expected langType %s, got %s", tt.langType, loader.langType)
