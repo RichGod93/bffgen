@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/template"
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/types"
@@ -126,48 +125,6 @@ func generateGo() error {
 	return nil
 }
 
-func addProxyRoutesToMainGo(config *types.BFFConfig) error {
-	// Read existing main.go
-	content, err := os.ReadFile("main.go")
-	if err != nil {
-		return fmt.Errorf("failed to read main.go: %w", err)
-	}
-
-	contentStr := string(content)
-
-	// Check if proxy routes already exist
-	if strings.Contains(contentStr, "// Generated proxy routes") {
-		LogVerboseCommand("Proxy routes already exist in main.go, skipping")
-		return nil
-	}
-
-	// Find the TODO comment and replace it with actual proxy routes
-	todoComment := "// TODO: Add your aggregated routes here\n\t// Run 'bffgen add-route' or 'bffgen add-template' to add routes\n\t// Then run 'bffgen generate' to generate the code"
-
-	// Generate proxy routes
-	proxyRoutes := generateProxyRoutesCode(config)
-
-	// Replace TODO comment with actual routes
-	newContent := strings.Replace(contentStr, todoComment, proxyRoutes, 1)
-
-	// Add createProxyHandler function if it doesn't exist
-	if !strings.Contains(newContent, "func createProxyHandler") {
-		// Find the end of main() function and insert createProxyHandler after it
-		mainEndPattern := "\n\tfmt.Println(\"🚀 BFF server starting on :8080\")\n\tlog.Fatal(http.ListenAndServe(\":8080\", r))\n}\n"
-		proxyHandlerFunc := generateProxyHandlerFunction()
-
-		// Insert createProxyHandler after the main function ends
-		newContent = strings.Replace(newContent, mainEndPattern, mainEndPattern+"\n"+proxyHandlerFunc+"\n", 1)
-	}
-
-	// Write updated main.go
-	if err := os.WriteFile("main.go", []byte(newContent), utils.ProjectFilePerm); err != nil {
-		return fmt.Errorf("failed to write main.go: %w", err)
-	}
-
-	LogVerboseCommand("Added proxy routes to existing main.go")
-	return nil
-}
 
 func generateProxyRoutesCode(config *types.BFFConfig) string {
 	var routes strings.Builder
@@ -222,111 +179,6 @@ func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
 	}
 }`
 }
-
-func createBasicMainGo(config *types.BFFConfig) error {
-	mainTemplate := `package main
-
-import (
-	"fmt"
-	"log"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-)
-
-func main() {
-	r := chi.NewRouter()
-
-	// Middleware
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
-
-	// Health check endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "BFF server is running!")
-	})
-
-	// Generated proxy routes
-{{range $serviceName, $service := .Services}}
-	// {{$serviceName}} service routes
-{{range $endpoint := $service.Endpoints}}
-	r.{{chiMethod $endpoint.Method}}("{{$endpoint.ExposeAs}}", createProxyHandler("{{$service.BaseURL}}", "{{$endpoint.Path}}"))
-{{end}}
-{{end}}
-
-	fmt.Println("🚀 BFF server starting on :{{.Settings.Port}}")
-	log.Fatal(http.ListenAndServe(":{{.Settings.Port}}", r))
-}
-
-// createProxyHandler creates a reverse proxy handler for the given backend URL and path
-func createProxyHandler(backendURL, backendPath string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Parse the backend URL
-		target, err := url.Parse(backendURL)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid backend URL: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Create reverse proxy
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		
-		// Configure proxy behavior
-		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("Proxy error: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		}
-
-		// Modify the request to use the backend path
-		originalPath := r.URL.Path
-		r.URL.Path = backendPath
-		r.URL.Host = target.Host
-		r.URL.Scheme = target.Scheme
-		r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-		r.Host = target.Host
-
-		// Log the proxy request
-		log.Printf("Proxying %s %s -> %s%s", r.Method, originalPath, backendURL, backendPath)
-
-		// Serve the proxy request
-		proxy.ServeHTTP(w, r)
-	}
-}`
-
-	tmpl, err := template.New("main").Funcs(template.FuncMap{
-		"chiMethod": chiMethod,
-	}).Parse(mainTemplate)
-	if err != nil {
-		return err
-	}
-
-	// Set default port if not specified
-	if config.Settings.Port == 0 {
-		config.Settings.Port = 8080
-	}
-
-	file, err := os.Create("main.go")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
-
-	return tmpl.Execute(file, config)
-}
-
 // generateMainGoWithScaffolding generates main.go using regeneration-safe scaffolding
 func generateMainGoWithScaffolding(config *types.BFFConfig, generator *scaffolding.Generator) error {
 	// Generate proxy routes content

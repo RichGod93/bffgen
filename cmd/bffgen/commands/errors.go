@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Color codes for terminal output
@@ -110,4 +111,12 @@ func PrintSection(title string) {
 // PrintTask prints a task status message
 func PrintTask(task string, status string) {
 	fmt.Printf("  %s├─ %s...%s %s\n", colorCyan, task, colorReset, status)
+}
+
+// toTitleCase converts a string to Title Case (replaces deprecated strings.Title)
+func toTitleCase(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }

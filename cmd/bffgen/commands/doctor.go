@@ -34,7 +34,6 @@ func runDoctor() error {
 
 	// Check if we're in a BFF project directory
 	if !isBFFProject() {
-		issues = append(issues, "Not in a BFF project directory (bff.config.yaml or bffgen.config.json not found)")
 		fmt.Println("❌ Not in a BFF project directory")
 		fmt.Println("💡 Run 'bffgen init <project-name>' to create a new project")
 		return nil

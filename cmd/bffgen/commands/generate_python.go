@@ -173,10 +173,7 @@ func generateFastAPIRouter(serviceName string, endpoints []interface{}, baseURL 
 		}
 
 		// Strip router prefix from path to avoid duplication
-		routePath := path
-		if strings.HasPrefix(routePath, routerPrefix) {
-			routePath = strings.TrimPrefix(routePath, routerPrefix)
-		}
+		routePath := strings.TrimPrefix(path, routerPrefix)
 		if routePath == "" {
 			routePath = "/"
 		}

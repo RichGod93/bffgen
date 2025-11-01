@@ -158,7 +158,7 @@ func generateTags(backends []interface{}) []map[string]interface{} {
 		if serviceName != "" {
 			tags = append(tags, map[string]interface{}{
 				"name":        serviceName,
-				"description": fmt.Sprintf("%s service endpoints", strings.Title(serviceName)),
+				"description": fmt.Sprintf("%s service endpoints", toTitleCase(serviceName)),
 			})
 		}
 	}

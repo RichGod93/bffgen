@@ -102,16 +102,3 @@ func normalizeRuntime(runtime string) string {
 	}
 }
 
-// detectProjectTypeWithoutOverride detects project type ignoring override
-func detectProjectTypeWithoutOverride() string {
-	// Temporarily clear override
-	originalOverride := globalConfig.RuntimeOverride
-	globalConfig.RuntimeOverride = ""
-
-	projectType := detectProjectType()
-
-	// Restore override
-	globalConfig.RuntimeOverride = originalOverride
-
-	return projectType
-}

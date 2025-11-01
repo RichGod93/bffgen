@@ -362,12 +362,12 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 		}
 
 		// Generate handler name from method and path
-		handlerName := strings.ToLower(method) + strings.ReplaceAll(strings.Title(strings.ReplaceAll(path, "/", " ")), " ", "")
+		handlerName := strings.ToLower(method) + strings.ReplaceAll(toTitleCase(strings.ReplaceAll(path, "/", " ")), " ", "")
 		if len(handlerName) > 50 {
 			// Simplify if too long
 			pathParts := strings.Split(strings.Trim(path, "/"), "/")
 			if len(pathParts) > 0 {
-				handlerName = strings.ToLower(method) + strings.Title(pathParts[len(pathParts)-1])
+				handlerName = strings.ToLower(method) + toTitleCase(pathParts[len(pathParts)-1])
 			}
 		}
 
@@ -377,7 +377,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 			"BackendPath":       backendPath,
 			"RequiresAuth":      requiresAuth,
 			"HandlerName":       handlerName,
-			"HandlerNamePascal": strings.Title(handlerName),
+			"HandlerNamePascal": toTitleCase(handlerName),
 		})
 	}
 
@@ -464,11 +464,11 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 		}
 
 		// Generate handler name
-		handlerName := strings.ToLower(method) + strings.ReplaceAll(strings.Title(strings.ReplaceAll(path, "/", " ")), " ", "")
+		handlerName := strings.ToLower(method) + strings.ReplaceAll(toTitleCase(strings.ReplaceAll(path, "/", " ")), " ", "")
 		if len(handlerName) > 50 {
 			pathParts := strings.Split(strings.Trim(path, "/"), "/")
 			if len(pathParts) > 0 {
-				handlerName = strings.ToLower(method) + strings.Title(pathParts[len(pathParts)-1])
+				handlerName = strings.ToLower(method) + toTitleCase(pathParts[len(pathParts)-1])
 			}
 		}
 
