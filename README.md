@@ -4,8 +4,10 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
+[![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg)](https://python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/badge/Latest-v1.2.0-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v1.2.0)
+[![Latest Release](https://img.shields.io/badge/Latest-v2.2.1-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v2.2.1)
+[![Python Support](https://img.shields.io/badge/Python-FastAPI-blue.svg)](https://github.com/RichGod93/bffgen)
 
 ---
 
@@ -79,20 +81,20 @@ uvicorn main:app --reload
 
 ## 🛠️ Commands
 
-| Command           | Description                                                     | Go  | Node.js |
-| ----------------- | --------------------------------------------------------------- | --- | ------- |
-| `init`            | Scaffold new BFF project (Go/Express/Fastify)                   | ✅  | ✅      |
-| `add-route`       | Add backend endpoint interactively                              | ✅  | ✅      |
-| `add-template`    | Add auth/ecommerce/content templates                            | ✅  | ✅      |
-| `generate`        | Generate routes, controllers, and services from config          | ✅  | ✅      |
-| `generate-docs`   | Generate OpenAPI/Swagger documentation                          | -   | ✅      |
-| `postman`         | Create Postman collection                                       | ✅  | ✅      |
-| `dev`             | Run development server (Go only, use `npm run dev` for Node.js) | ✅  | -       |
-| `config`          | Manage global configuration and validation                      | ✅  | ✅      |
-| `config validate` | Validate project configuration (NEW v2.0)                       | ✅  | ✅      |
-| `convert`         | Convert config between YAML and JSON (NEW v2.0)                 | ✅  | ✅      |
-| `add-infra`       | Add infrastructure to existing project (NEW v2.0)               | ✅  | ✅      |
-| `doctor`          | Check project health and configuration                          | ✅  | ✅      |
+| Command           | Description                                                     | Go  | Node.js | Python |
+| ----------------- | --------------------------------------------------------------- | --- | ------- | ------ |
+| `init`            | Scaffold new BFF project (Go/Express/Fastify/FastAPI)           | ✅  | ✅      | ✅     |
+| `add-route`       | Add backend endpoint interactively                              | ✅  | ✅      | ✅     |
+| `add-template`    | Add auth/ecommerce/content templates                            | ✅  | ✅      | ✅     |
+| `generate`        | Generate routes, controllers, and services from config          | ✅  | ✅      | ✅     |
+| `generate-docs`   | Generate OpenAPI/Swagger documentation                          | -   | ✅      | -      |
+| `postman`         | Create Postman collection                                       | ✅  | ✅      | ✅     |
+| `dev`             | Run development server (Go/Python, use `npm run dev` for Node.js) | ✅  | -       | ✅     |
+| `config`          | Manage global configuration and validation                      | ✅  | ✅      | ✅     |
+| `config validate` | Validate project configuration (NEW v2.0)                       | ✅  | ✅      | ✅     |
+| `convert`         | Convert config between YAML and JSON (NEW v2.0)                 | ✅  | ✅      | ✅     |
+| `add-infra`       | Add infrastructure to existing project (NEW v2.0)               | ✅  | ✅      | ✅     |
+| `doctor`          | Check project health and configuration                          | ✅  | ✅      | ✅     |
 
 ---
 
@@ -103,8 +105,10 @@ uvicorn main:app --reload
 - **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
 - **Node.js Express** - Popular, flexible web framework
 - **Node.js Fastify** - Fast, schema-based framework
+- **Python FastAPI** - Modern, async Python web framework with automatic API docs (NEW v2.2)
 - **Template-Based Generation** - Embedded templates for consistency
 - **Auto-Detection** - Commands detect project type automatically
+- **Language-Specific Optimization** - Tailored code generation for each runtime
 
 ### 🏗️ **Enhanced Backend Architecture Support**
 
@@ -166,7 +170,7 @@ uvicorn main:app --reload
 
 ## 📦 Installation
 
-### npm (Recommended for Node.js Developers)
+### npm (Recommended for Node.js & Python Developers)
 
 ```bash
 # Install globally
@@ -174,14 +178,17 @@ npm install -g bffgen
 
 # Or use npx (no installation needed)
 npx bffgen init my-project --lang nodejs-express
+
+# Create FastAPI BFF
+npx bffgen init my-python-bff --lang python-fastapi
 ```
 
 ### Go Install
 
-**Latest (v1.2.0):**
+**Latest (v2.2.1 - Python FastAPI Support):**
 
 ```bash
-go install github.com/RichGod93/bffgen/cmd/bffgen@v1.2.0
+go install github.com/RichGod93/bffgen/cmd/bffgen@v2.2.1
 ```
 
 **Latest Stable:**
