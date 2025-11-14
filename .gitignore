@@ -57,6 +57,9 @@ coverage/
 # nyc test coverage
 .nyc_output
 
+# claude.ai
+.claude/
+
 # Dependency directories
 node_modules/
 
