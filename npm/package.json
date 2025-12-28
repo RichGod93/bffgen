@@ -1,6 +1,6 @@
 {
   "name": "bffgen",
-  "version": "2.2.1",
+  "version": "3.0.0",
   "description": "Backend-for-Frontend (BFF) generator - Scaffold secure, production-ready BFF services in Go, Node.js, or Python",
   "main": "lib/index.js",
   "bin": {

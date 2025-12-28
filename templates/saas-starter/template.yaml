@@ -1,0 +1,37 @@
+name: saas-starter
+version: 1.0.0
+description: Complete SaaS starter with authentication, billing, and admin dashboard
+author: bffgen
+category: fullstack
+language: nodejs-express
+features:
+  - JWT Authentication
+  - OAuth (Google, GitHub)
+  - Stripe Billing Integration
+  - Admin Dashboard
+  - User Management
+  - Rate Limiting
+  - Comprehensive Logging
+
+variables:
+  - name: PROJECT_NAME
+    description: Name of your project
+    default: my-saas
+    required: false
+
+  - name: DATABASE_URL
+    description: PostgreSQL connection string
+    default: postgresql://localhost:5432/{{PROJECT_NAME}}
+    required: false
+
+  - name: PORT
+    description: Server port
+    default: "8080"
+    required: false
+
+files:
+  - src/**
+
+post_install:
+  - npm install
+  - echo "✓ SaaS starter template scaffolded"

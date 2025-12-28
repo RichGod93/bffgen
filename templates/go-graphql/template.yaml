@@ -1,0 +1,18 @@
+name: go-graphql
+version: 1.0.0
+description: GraphQL BFF using Gqlgen and Go
+author: bffgen
+category: web
+language: go
+features:
+  - Gqlgen
+  - Type-safe Resolvers
+  - REST Aggregation
+variables:
+  - name: PORT
+    description: Server port
+    default: "8080"
+post_install:
+  - go mod tidy
+  - go run github.com/99designs/gqlgen generate
+  - echo "🚀 GraphQL Server ready at http://localhost:8080/query"
