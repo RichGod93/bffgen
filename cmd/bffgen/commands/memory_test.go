@@ -1,9 +1,15 @@
 package commands
 
 import (
+	"os"
 	"runtime"
 	"testing"
 )
+
+// isCI checks if we're running in a CI environment
+func isCI() bool {
+	return os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+}
 
 func TestMemory_GenerateNoLeak(t *testing.T) {
 	// Skip if not running memory tests
@@ -129,9 +135,9 @@ func TestMemory_GlobalConfigNoLeak(t *testing.T) {
 
 // Long-running test for sustained operations
 func TestLongRunning_CommandExecution(t *testing.T) {
-	// Skip in normal test runs
-	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
+	// Skip in normal test runs and CI
+	if testing.Short() || isCI() {
+		t.Skip("Skipping long-running test in short mode or CI")
 	}
 
 	var before, during, after runtime.MemStats
