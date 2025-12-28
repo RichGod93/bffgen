@@ -1,0 +1,17 @@
+name: nodejs-apollo
+version: 1.0.0
+description: GraphQL BFF using Apollo Server and RESTDataSource
+author: bffgen
+category: web
+language: nodejs-express
+features:
+  - Apollo Server v4
+  - RESTDataSource Aggregation
+  - Dynamic Schema Generation
+variables:
+  - name: PORT
+    description: Server port
+    default: "4000"
+post_install:
+  - npm install
+  - echo "🚀 Apollo Server ready at http://localhost:4000/"
