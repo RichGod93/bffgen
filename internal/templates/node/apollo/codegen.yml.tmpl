@@ -1,0 +1,37 @@
+# GraphQL Code Generator configuration
+# Automatically generates TypeScript types from your GraphQL schema
+
+schema: "./schema.graphql"
+documents: null
+generates:
+  ./generated/types.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      useIndexSignature: true
+      contextType: "./context#GraphQLContext"
+      scalars:
+        DateTime: Date
+        JSON: any
+      mappers:
+        User: "../models#UserModel"
+      defaultMapper: Partial<{T}>
+      enumsAsTypes: true
+      avoidOptionals:
+        field: false
+        inputValue: false
+        object: false
+        defaultValue: false
+      maybeValue: T | null
+      inputMaybeValue: T | null
+
+  ./generated/schema.json:
+    plugins:
+      - "introspection"
+    config:
+      minify: true
+
+hooks:
+  afterAllFileWrite:
+    - prettier --write

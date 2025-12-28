@@ -64,6 +64,9 @@ func Execute(version, buildTime, commit string) error {
 	rootCmd.AddCommand(generateDocsCmd)
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(watchCmd)
+	rootCmd.AddCommand(testCmd)
+	rootCmd.AddCommand(templateCmd)
 
 	// Legacy commands (for backward compatibility)
 	rootCmd.AddCommand(addRouteCmd)

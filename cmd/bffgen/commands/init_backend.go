@@ -14,15 +14,6 @@ import (
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
-// BackendService represents a backend service configuration
-type BackendService struct {
-	Name      string
-	BaseURL   string
-	Port      int
-	Path      string
-	Endpoints []string
-}
-
 // ProjectOptions holds options for project initialization
 type ProjectOptions struct {
 	MiddlewareFlag   string
@@ -42,7 +33,7 @@ type ProjectOptions struct {
 
 // initializeProject initializes a new BFF project
 // initializeProjectWithOptions initializes a new BFF project with custom options
-func initializeProjectWithOptions(projectName string, langType scaffolding.LanguageType, framework string, opts ProjectOptions) (scaffolding.LanguageType, string, []BackendService, error) {
+func initializeProjectWithOptions(projectName string, langType scaffolding.LanguageType, framework string, opts ProjectOptions) (scaffolding.LanguageType, string, []types.BackendService, error) {
 	if err := os.MkdirAll(projectName, utils.ProjectDirPerm); err != nil {
 		return langType, framework, nil, fmt.Errorf("failed to create project directory: %w", err)
 	}
@@ -252,7 +243,7 @@ func copyTemplateFiles(projectName string) error {
 	return nil
 }
 
-func createBFFConfig(projectName string, backendServices []BackendService) error {
+func createBFFConfig(projectName string, backendServices []types.BackendService) error {
 	configContent := generateEnhancedBFFConfig(backendServices, projectName)
 	return os.WriteFile(filepath.Join(projectName, "bff.config.yaml"), []byte(configContent), utils.ProjectFilePerm)
 }
@@ -354,7 +345,7 @@ func copyAuthPackage(projectName string) error {
 	return nil
 }
 
-func configureBackendServices(arch string, reader *bufio.Reader) ([]BackendService, error) {
+func configureBackendServices(arch string, reader *bufio.Reader) ([]types.BackendService, error) {
 	switch arch {
 	case "1":
 		return configureMicroservices(reader), nil
@@ -367,8 +358,8 @@ func configureBackendServices(arch string, reader *bufio.Reader) ([]BackendServi
 	}
 }
 
-func configureMicroservices(reader *bufio.Reader) []BackendService {
-	var services []BackendService
+func configureMicroservices(reader *bufio.Reader) []types.BackendService {
+	var services []types.BackendService
 
 	fmt.Println("\n🔧 Configuring Microservices Backend")
 	fmt.Println("Enter your backend services (press Enter with empty name to finish):")
@@ -391,7 +382,7 @@ func configureMicroservices(reader *bufio.Reader) []BackendService {
 
 		port := extractPortFromURL(baseURL, 4000+len(services))
 
-		service := BackendService{
+		service := types.BackendService{
 			Name:      serviceName,
 			BaseURL:   baseURL,
 			Port:      port,
@@ -406,7 +397,7 @@ func configureMicroservices(reader *bufio.Reader) []BackendService {
 	return services
 }
 
-func configureMonolithic(reader *bufio.Reader) []BackendService {
+func configureMonolithic(reader *bufio.Reader) []types.BackendService {
 	fmt.Println("\n🔧 Configuring Monolithic Backend")
 
 	fmt.Printf("✔ Backend base URL (e.g., 'http://localhost:3000/api'): ")
@@ -420,10 +411,10 @@ func configureMonolithic(reader *bufio.Reader) []BackendService {
 	port := extractPortFromURL(baseURL, 3000)
 
 	serviceNames := []string{"users", "products", "orders", "cart", "auth"}
-	var services []BackendService
+	var services []types.BackendService
 
 	for _, serviceName := range serviceNames {
-		service := BackendService{
+		service := types.BackendService{
 			Name:      serviceName,
 			BaseURL:   baseURL,
 			Port:      port,
@@ -437,8 +428,8 @@ func configureMonolithic(reader *bufio.Reader) []BackendService {
 	return services
 }
 
-func configureHybrid(reader *bufio.Reader) []BackendService {
-	var services []BackendService
+func configureHybrid(reader *bufio.Reader) []types.BackendService {
+	var services []types.BackendService
 
 	fmt.Println("\n🔧 Configuring Hybrid Backend")
 	fmt.Println("Enter your backend services (press Enter with empty name to finish):")
@@ -469,7 +460,7 @@ func configureHybrid(reader *bufio.Reader) []BackendService {
 			}
 		}
 
-		service := BackendService{
+		service := types.BackendService{
 			Name:      serviceName,
 			BaseURL:   baseURL,
 			Port:      port,
@@ -514,7 +505,7 @@ func getDefaultEndpoints(serviceName string) []string {
 	}
 }
 
-func generateEnhancedBFFConfig(backendServices []BackendService, projectName string) string {
+func generateEnhancedBFFConfig(backendServices []types.BackendService, projectName string) string {
 	var configContent strings.Builder
 
 	configContent.WriteString("# BFF Configuration\n")
@@ -547,16 +538,16 @@ func generateEnhancedBFFConfig(backendServices []BackendService, projectName str
 	return configContent.String()
 }
 
-func showBackendConfigSummary(backendServices []BackendService) {
+func showBackendConfigSummary(backendServices []types.BackendService) {
 	fmt.Println("\n📋 Backend Configuration Summary:")
 
-	portGroups := make(map[int][]BackendService)
+	portGroups := make(map[int][]types.BackendService)
 	for _, service := range backendServices {
 		portGroups[service.Port] = append(portGroups[service.Port], service)
 	}
 
 	if len(portGroups) == 1 {
-		var services []BackendService
+		var services []types.BackendService
 		for _, s := range portGroups {
 			services = s
 		}
@@ -575,7 +566,7 @@ func showBackendConfigSummary(backendServices []BackendService) {
 	}
 }
 
-func showSetupInstructions(backendServices []BackendService, projectName string) {
+func showSetupInstructions(backendServices []types.BackendService, projectName string) {
 	fmt.Println("\n🔧 Setup Instructions:")
 	fmt.Println("   1. Start your backend services")
 	fmt.Println("   2. Run the BFF server:")
@@ -584,7 +575,7 @@ func showSetupInstructions(backendServices []BackendService, projectName string)
 }
 
 // showPostInitGuidance shows personalized post-initialization guidance
-func showPostInitGuidance(projectName, runtime, framework string, backendServices []BackendService) {
+func showPostInitGuidance(projectName, runtime, framework string, backendServices []types.BackendService) {
 	// Check required tools
 	required, optional := utils.CheckRequiredTools(runtime)
 

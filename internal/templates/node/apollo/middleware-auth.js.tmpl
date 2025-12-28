@@ -1,0 +1,80 @@
+const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+/**
+ * Authentication middleware for Apollo Server context
+ * Extracts and verifies JWT token from Authorization header
+ */
+async function authMiddleware(req) {
+  const authHeader = req.headers.authorization || '';
+
+  if (!authHeader) {
+    return null; // No authentication provided
+  }
+
+  try {
+    // Extract token from "Bearer <token>" format
+    const token = authHeader.replace('Bearer ', '');
+
+    if (!token) {
+      logger.warn('Authorization header present but token is empty');
+      return null;
+    }
+
+    // Verify and decode JWT token
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Return user context
+    return {
+      id: decoded.sub || decoded.userId,
+      email: decoded.email,
+      roles: decoded.roles || [],
+      token: token,
+      ...decoded,
+    };
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      logger.warn('JWT token has expired');
+    } else if (error.name === 'JsonWebTokenError') {
+      logger.warn('Invalid JWT token:', error.message);
+    } else {
+      logger.error('JWT verification error:', error);
+    }
+
+    return null; // Invalid or expired token
+  }
+}
+
+/**
+ * Helper function to require authentication in resolvers
+ */
+function requireAuth(context) {
+  if (!context.user) {
+    throw new Error('Authentication required');
+  }
+  return context.user;
+}
+
+/**
+ * Helper function to require specific role(s)
+ */
+function requireRole(context, allowedRoles) {
+  const user = requireAuth(context);
+
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  const hasRole = user.roles?.some(role => roles.includes(role));
+
+  if (!hasRole) {
+    throw new Error(`Insufficient permissions. Required roles: ${roles.join(', ')}`);
+  }
+
+  return user;
+}
+
+module.exports = {
+  authMiddleware,
+  requireAuth,
+  requireRole,
+};

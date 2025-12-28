@@ -1,0 +1,306 @@
+name: mobile-api
+version: 1.0.0
+description: Mobile-optimized GraphQL BFF with aggregated queries, offline support, and push notifications
+author: bffgen
+category: mobile
+
+# Supported languages for this template
+language: multi # Supports: nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql
+
+features:
+  - Mobile-optimized GraphQL API with data aggregation
+  - Paginated and batched queries for reduced mobile bandwidth
+  - User profile aggregation (profile + preferences + notifications)
+  - App configuration and feature flags
+  - Push notification management
+  - Offline-first data sync endpoints
+  - Authentication with refresh token support
+  - Response caching with mobile-optimized TTL
+  - GraphQL subscriptions for real-time updates
+  - Image optimization and CDN integration
+  - Analytics and crash reporting endpoints
+  - JWT authentication middleware
+  - Circuit breaker and retry patterns
+  - Health check and diagnostics endpoints
+
+# Template variables
+variables:
+  - name: PROJECT_NAME
+    description: Name of the mobile GraphQL BFF project
+    default: mobile-bff
+    required: true
+
+  - name: PORT
+    description: Server port
+    default: "4000"
+    required: false
+
+  - name: GRAPHQL_ENDPOINT
+    description: GraphQL endpoint path
+    default: /graphql
+    required: false
+
+  - name: ENABLE_SUBSCRIPTIONS
+    description: Enable GraphQL subscriptions for real-time features
+    default: "true"
+    required: false
+
+  - name: MAX_QUERY_DEPTH
+    description: Maximum query depth limit
+    default: "7"
+    required: false
+
+  - name: MOBILE_CACHE_TTL
+    description: Mobile cache TTL in seconds (optimized for mobile)
+    default: "300"
+    required: false
+
+  - name: IMAGE_CDN_URL
+    description: CDN URL for optimized images
+    default: "https://cdn.example.com"
+    required: false
+
+# Backend microservices to integrate
+backends:
+  - name: users
+    baseUrl: http://localhost:8001
+    description: User management and authentication service
+    endpoints:
+      - path: /users/:id
+        method: GET
+        graphqlType: User
+      - path: /users/:id/profile
+        method: GET
+        graphqlType: UserProfile
+      - path: /users/:id/preferences
+        method: GET
+        graphqlType: UserPreferences
+
+  - name: notifications
+    baseUrl: http://localhost:8002
+    description: Push notification service
+    endpoints:
+      - path: /notifications
+        method: GET
+        graphqlType: Notification
+      - path: /notifications/:id/read
+        method: POST
+        graphqlType: Notification
+      - path: /notifications/register-device
+        method: POST
+        graphqlType: DeviceRegistration
+
+  - name: content
+    baseUrl: http://localhost:8003
+    description: Content and media service
+    endpoints:
+      - path: /content/feed
+        method: GET
+        graphqlType: ContentFeed
+      - path: /content/:id
+        method: GET
+        graphqlType: Content
+      - path: /content/search
+        method: GET
+        graphqlType: SearchResult
+
+  - name: config
+    baseUrl: http://localhost:8004
+    description: App configuration and feature flags
+    endpoints:
+      - path: /config/app
+        method: GET
+        graphqlType: AppConfig
+      - path: /config/features
+        method: GET
+        graphqlType: FeatureFlags
+
+  - name: sync
+    baseUrl: http://localhost:8005
+    description: Offline sync service
+    endpoints:
+      - path: /sync/pull
+        method: POST
+        graphqlType: SyncData
+      - path: /sync/push
+        method: POST
+        graphqlType: SyncResult
+
+# GraphQL-specific configuration
+graphql:
+  schema:
+    path: schema.graphql
+    patterns:
+      - "**/*.graphql"
+
+  dataSources:
+    - name: userService
+      type: rest
+      baseUrl: ${USER_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 300
+
+    - name: notificationService
+      type: rest
+      baseUrl: ${NOTIFICATION_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 60
+
+    - name: contentService
+      type: rest
+      baseUrl: ${CONTENT_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 600
+
+    - name: configService
+      type: rest
+      baseUrl: ${CONFIG_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 3600
+
+    - name: syncService
+      type: rest
+      baseUrl: ${SYNC_SERVICE_URL}
+      cache:
+        enabled: false
+
+  typeGeneration:
+    enabled: true
+    language: typescript
+    outputPath: ./generated/types.ts
+    watchMode: false
+
+  subscriptions:
+    enabled: true
+    transport: websocket
+    path: /graphql/subscriptions
+
+# Aggregated query examples
+aggregations:
+  - name: mobileHome
+    description: Aggregated home screen data for mobile
+    sources:
+      - userService
+      - contentService
+      - notificationService
+    queryType: Query
+    returnType: MobileHomeData
+
+  - name: userDashboard
+    description: Complete user dashboard with all user data
+    sources:
+      - userService
+      - notificationService
+      - configService
+    queryType: Query
+    returnType: UserDashboard
+
+# Post-generation instructions
+postInstall:
+  - message: "Mobile GraphQL BFF project created successfully!"
+  - message: "Next steps:"
+  - message: "  1. cd {{.PROJECT_NAME}}"
+  - message: "  2. Install dependencies (npm install / pip install -r requirements.txt / go mod download)"
+  - message: "  3. Configure backend services in .env"
+  - message: "  4. Generate TypeScript types (npm run codegen for Node.js)"
+  - message: "  5. Start development server"
+  - message: ""
+  - message: "GraphQL endpoint: http://localhost:{{.PORT}}/graphql"
+  - message: "Subscriptions endpoint: ws://localhost:{{.PORT}}/graphql/subscriptions"
+  - message: ""
+  - message: "Documentation: https://github.com/RichGod93/bffgen/docs/mobile-graphql.md"
+
+# Example queries optimized for mobile
+examples:
+  - name: Mobile Home Screen (Aggregated)
+    query: |
+      query MobileHome {
+        mobileHome {
+          user {
+            id
+            name
+            avatar
+          }
+          feed(limit: 10) {
+            id
+            title
+            thumbnail
+            timestamp
+          }
+          notifications(unreadOnly: true, limit: 5) {
+            id
+            title
+            read
+          }
+          config {
+            theme
+            features
+          }
+        }
+      }
+
+  - name: User Dashboard (Aggregated)
+    query: |
+      query UserDashboard($userId: ID!) {
+        userDashboard(userId: $userId) {
+          profile {
+            id
+            name
+            email
+            avatar
+          }
+          preferences {
+            language
+            notifications
+            theme
+          }
+          unreadCount
+          featuresEnabled
+        }
+      }
+    variables:
+      userId: "123"
+
+  - name: Content Feed with Pagination
+    query: |
+      query ContentFeed($cursor: String, $limit: Int = 10) {
+        feed(cursor: $cursor, limit: $limit) {
+          edges {
+            node {
+              id
+              title
+              summary
+              thumbnail
+            }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+
+  - name: Register Push Notification Device
+    mutation: |
+      mutation RegisterDevice($token: String!, $platform: Platform!) {
+        registerDevice(token: $token, platform: $platform) {
+          success
+          deviceId
+        }
+      }
+
+  - name: Real-time Notifications (Subscription)
+    subscription: |
+      subscription OnNotification($userId: ID!) {
+        notificationReceived(userId: $userId) {
+          id
+          title
+          body
+          timestamp
+        }
+      }

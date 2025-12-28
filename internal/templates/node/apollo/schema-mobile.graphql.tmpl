@@ -1,0 +1,417 @@
+# Mobile-optimized GraphQL schema
+
+type Query {
+  # Health check
+  health: HealthStatus!
+
+  # Aggregated mobile queries
+  mobileHome: MobileHomeData!
+  userDashboard(userId: ID!): UserDashboard!
+
+  # User queries
+  me: User
+  user(id: ID!): User
+
+  # Content feed with pagination
+  feed(cursor: String, limit: Int = 10): ContentConnection!
+  content(id: ID!): Content
+  searchContent(query: String!, limit: Int = 20): SearchResult!
+
+  # Notifications
+  notifications(unreadOnly: Boolean, limit: Int): [Notification!]!
+  unreadNotificationsCount: Int!
+
+  # App configuration
+  appConfig: AppConfig!
+  featureFlags: FeatureFlags!
+
+  # Sync status
+  syncStatus: SyncStatus!
+}
+
+type Mutation {
+  # Authentication
+  login(email: String!, password: String!): AuthPayload!
+  register(input: RegisterInput!): AuthPayload!
+  refreshToken(refreshToken: String!): AuthPayload!
+  logout: Boolean!
+
+  # User profile
+  updateProfile(input: UpdateProfileInput!): User!
+  updatePreferences(input: PreferencesInput!): UserPreferences!
+
+  # Notifications
+  markNotificationAsRead(id: ID!): Notification!
+  markAllNotificationsAsRead: Int!
+  registerDevice(token: String!, platform: Platform!): DeviceRegistration!
+  unregisterDevice(deviceId: ID!): Boolean!
+
+  # Content interactions
+  likeContent(id: ID!): Content!
+  unlikeContent(id: ID!): Content!
+  shareContent(id: ID!, platform: SharePlatform!): ShareResult!
+
+  # Offline sync
+  syncData(input: SyncInput!): SyncResult!
+
+  # Analytics
+  trackEvent(event: AnalyticsEvent!): Boolean!
+}
+
+type Subscription {
+  # Real-time notifications
+  notificationReceived(userId: ID!): Notification!
+
+  # Real-time content updates
+  contentUpdated(userId: ID!): Content!
+
+  # Sync updates
+  syncStatusChanged(userId: ID!): SyncStatus!
+}
+
+# Aggregated types for mobile
+type MobileHomeData {
+  user: User!
+  feed(limit: Int = 10): [Content!]!
+  notifications(limit: Int = 5): [Notification!]!
+  unreadCount: Int!
+  config: AppConfig!
+  featuresEnabled: [String!]!
+}
+
+type UserDashboard {
+  profile: User!
+  preferences: UserPreferences!
+  stats: UserStats!
+  recentActivity: [Activity!]!
+  unreadCount: Int!
+  featuresEnabled: [String!]!
+}
+
+# User types
+type User {
+  id: ID!
+  email: String!
+  name: String!
+  avatar: String
+  bio: String
+  createdAt: String!
+  preferences: UserPreferences
+  stats: UserStats
+}
+
+type UserPreferences {
+  language: String!
+  theme: Theme!
+  notificationsEnabled: Boolean!
+  pushNotifications: PushPreferences!
+  privacy: PrivacySettings!
+}
+
+type PushPreferences {
+  enabled: Boolean!
+  likes: Boolean!
+  comments: Boolean!
+  follows: Boolean!
+  mentions: Boolean!
+}
+
+type PrivacySettings {
+  profileVisibility: Visibility!
+  showEmail: Boolean!
+  showActivity: Boolean!
+}
+
+type UserStats {
+  totalContent: Int!
+  totalLikes: Int!
+  totalFollowers: Int!
+  totalFollowing: Int!
+}
+
+# Content types
+type Content {
+  id: ID!
+  title: String!
+  summary: String
+  body: String
+  thumbnail: String
+  images: [Image!]
+  author: User!
+  likesCount: Int!
+  isLiked: Boolean!
+  commentsCount: Int!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Image {
+  id: ID!
+  url: String!
+  thumbnail: String!
+  width: Int
+  height: Int
+  size: Int
+}
+
+type ContentConnection {
+  edges: [ContentEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ContentEdge {
+  node: Content!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type SearchResult {
+  total: Int!
+  results: [Content!]!
+  facets: SearchFacets
+}
+
+type SearchFacets {
+  authors: [FacetItem!]!
+  categories: [FacetItem!]!
+}
+
+type FacetItem {
+  value: String!
+  count: Int!
+}
+
+# Notification types
+type Notification {
+  id: ID!
+  title: String!
+  body: String!
+  type: NotificationType!
+  read: Boolean!
+  actionUrl: String
+  thumbnail: String
+  createdAt: String!
+  data: NotificationData
+}
+
+type NotificationData {
+  contentId: ID
+  userId: ID
+  actionType: String
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MENTION
+  SYSTEM
+  ANNOUNCEMENT
+}
+
+# App configuration types
+type AppConfig {
+  version: String!
+  minVersion: String!
+  updateRequired: Boolean!
+  updateUrl: String
+  theme: ThemeConfig!
+  features: FeatureFlags!
+  apiUrl: String!
+  cdnUrl: String!
+  supportUrl: String!
+}
+
+type ThemeConfig {
+  primaryColor: String!
+  secondaryColor: String!
+  accentColor: String!
+}
+
+type FeatureFlags {
+  darkMode: Boolean!
+  offlineMode: Boolean!
+  pushNotifications: Boolean!
+  socialSharing: Boolean!
+  analytics: Boolean!
+  advancedSearch: Boolean!
+}
+
+# Authentication types
+type AuthPayload {
+  token: String!
+  refreshToken: String!
+  expiresIn: Int!
+  user: User!
+}
+
+type DeviceRegistration {
+  success: Boolean!
+  deviceId: ID!
+  message: String
+}
+
+# Sync types
+type SyncStatus {
+  lastSync: String
+  pendingChanges: Int!
+  syncInProgress: Boolean!
+  errors: [SyncError!]!
+}
+
+type SyncResult {
+  success: Boolean!
+  syncedItems: Int!
+  failedItems: Int!
+  conflicts: [SyncConflict!]!
+  timestamp: String!
+}
+
+type SyncError {
+  id: ID!
+  message: String!
+  retryable: Boolean!
+}
+
+type SyncConflict {
+  id: ID!
+  type: String!
+  localVersion: String!
+  remoteVersion: String!
+}
+
+# Activity types
+type Activity {
+  id: ID!
+  type: ActivityType!
+  description: String!
+  timestamp: String!
+  metadata: ActivityMetadata
+}
+
+enum ActivityType {
+  CONTENT_CREATED
+  CONTENT_LIKED
+  CONTENT_SHARED
+  USER_FOLLOWED
+  PROFILE_UPDATED
+}
+
+type ActivityMetadata {
+  contentId: ID
+  userId: ID
+  count: Int
+}
+
+# Share types
+type ShareResult {
+  success: Boolean!
+  shareUrl: String
+  message: String
+}
+
+# Health check type
+type HealthStatus {
+  status: String!
+  timestamp: String!
+  version: String!
+  services: [ServiceHealth!]!
+}
+
+type ServiceHealth {
+  name: String!
+  status: String!
+  responseTime: Int
+}
+
+# Input types
+input RegisterInput {
+  email: String!
+  password: String!
+  name: String!
+}
+
+input UpdateProfileInput {
+  name: String
+  bio: String
+  avatar: String
+}
+
+input PreferencesInput {
+  language: String
+  theme: Theme
+  notificationsEnabled: Boolean
+  pushNotifications: PushPreferencesInput
+  privacy: PrivacySettingsInput
+}
+
+input PushPreferencesInput {
+  enabled: Boolean
+  likes: Boolean
+  comments: Boolean
+  follows: Boolean
+  mentions: Boolean
+}
+
+input PrivacySettingsInput {
+  profileVisibility: Visibility
+  showEmail: Boolean
+  showActivity: Boolean
+}
+
+input SyncInput {
+  lastSyncTimestamp: String
+  changes: [ChangeInput!]!
+}
+
+input ChangeInput {
+  id: ID!
+  type: String!
+  action: ChangeAction!
+  data: String!
+}
+
+input AnalyticsEvent {
+  name: String!
+  properties: String
+  timestamp: String
+}
+
+# Enums
+enum Theme {
+  LIGHT
+  DARK
+  AUTO
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+  FRIENDS
+}
+
+enum Platform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum SharePlatform {
+  FACEBOOK
+  TWITTER
+  WHATSAPP
+  EMAIL
+  COPY_LINK
+}
+
+enum ChangeAction {
+  CREATE
+  UPDATE
+  DELETE
+}

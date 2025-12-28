@@ -1,0 +1,313 @@
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
+const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
+const { WebSocketServer } = require('ws');
+const { useServer } = require('graphql-ws/lib/use/ws');
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { json } = require('body-parser');
+const helmet = require('helmet');
+const { PubSub } = require('graphql-subscriptions');
+const { InMemoryLRUCache } = require('@apollo/utils.keyvaluecache');
+
+const typeDefs = require('./schema-mobile');
+const resolvers = require('./resolvers-mobile');
+const { createDataSources } = require('./datasources-mobile');
+const { authMiddleware } = require('./middleware/auth');
+const logger = require('./utils/logger');
+
+const PORT = process.env.PORT || 4000;
+const GRAPHQL_PATH = '/graphql';
+const SUBSCRIPTIONS_PATH = '/graphql/subscriptions';
+
+// Create PubSub instance for subscriptions
+const pubsub = new PubSub();
+
+async function startMobileGraphQLServer() {
+  const app = express();
+  const httpServer = http.createServer(app);
+
+  // Create GraphQL schema
+  const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+  // Create WebSocket server for subscriptions
+  const wsServer = new WebSocketServer({
+    server: httpServer,
+    path: SUBSCRIPTIONS_PATH,
+  });
+
+  // Setup GraphQL-WS for subscriptions
+  const serverCleanup = useServer(
+    {
+      schema,
+      context: async (ctx) => {
+        // Get auth token from connection params
+        const token = ctx.connectionParams?.authorization;
+        let user = null;
+
+        if (token) {
+          try {
+            user = await authMiddleware({ headers: { authorization: token } });
+          } catch (error) {
+            logger.warn('WebSocket auth failed:', error.message);
+          }
+        }
+
+        return {
+          user,
+          pubsub,
+        };
+      },
+      onConnect: async (ctx) => {
+        logger.info('WebSocket client connected');
+      },
+      onDisconnect: (ctx) => {
+        logger.info('WebSocket client disconnected');
+      },
+    },
+    wsServer
+  );
+
+  // Apollo Server setup with mobile optimizations
+  const server = new ApolloServer({
+    schema,
+    plugins: [
+      // Proper shutdown for HTTP server
+      ApolloServerPluginDrainHttpServer({ httpServer }),
+      // Proper shutdown for WebSocket server
+      {
+        async serverWillStart() {
+          return {
+            async drainServer() {
+              await serverCleanup.dispose();
+            },
+          };
+        },
+      },
+      // Error logging
+      {
+        async requestDidStart() {
+          return {
+            async didEncounterErrors(requestContext) {
+              logger.error('GraphQL Error:', {
+                operationName: requestContext.operationName,
+                errors: requestContext.errors,
+              });
+            },
+          };
+        },
+      },
+      // Performance monitoring
+      {
+        async requestDidStart() {
+          const start = Date.now();
+          return {
+            async willSendResponse(requestContext) {
+              const duration = Date.now() - start;
+              logger.info('GraphQL Request', {
+                operationName: requestContext.operationName,
+                duration: `${duration}ms`,
+              });
+            },
+          };
+        },
+      },
+    ],
+    formatError: (error) => {
+      logger.error('GraphQL Error:', {
+        message: error.message,
+        code: error.extensions?.code,
+        path: error.path,
+      });
+
+      // Don't expose internal errors in production
+      if (process.env.NODE_ENV === 'production' && error.extensions?.code === 'INTERNAL_SERVER_ERROR') {
+        return {
+          message: 'An unexpected error occurred',
+          code: 'INTERNAL_SERVER_ERROR',
+        };
+      }
+
+      return {
+        message: error.message,
+        code: error.extensions?.code || 'INTERNAL_SERVER_ERROR',
+        locations: error.locations,
+        path: error.path,
+      };
+    },
+    introspection: process.env.NODE_ENV !== 'production',
+    // Mobile-optimized cache
+    cache: new InMemoryLRUCache({
+      maxSize: Math.pow(2, 20) * 100, // 100 MB
+      ttl: 300000, // 5 minutes default TTL
+    }),
+  });
+
+  await server.start();
+
+  // Middleware setup
+  app.use(
+    helmet({
+      contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
+  // CORS configuration for mobile
+  const corsOptions = {
+    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
+    credentials: true,
+    // Optimize for mobile preflight requests
+    maxAge: 86400, // 24 hours
+  };
+
+  app.use(cors(corsOptions));
+
+  // GraphQL endpoint with mobile-optimized middleware
+  app.use(
+    GRAPHQL_PATH,
+    json({
+      limit: '10mb', // Allow larger payloads for mobile uploads
+    }),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        // Get user from auth middleware
+        let user = null;
+        try {
+          user = await authMiddleware(req);
+        } catch (error) {
+          // Auth failures are handled by resolvers
+          logger.debug('Auth middleware:', error.message);
+        }
+
+        // Generate correlation ID for request tracing
+        const correlationId = req.headers['x-correlation-id'] || generateCorrelationId();
+
+        // Create cache for this request
+        const cache = new InMemoryLRUCache({
+          maxSize: Math.pow(2, 20) * 10, // 10 MB per request
+        });
+
+        // Create data sources with context
+        const dataSources = createDataSources({
+          user,
+          headers: req.headers,
+          correlationId,
+          cache,
+        });
+
+        return {
+          user,
+          dataSources,
+          headers: req.headers,
+          correlationId,
+          pubsub,
+          cache,
+        };
+      },
+    })
+  );
+
+  // Health check endpoint
+  app.get('/health', async (req, res) => {
+    try {
+      // Quick health check without hitting all services
+      res.json({
+        status: 'healthy',
+        service: 'mobile-graphql-bff',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0',
+        uptime: process.uptime(),
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: 'unhealthy',
+        error: error.message,
+      });
+    }
+  });
+
+  // Readiness probe (checks dependencies)
+  app.get('/ready', async (req, res) => {
+    try {
+      // Check if critical services are accessible
+      const services = {
+        users: process.env.USER_SERVICE_URL,
+        content: process.env.CONTENT_SERVICE_URL,
+        notifications: process.env.NOTIFICATION_SERVICE_URL,
+      };
+
+      res.json({
+        status: 'ready',
+        services,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: 'not ready',
+        error: error.message,
+      });
+    }
+  });
+
+  // Liveness probe
+  app.get('/live', (req, res) => {
+    res.json({ status: 'alive' });
+  });
+
+  // Metrics endpoint (basic)
+  app.get('/metrics', (req, res) => {
+    res.json({
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage(),
+    });
+  });
+
+  // Start server
+  await new Promise((resolve) => httpServer.listen({ port: PORT }, resolve));
+
+  logger.info(`🚀 Mobile GraphQL BFF Server ready!`);
+  logger.info(`📱 GraphQL endpoint: http://localhost:${PORT}${GRAPHQL_PATH}`);
+  logger.info(`🔌 Subscriptions endpoint: ws://localhost:${PORT}${SUBSCRIPTIONS_PATH}`);
+  logger.info(`💊 Health check: http://localhost:${PORT}/health`);
+
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info(`🎮 GraphQL Playground: http://localhost:${PORT}${GRAPHQL_PATH}`);
+  }
+
+  // Graceful shutdown
+  const shutdown = async (signal) => {
+    logger.info(`${signal} received, shutting down gracefully...`);
+
+    // Stop accepting new connections
+    httpServer.close(() => {
+      logger.info('HTTP server closed');
+    });
+
+    // Close WebSocket connections
+    await serverCleanup.dispose();
+    logger.info('WebSocket server closed');
+
+    // Give time for in-flight requests to complete
+    setTimeout(() => {
+      logger.info('Forcing shutdown');
+      process.exit(0);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+function generateCorrelationId() {
+  return `mobile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Start server
+startMobileGraphQLServer().catch((error) => {
+  logger.error('Failed to start server:', error);
+  process.exit(1);
+});

@@ -1,0 +1,362 @@
+const { GraphQLError } = require('graphql');
+const logger = require('./utils/logger');
+
+const resolvers = {
+  Query: {
+    // Health check
+    health: async (_, __, { dataSources }) => {
+      const services = await Promise.allSettled([
+        dataSources.userService.checkHealth(),
+        dataSources.contentService.checkHealth(),
+        dataSources.notificationService.checkHealth(),
+        dataSources.configService.checkHealth(),
+      ]);
+
+      return {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0',
+        services: [
+          { name: 'users', status: services[0].status === 'fulfilled' ? 'up' : 'down' },
+          { name: 'content', status: services[1].status === 'fulfilled' ? 'up' : 'down' },
+          { name: 'notifications', status: services[2].status === 'fulfilled' ? 'up' : 'down' },
+          { name: 'config', status: services[3].status === 'fulfilled' ? 'up' : 'down' },
+        ],
+      };
+    },
+
+    // Aggregated mobile home screen
+    mobileHome: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+
+      // Parallel data fetching for optimal mobile performance
+      const [userProfile, feed, notifications, config] = await Promise.all([
+        dataSources.userService.getUser(user.id),
+        dataSources.contentService.getFeed({ limit: 10 }),
+        dataSources.notificationService.getNotifications({ userId: user.id, limit: 5 }),
+        dataSources.configService.getAppConfig(),
+      ]);
+
+      const unreadCount = await dataSources.notificationService.getUnreadCount(user.id);
+
+      return {
+        user: userProfile,
+        feed: feed.results || [],
+        notifications: notifications.results || [],
+        unreadCount,
+        config,
+        featuresEnabled: config.features ? Object.keys(config.features).filter(key => config.features[key]) : [],
+      };
+    },
+
+    // Aggregated user dashboard
+    userDashboard: async (_, { userId }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+
+      const targetUserId = userId || user.id;
+
+      // Parallel data fetching
+      const [profile, preferences, stats, recentActivity, unreadCount, features] = await Promise.all([
+        dataSources.userService.getUser(targetUserId),
+        dataSources.userService.getUserPreferences(targetUserId),
+        dataSources.userService.getUserStats(targetUserId),
+        dataSources.userService.getRecentActivity(targetUserId),
+        dataSources.notificationService.getUnreadCount(targetUserId),
+        dataSources.configService.getFeatureFlags(),
+      ]);
+
+      return {
+        profile,
+        preferences,
+        stats,
+        recentActivity: recentActivity.results || [],
+        unreadCount,
+        featuresEnabled: features ? Object.keys(features).filter(key => features[key]) : [],
+      };
+    },
+
+    // Current authenticated user
+    me: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        return null;
+      }
+      return dataSources.userService.getUser(user.id);
+    },
+
+    // Get specific user
+    user: async (_, { id }, { dataSources }) => {
+      return dataSources.userService.getUser(id);
+    },
+
+    // Content feed with cursor-based pagination
+    feed: async (_, { cursor, limit = 10 }, { dataSources }) => {
+      const result = await dataSources.contentService.getFeed({ cursor, limit: limit + 1 });
+      const hasNextPage = result.results.length > limit;
+      const edges = result.results.slice(0, limit).map((node, index) => ({
+        node,
+        cursor: Buffer.from(`${node.id}:${index}`).toString('base64'),
+      }));
+
+      return {
+        edges,
+        pageInfo: {
+          hasNextPage,
+          hasPreviousPage: !!cursor,
+          startCursor: edges.length > 0 ? edges[0].cursor : null,
+          endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
+        },
+      };
+    },
+
+    // Get specific content
+    content: async (_, { id }, { dataSources }) => {
+      return dataSources.contentService.getContent(id);
+    },
+
+    // Search content
+    searchContent: async (_, { query, limit = 20 }, { dataSources }) => {
+      return dataSources.contentService.searchContent({ query, limit });
+    },
+
+    // Get notifications
+    notifications: async (_, { unreadOnly, limit }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      const result = await dataSources.notificationService.getNotifications({
+        userId: user.id,
+        unreadOnly,
+        limit,
+      });
+      return result.results || [];
+    },
+
+    // Get unread notifications count
+    unreadNotificationsCount: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        return 0;
+      }
+      return dataSources.notificationService.getUnreadCount(user.id);
+    },
+
+    // App configuration
+    appConfig: async (_, __, { dataSources }) => {
+      return dataSources.configService.getAppConfig();
+    },
+
+    // Feature flags
+    featureFlags: async (_, __, { dataSources }) => {
+      return dataSources.configService.getFeatureFlags();
+    },
+
+    // Sync status
+    syncStatus: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.syncService.getSyncStatus(user.id);
+    },
+  },
+
+  Mutation: {
+    // Login
+    login: async (_, { email, password }, { dataSources }) => {
+      return dataSources.userService.login({ email, password });
+    },
+
+    // Register
+    register: async (_, { input }, { dataSources }) => {
+      return dataSources.userService.register(input);
+    },
+
+    // Refresh token
+    refreshToken: async (_, { refreshToken }, { dataSources }) => {
+      return dataSources.userService.refreshToken(refreshToken);
+    },
+
+    // Logout
+    logout: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        return false;
+      }
+      await dataSources.userService.logout(user.id);
+      return true;
+    },
+
+    // Update profile
+    updateProfile: async (_, { input }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.userService.updateProfile(user.id, input);
+    },
+
+    // Update preferences
+    updatePreferences: async (_, { input }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.userService.updatePreferences(user.id, input);
+    },
+
+    // Mark notification as read
+    markNotificationAsRead: async (_, { id }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.notificationService.markAsRead(id);
+    },
+
+    // Mark all notifications as read
+    markAllNotificationsAsRead: async (_, __, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.notificationService.markAllAsRead(user.id);
+    },
+
+    // Register device for push notifications
+    registerDevice: async (_, { token, platform }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.notificationService.registerDevice({ userId: user.id, token, platform });
+    },
+
+    // Unregister device
+    unregisterDevice: async (_, { deviceId }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      await dataSources.notificationService.unregisterDevice(deviceId);
+      return true;
+    },
+
+    // Like content
+    likeContent: async (_, { id }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.contentService.likeContent({ userId: user.id, contentId: id });
+    },
+
+    // Unlike content
+    unlikeContent: async (_, { id }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.contentService.unlikeContent({ userId: user.id, contentId: id });
+    },
+
+    // Share content
+    shareContent: async (_, { id, platform }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.contentService.shareContent({ userId: user.id, contentId: id, platform });
+    },
+
+    // Sync data
+    syncData: async (_, { input }, { user, dataSources }) => {
+      if (!user) {
+        throw new GraphQLError('Authentication required', {
+          extensions: { code: 'UNAUTHENTICATED' },
+        });
+      }
+      return dataSources.syncService.syncData({ userId: user.id, ...input });
+    },
+
+    // Track analytics event
+    trackEvent: async (_, { event }, { user, dataSources }) => {
+      try {
+        await dataSources.analyticsService.trackEvent({
+          userId: user?.id,
+          ...event,
+        });
+        return true;
+      } catch (error) {
+        logger.error('Failed to track event:', error);
+        return false;
+      }
+    },
+  },
+
+  Subscription: {
+    // Real-time notifications
+    notificationReceived: {
+      subscribe: (_, { userId }, { pubsub }) => {
+        return pubsub.asyncIterator([`NOTIFICATION_${userId}`]);
+      },
+    },
+
+    // Real-time content updates
+    contentUpdated: {
+      subscribe: (_, { userId }, { pubsub }) => {
+        return pubsub.asyncIterator([`CONTENT_UPDATE_${userId}`]);
+      },
+    },
+
+    // Sync status updates
+    syncStatusChanged: {
+      subscribe: (_, { userId }, { pubsub }) => {
+        return pubsub.asyncIterator([`SYNC_STATUS_${userId}`]);
+      },
+    },
+  },
+
+  // Field resolvers
+  User: {
+    preferences: async (parent, _, { dataSources }) => {
+      if (parent.preferences) return parent.preferences;
+      return dataSources.userService.getUserPreferences(parent.id);
+    },
+    stats: async (parent, _, { dataSources }) => {
+      if (parent.stats) return parent.stats;
+      return dataSources.userService.getUserStats(parent.id);
+    },
+  },
+
+  Content: {
+    author: async (parent, _, { dataSources }) => {
+      if (parent.author && typeof parent.author === 'object') return parent.author;
+      const authorId = parent.author || parent.authorId;
+      return dataSources.userService.getUser(authorId);
+    },
+    isLiked: async (parent, _, { user, dataSources }) => {
+      if (!user) return false;
+      return dataSources.contentService.isLiked({ userId: user.id, contentId: parent.id });
+    },
+  },
+};
+
+module.exports = resolvers;

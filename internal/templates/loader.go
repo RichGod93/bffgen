@@ -82,7 +82,7 @@ func NewTemplateLoader(langType scaffolding.LanguageType) *TemplateLoader {
 func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, error) {
 	var path string
 
-	// Common templates (shared between Express and Fastify)
+	// Common templates (shared between Express, Fastify, Apollo, and Yoga)
 	commonFiles := []string{
 		"env.tmpl", "env.test.tmpl", "gitignore.tmpl", "bffgen.config.json.tmpl",
 		"service-base.js.tmpl", "service-template.js.tmpl",
@@ -92,8 +92,12 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 		// New aggregation utilities
 		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",
 		"response-transformer.js.tmpl", "request-batcher.js.tmpl", "field-selector.js.tmpl",
+		// GraphQL utilities
+		"graphql/rest-datasource.js.tmpl", "graphql/schema-stitching.js.tmpl",
 		// Docker and scripts
 		"docker-compose.yml.tmpl", "scripts/clear-cache.js.tmpl",
+		// Health and shutdown
+		"health.js.tmpl", "graceful-shutdown.js.tmpl",
 	}
 
 	isCommon := false
@@ -116,6 +120,10 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 			path = filepath.Join("node", "express", filename)
 		case scaffolding.LanguageNodeFastify:
 			path = filepath.Join("node", "fastify", filename)
+		case scaffolding.LanguageNodeApollo:
+			path = filepath.Join("node", "apollo", filename)
+		case scaffolding.LanguageNodeYoga:
+			path = filepath.Join("node", "yoga", filename)
 		default:
 			return "", fmt.Errorf("unsupported language type: %s", tl.langType)
 		}

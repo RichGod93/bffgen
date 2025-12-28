@@ -1,0 +1,268 @@
+name: graphql-api
+version: 1.0.0
+description: Production-ready GraphQL BFF with REST-to-GraphQL aggregation, schema stitching, and type generation
+author: bffgen
+category: api
+
+# Supported languages for this template
+language: nodejs-apollo # Can be: nodejs-apollo, nodejs-yoga, go-graphql
+
+features:
+  - GraphQL API with Apollo Server / GraphQL Yoga
+  - REST-to-GraphQL data source aggregation
+  - Schema stitching for microservices
+  - TypeScript type generation with GraphQL Code Generator
+  - JWT authentication middleware
+  - Response caching with TTL
+  - Circuit breaker pattern for resilience
+  - Query depth limiting
+  - Request batching and DataLoader
+  - Health check endpoints
+  - Graceful shutdown
+  - Winston logging
+  - Docker and docker-compose support
+  - Environment-based configuration
+
+# Template variables that can be customized
+variables:
+  - name: PROJECT_NAME
+    description: Name of the GraphQL BFF project
+    default: graphql-bff
+    required: true
+
+  - name: PORT
+    description: Server port
+    default: "4000"
+    required: false
+
+  - name: GRAPHQL_ENDPOINT
+    description: GraphQL endpoint path
+    default: /graphql
+    required: false
+
+  - name: ENABLE_PLAYGROUND
+    description: Enable GraphQL Playground in development
+    default: "true"
+    required: false
+
+  - name: MAX_QUERY_DEPTH
+    description: Maximum query depth limit
+    default: "10"
+    required: false
+
+  - name: CACHE_TTL
+    description: Default cache TTL in seconds
+    default: "60"
+    required: false
+
+# Backend microservices to integrate
+backends:
+  - name: users
+    baseUrl: http://localhost:8001
+    description: User management service
+    endpoints:
+      - path: /users
+        method: GET
+        graphqlType: User
+      - path: /users/:id
+        method: GET
+        graphqlType: User
+
+  - name: products
+    baseUrl: http://localhost:8002
+    description: Product catalog service
+    endpoints:
+      - path: /products
+        method: GET
+        graphqlType: Product
+      - path: /products/:id
+        method: GET
+        graphqlType: Product
+
+  - name: orders
+    baseUrl: http://localhost:8003
+    description: Order management service
+    endpoints:
+      - path: /orders
+        method: GET
+        graphqlType: Order
+      - path: /orders/:id
+        method: GET
+        graphqlType: Order
+
+# GraphQL-specific configuration
+graphql:
+  schema:
+    path: schema.graphql
+    patterns:
+      - "**/*.graphql"
+
+  dataSources:
+    - name: userService
+      type: rest
+      baseUrl: ${USER_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 60
+
+    - name: productService
+      type: rest
+      baseUrl: ${PRODUCT_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 120
+
+    - name: orderService
+      type: rest
+      baseUrl: ${ORDER_SERVICE_URL}
+      cache:
+        enabled: true
+        ttl: 30
+
+  typeGeneration:
+    enabled: true
+    language: typescript
+    outputPath: ./generated/types.ts
+    watchMode: false
+
+  schemaStitching:
+    enabled: false
+    remoteSchemas: []
+
+# File structure to generate
+files:
+  # Main server file
+  - path: index.js
+    template: index.js.tmpl
+    description: Main GraphQL server entry point
+
+  # GraphQL schema
+  - path: schema.graphql
+    template: schema.graphql.tmpl
+    description: GraphQL type definitions
+
+  # Resolvers
+  - path: resolvers.js
+    template: resolvers.js.tmpl
+    description: GraphQL resolvers
+
+  # Data sources
+  - path: datasources.js
+    template: datasources.js.tmpl
+    description: REST data source implementations
+
+  # Authentication
+  - path: middleware/auth.js
+    template: middleware-auth.js.tmpl
+    description: JWT authentication middleware
+
+  # Utilities
+  - path: utils/logger.js
+    template: logger.js.tmpl
+    description: Winston logger configuration
+
+  - path: utils/rest-datasource.js
+    template: graphql/rest-datasource.js.tmpl
+    description: Enhanced REST data source with circuit breaker
+
+  - path: utils/schema-stitching.js
+    template: graphql/schema-stitching.js.tmpl
+    description: Schema stitching utilities
+
+  # Configuration
+  - path: .env
+    template: env.tmpl
+    description: Environment variables
+
+  - path: package.json
+    template: package.json.tmpl
+    description: Node.js dependencies
+
+  - path: codegen.yml
+    template: codegen.yml.tmpl
+    description: GraphQL Code Generator configuration
+
+  # Docker
+  - path: Dockerfile
+    template: Dockerfile.node.tmpl
+    description: Production Docker image
+
+  - path: docker-compose.yml
+    template: docker-compose.yml.tmpl
+    description: Development environment
+
+  - path: .dockerignore
+    template: dockerignore.tmpl
+    description: Docker ignore patterns
+
+  # Git
+  - path: .gitignore
+    template: gitignore.tmpl
+    description: Git ignore patterns
+
+# Post-generation instructions
+postInstall:
+  - message: "GraphQL BFF project created successfully!"
+  - message: "Next steps:"
+  - message: "  1. cd {{.PROJECT_NAME}}"
+  - message: "  2. npm install"
+  - message: "  3. Configure backend services in .env"
+  - message: "  4. npm run codegen  # Generate TypeScript types"
+  - message: "  5. npm run dev      # Start development server"
+  - message: ""
+  - message: "GraphQL Playground will be available at http://localhost:{{.PORT}}/graphql"
+  - message: ""
+  - message: "Documentation: https://github.com/RichGod93/bffgen/docs/graphql.md"
+
+# Example queries to test the GraphQL API
+examples:
+  - name: Health Check
+    query: |
+      query {
+        health {
+          status
+          timestamp
+          version
+        }
+      }
+
+  - name: User Dashboard (Aggregated)
+    query: |
+      query UserDashboard($userId: ID!) {
+        dashboard(userId: $userId) {
+          user {
+            id
+            name
+            email
+          }
+          summary {
+            totalItems
+            activeCount
+          }
+          recentActivities {
+            id
+            type
+            title
+            timestamp
+          }
+          notifications {
+            id
+            title
+            read
+          }
+        }
+      }
+    variables:
+      userId: "123"
+
+  - name: Current User
+    query: |
+      query {
+        me {
+          id
+          email
+          name
+        }
+      }
+    headers:
+      Authorization: "Bearer <your-jwt-token>"

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -154,7 +155,7 @@ func addHealthCheckInfrastructure(projectType string) error {
 	langType := getLangTypeFromProjectType(projectType)
 	framework := detectFrameworkFromProject(projectType)
 
-	return generateHealthChecks(".", langType, framework, []BackendService{})
+	return generateHealthChecks(".", langType, framework, []types.BackendService{})
 }
 
 func addComposeInfrastructure(projectType string) error {
@@ -166,7 +167,7 @@ func addComposeInfrastructure(projectType string) error {
 
 	langType := getLangTypeFromProjectType(projectType)
 
-	return generateDockerCompose(".", langType, []BackendService{}, 8080)
+	return generateDockerCompose(".", langType, []types.BackendService{}, 8080)
 }
 
 func getLangTypeFromProjectType(projectType string) scaffolding.LanguageType {

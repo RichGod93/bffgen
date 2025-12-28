@@ -1,0 +1,18 @@
+name: python-fastapi
+version: 1.0.0
+description: REST BFF using FastAPI with async aggregation
+author: bffgen
+category: web
+language: python-fastapi
+features:
+  - FastAPI
+  - Async/Await
+  - Pydantic Models
+  - REST Aggregation
+variables:
+  - name: PORT
+    description: Server port
+    default: "8000"
+post_install:
+  - pip install -r requirements.txt
+  - echo "🚀 FastAPI Server ready at http://localhost:8000"

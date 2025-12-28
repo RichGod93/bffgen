@@ -10,6 +10,7 @@ import (
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
@@ -131,7 +132,7 @@ func generateDockerfile(projectName string, langType scaffolding.LanguageType, f
 }
 
 // generateHealthChecks generates enhanced health check endpoints
-func generateHealthChecks(projectName string, langType scaffolding.LanguageType, framework string, backends []BackendService) error {
+func generateHealthChecks(projectName string, langType scaffolding.LanguageType, framework string, backends []types.BackendService) error {
 	if langType == scaffolding.LanguageGo {
 		return generateGoHealthChecks(projectName, backends)
 	}
@@ -139,7 +140,7 @@ func generateHealthChecks(projectName string, langType scaffolding.LanguageType,
 }
 
 // generateGoHealthChecks generates Go health check package
-func generateGoHealthChecks(projectName string, backends []BackendService) error {
+func generateGoHealthChecks(projectName string, backends []types.BackendService) error {
 	// Create health package directory
 	healthDir := filepath.Join(projectName, "internal", "health")
 	if err := os.MkdirAll(healthDir, utils.ProjectDirPerm); err != nil {
@@ -162,7 +163,7 @@ func generateGoHealthChecks(projectName string, backends []BackendService) error
 }
 
 // generateNodeHealthChecks generates Node.js health check utility
-func generateNodeHealthChecks(projectName string, framework string, backends []BackendService) error {
+func generateNodeHealthChecks(projectName string, framework string, backends []types.BackendService) error {
 	// Health check utility already exists in node/common/health.js.tmpl
 	// It's created during init, so we just ensure it exists
 	utilsDir := filepath.Join(projectName, "src", "utils")
@@ -240,7 +241,7 @@ func generateNodeGracefulShutdown(projectName string, framework string) error {
 }
 
 // generateDockerCompose generates development docker-compose.yml
-func generateDockerCompose(projectName string, langType scaffolding.LanguageType, backends []BackendService, port int) error {
+func generateDockerCompose(projectName string, langType scaffolding.LanguageType, backends []types.BackendService, port int) error {
 	// Determine which template to use
 	var templatePath string
 	if langType == scaffolding.LanguageGo {

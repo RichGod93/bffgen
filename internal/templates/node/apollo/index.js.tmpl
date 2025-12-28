@@ -1,0 +1,106 @@
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
+const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { json } = require('body-parser');
+const helmet = require('helmet');
+
+const typeDefs = require('./schema');
+const resolvers = require('./resolvers');
+const { createDataSources } = require('./datasources');
+const { authMiddleware } = require('./middleware/auth');
+const logger = require('./utils/logger');
+
+const PORT = process.env.PORT || 4000;
+
+async function startApolloServer() {
+  const app = express();
+  const httpServer = http.createServer(app);
+
+  // Apollo Server setup
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    plugins: [
+      ApolloServerPluginDrainHttpServer({ httpServer }),
+      {
+        async requestDidStart() {
+          return {
+            async didEncounterErrors(requestContext) {
+              logger.error('GraphQL Error:', requestContext.errors);
+            },
+          };
+        },
+      },
+    ],
+    formatError: (error) => {
+      logger.error('GraphQL Error:', error);
+      return {
+        message: error.message,
+        code: error.extensions?.code || 'INTERNAL_SERVER_ERROR',
+        locations: error.locations,
+        path: error.path,
+      };
+    },
+    introspection: process.env.NODE_ENV !== 'production',
+  });
+
+  await server.start();
+
+  // Middleware setup
+  app.use(
+    helmet({
+      contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
+  app.use(
+    '/graphql',
+    cors({
+      origin: process.env.CORS_ORIGINS?.split(',') || {{.CORSOriginsJS}},
+      credentials: true,
+    }),
+    json(),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        // Get user from auth middleware
+        const user = await authMiddleware(req);
+
+        // Create data sources with context
+        const dataSources = createDataSources({
+          user,
+          headers: req.headers,
+        });
+
+        return {
+          user,
+          dataSources,
+          headers: req.headers,
+        };
+      },
+    })
+  );
+
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'healthy',
+      service: 'graphql-bff',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Start server
+  await new Promise((resolve) => httpServer.listen({ port: PORT }, resolve));
+
+  logger.info(`🚀 GraphQL BFF Server ready at http://localhost:${PORT}/graphql`);
+  logger.info(`📊 GraphQL Playground: http://localhost:${PORT}/graphql`);
+}
+
+startApolloServer().catch((error) => {
+  logger.error('Failed to start server:', error);
+  process.exit(1);
+});

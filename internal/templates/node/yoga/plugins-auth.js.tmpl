@@ -1,0 +1,125 @@
+const jwt = require('jsonwebtoken');
+const { GraphQLError } = require('graphql');
+const logger = require('../utils/logger');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+/**
+ * GraphQL Yoga Authentication Plugin
+ * Extracts and verifies JWT tokens from requests
+ */
+function authPlugin() {
+  return {
+    onContextBuilding({ context, extendContext }) {
+      const request = context.request;
+      const authHeader = request.headers.get('authorization') || '';
+
+      if (!authHeader) {
+        // No auth provided - continue without user
+        extendContext({ user: null });
+        return;
+      }
+
+      try {
+        // Extract token from "Bearer <token>" format
+        const token = authHeader.replace('Bearer ', '');
+
+        if (!token) {
+          logger.warn('Authorization header present but token is empty');
+          extendContext({ user: null });
+          return;
+        }
+
+        // Verify and decode JWT token
+        const decoded = jwt.verify(token, JWT_SECRET);
+
+        // Add user to context
+        extendContext({
+          user: {
+            id: decoded.sub || decoded.userId,
+            email: decoded.email,
+            roles: decoded.roles || [],
+            token: token,
+            ...decoded,
+          },
+        });
+
+        logger.debug(`Authenticated user: ${decoded.email || decoded.sub}`);
+      } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+          logger.warn('JWT token has expired');
+        } else if (error.name === 'JsonWebTokenError') {
+          logger.warn('Invalid JWT token:', error.message);
+        } else {
+          logger.error('JWT verification error:', error);
+        }
+
+        // Continue without user on auth errors
+        extendContext({ user: null });
+      }
+    },
+
+    onExecute({ args }) {
+      // You can add additional checks here if needed
+      // For example, check if operation requires authentication
+      return {
+        onExecuteDone() {
+          // Clean up after execution if needed
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Directive to require authentication
+ */
+function requireAuth(context) {
+  if (!context.user) {
+    throw new GraphQLError('Authentication required', {
+      extensions: {
+        code: 'UNAUTHENTICATED',
+        http: { status: 401 },
+      },
+    });
+  }
+  return context.user;
+}
+
+/**
+ * Directive to require specific role(s)
+ */
+function requireRole(context, allowedRoles) {
+  const user = requireAuth(context);
+
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  const hasRole = user.roles?.some((role) => roles.includes(role));
+
+  if (!hasRole) {
+    throw new GraphQLError(`Insufficient permissions. Required roles: ${roles.join(', ')}`, {
+      extensions: {
+        code: 'FORBIDDEN',
+        http: { status: 403 },
+      },
+    });
+  }
+
+  return user;
+}
+
+/**
+ * Helper to generate JWT tokens (useful for testing)
+ */
+function generateToken(payload, expiresIn = '7d') {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn,
+    issuer: '{{.ProjectName}}',
+  });
+}
+
+module.exports = {
+  authPlugin,
+  requireAuth,
+  requireRole,
+  generateToken,
+};

@@ -1,0 +1,350 @@
+"""
+GraphQL resolvers for mobile API
+"""
+import strawberry
+from typing import List, Optional, AsyncIterator
+from strawberry.types import Info
+import asyncio
+
+from .schema import (
+    Query, Mutation, Subscription,
+    MobileHomeData, UserDashboard, User, Content, ContentConnection,
+    Notification, AppConfig, FeatureFlags, SyncStatus,
+    AuthPayload, DeviceRegistration, ShareResult, SyncResult, HealthStatus,
+    RegisterInput, UpdateProfileInput, PreferencesInput,
+    Platform, SharePlatform, SearchResult, UserPreferences,
+)
+from .dataloaders import get_dataloaders
+from utils.logger import logger
+
+
+@strawberry.type
+class Query:
+    @strawberry.field
+    async def health(self, info: Info) -> HealthStatus:
+        """Health check for all services"""
+        dataloaders = get_dataloaders(info.context)
+
+        services = []
+        try:
+            await dataloaders['user_service'].check_health()
+            services.append({"name": "users", "status": "up"})
+        except Exception:
+            services.append({"name": "users", "status": "down"})
+
+        try:
+            await dataloaders['content_service'].check_health()
+            services.append({"name": "content", "status": "up"})
+        except Exception:
+            services.append({"name": "content", "status": "down"})
+
+        try:
+            await dataloaders['notification_service'].check_health()
+            services.append({"name": "notifications", "status": "up"})
+        except Exception:
+            services.append({"name": "notifications", "status": "down"})
+
+        return HealthStatus(
+            status="healthy",
+            timestamp=str(asyncio.get_event_loop().time()),
+            version="1.0.0",
+            services=services
+        )
+
+    @strawberry.field
+    async def mobile_home(self, info: Info) -> MobileHomeData:
+        """Aggregated home screen data for mobile"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+
+        # Parallel data fetching
+        user_data, feed, notifications, config, unread_count = await asyncio.gather(
+            dataloaders['user_service'].get_user(user['id']),
+            dataloaders['content_service'].get_feed(limit=10),
+            dataloaders['notification_service'].get_notifications(user['id'], limit=5),
+            dataloaders['config_service'].get_app_config(),
+            dataloaders['notification_service'].get_unread_count(user['id'])
+        )
+
+        features_enabled = [k for k, v in config.get('features', {}).items() if v]
+
+        return MobileHomeData(
+            user=user_data,
+            feed=feed.get('results', []),
+            notifications=notifications.get('results', []),
+            unread_count=unread_count,
+            config=config,
+            features_enabled=features_enabled
+        )
+
+    @strawberry.field
+    async def user_dashboard(self, info: Info, user_id: Optional[strawberry.ID] = None) -> UserDashboard:
+        """Aggregated user dashboard"""
+        current_user = info.context.get('user')
+        if not current_user:
+            raise Exception("Authentication required")
+
+        target_user_id = user_id or current_user['id']
+        dataloaders = get_dataloaders(info.context)
+
+        # Parallel data fetching
+        profile, preferences, stats, recent_activity, unread_count, features = await asyncio.gather(
+            dataloaders['user_service'].get_user(target_user_id),
+            dataloaders['user_service'].get_user_preferences(target_user_id),
+            dataloaders['user_service'].get_user_stats(target_user_id),
+            dataloaders['user_service'].get_recent_activity(target_user_id),
+            dataloaders['notification_service'].get_unread_count(target_user_id),
+            dataloaders['config_service'].get_feature_flags()
+        )
+
+        features_enabled = [k for k, v in features.items() if v]
+
+        return UserDashboard(
+            profile=profile,
+            preferences=preferences,
+            stats=stats,
+            recent_activity=recent_activity.get('results', []),
+            unread_count=unread_count,
+            features_enabled=features_enabled
+        )
+
+    @strawberry.field
+    async def me(self, info: Info) -> Optional[User]:
+        """Get current authenticated user"""
+        user = info.context.get('user')
+        if not user:
+            return None
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].get_user(user['id'])
+
+    @strawberry.field
+    async def user(self, info: Info, id: strawberry.ID) -> User:
+        """Get specific user"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].get_user(id)
+
+    @strawberry.field
+    async def feed(
+        self,
+        info: Info,
+        cursor: Optional[str] = None,
+        limit: int = 10
+    ) -> ContentConnection:
+        """Content feed with pagination"""
+        dataloaders = get_dataloaders(info.context)
+        result = await dataloaders['content_service'].get_feed(cursor=cursor, limit=limit + 1)
+
+        results = result.get('results', [])
+        has_next_page = len(results) > limit
+        edges = [
+            ContentEdge(
+                node=node,
+                cursor=f"{node['id']}:{i}"
+            )
+            for i, node in enumerate(results[:limit])
+        ]
+
+        return ContentConnection(
+            edges=edges,
+            page_info={
+                'has_next_page': has_next_page,
+                'has_previous_page': bool(cursor),
+                'start_cursor': edges[0].cursor if edges else None,
+                'end_cursor': edges[-1].cursor if edges else None
+            }
+        )
+
+    @strawberry.field
+    async def content(self, info: Info, id: strawberry.ID) -> Content:
+        """Get specific content"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['content_service'].get_content(id)
+
+    @strawberry.field
+    async def search_content(
+        self,
+        info: Info,
+        query: str,
+        limit: int = 20
+    ) -> SearchResult:
+        """Search content"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['content_service'].search_content(query, limit)
+
+    @strawberry.field
+    async def notifications(
+        self,
+        info: Info,
+        unread_only: Optional[bool] = None,
+        limit: Optional[int] = None
+    ) -> List[Notification]:
+        """Get notifications"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        result = await dataloaders['notification_service'].get_notifications(
+            user['id'],
+            unread_only=unread_only,
+            limit=limit
+        )
+        return result.get('results', [])
+
+    @strawberry.field
+    async def unread_notifications_count(self, info: Info) -> int:
+        """Get unread notifications count"""
+        user = info.context.get('user')
+        if not user:
+            return 0
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['notification_service'].get_unread_count(user['id'])
+
+    @strawberry.field
+    async def app_config(self, info: Info) -> AppConfig:
+        """Get app configuration"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['config_service'].get_app_config()
+
+    @strawberry.field
+    async def feature_flags(self, info: Info) -> FeatureFlags:
+        """Get feature flags"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['config_service'].get_feature_flags()
+
+    @strawberry.field
+    async def sync_status(self, info: Info) -> SyncStatus:
+        """Get sync status"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['sync_service'].get_sync_status(user['id'])
+
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    async def login(self, info: Info, email: str, password: str) -> AuthPayload:
+        """User login"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].login(email, password)
+
+    @strawberry.mutation
+    async def register(self, info: Info, input: RegisterInput) -> AuthPayload:
+        """User registration"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].register(input)
+
+    @strawberry.mutation
+    async def refresh_token(self, info: Info, refresh_token: str) -> AuthPayload:
+        """Refresh authentication token"""
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].refresh_token(refresh_token)
+
+    @strawberry.mutation
+    async def logout(self, info: Info) -> bool:
+        """User logout"""
+        user = info.context.get('user')
+        if not user:
+            return False
+
+        dataloaders = get_dataloaders(info.context)
+        await dataloaders['user_service'].logout(user['id'])
+        return True
+
+    @strawberry.mutation
+    async def update_profile(self, info: Info, input: UpdateProfileInput) -> User:
+        """Update user profile"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].update_profile(user['id'], input)
+
+    @strawberry.mutation
+    async def update_preferences(self, info: Info, input: PreferencesInput) -> UserPreferences:
+        """Update user preferences"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['user_service'].update_preferences(user['id'], input)
+
+    @strawberry.mutation
+    async def mark_notification_as_read(self, info: Info, id: strawberry.ID) -> Notification:
+        """Mark notification as read"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['notification_service'].mark_as_read(id)
+
+    @strawberry.mutation
+    async def register_device(
+        self,
+        info: Info,
+        token: str,
+        platform: Platform
+    ) -> DeviceRegistration:
+        """Register device for push notifications"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['notification_service'].register_device(
+            user['id'],
+            token,
+            platform
+        )
+
+    @strawberry.mutation
+    async def like_content(self, info: Info, id: strawberry.ID) -> Content:
+        """Like content"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['content_service'].like_content(user['id'], id)
+
+    @strawberry.mutation
+    async def share_content(
+        self,
+        info: Info,
+        id: strawberry.ID,
+        platform: SharePlatform
+    ) -> ShareResult:
+        """Share content"""
+        user = info.context.get('user')
+        if not user:
+            raise Exception("Authentication required")
+
+        dataloaders = get_dataloaders(info.context)
+        return await dataloaders['content_service'].share_content(user['id'], id, platform)
+
+
+@strawberry.type
+class Subscription:
+    @strawberry.subscription
+    async def notification_received(
+        self,
+        info: Info,
+        user_id: strawberry.ID
+    ) -> AsyncIterator[Notification]:
+        """Subscribe to real-time notifications"""
+        # Implementation would use Redis pub/sub or similar
+        # This is a placeholder
+        while True:
+            await asyncio.sleep(1)
+            # yield notification when received
