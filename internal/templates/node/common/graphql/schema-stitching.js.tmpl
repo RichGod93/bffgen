@@ -1,0 +1,180 @@
+const { stitchSchemas } = require('@graphql-tools/stitch');
+const { introspectSchema } = require('@graphql-tools/wrap');
+const { print } = require('graphql');
+const { fetch } = require('@whatwg-node/fetch');
+const logger = require('../../utils/logger');
+
+/**
+ * GraphQL Schema Stitching Utility
+ * Combines multiple remote GraphQL schemas into a single unified schema
+ */
+
+/**
+ * Create an executor for a remote GraphQL endpoint
+ */
+function createRemoteExecutor(url, headers = {}) {
+  return async ({ document, variables, context }) => {
+    const query = print(document);
+
+    // Merge context headers with configured headers
+    const allHeaders = {
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+
+    if (context?.headers?.authorization) {
+      allHeaders.authorization = context.headers.authorization;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: allHeaders,
+        body: JSON.stringify({ query, variables }),
+      });
+
+      const result = await response.json();
+
+      if (result.errors) {
+        logger.error(`GraphQL errors from ${url}:`, result.errors);
+      }
+
+      return result;
+    } catch (error) {
+      logger.error(`Failed to execute query on ${url}:`, error);
+      throw error;
+    }
+  };
+}
+
+/**
+ * Load and stitch remote schemas
+ */
+async function stitchRemoteSchemas(remoteSchemas, localSchema = null) {
+  try {
+    logger.info(`Stitching ${remoteSchemas.length} remote schemas...`);
+
+    const subschemas = [];
+
+    // Add local schema if provided
+    if (localSchema) {
+      subschemas.push({
+        schema: localSchema,
+      });
+    }
+
+    // Load remote schemas
+    for (const config of remoteSchemas) {
+      try {
+        const executor = createRemoteExecutor(config.url, config.headers);
+
+        // Introspect remote schema
+        const schema = await introspectSchema(executor);
+
+        subschemas.push({
+          schema,
+          executor,
+          batch: config.batch !== false, // Enable batching by default
+          transforms: config.transforms || [],
+        });
+
+        logger.info(`✓ Loaded remote schema from ${config.url}`);
+      } catch (error) {
+        logger.error(`✗ Failed to load schema from ${config.url}:`, error);
+
+        // Optionally skip failing schemas instead of crashing
+        if (config.required !== false) {
+          throw error;
+        }
+      }
+    }
+
+    // Stitch all schemas together
+    const stitchedSchema = stitchSchemas({
+      subschemas,
+      mergeTypes: true, // Automatically merge types with same name
+    });
+
+    logger.info('✓ Schema stitching completed successfully');
+
+    return stitchedSchema;
+  } catch (error) {
+    logger.error('Schema stitching failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create schema stitching middleware
+ */
+function createSchemaStitchingMiddleware(remoteSchemas) {
+  let cachedSchema = null;
+  let lastRefresh = null;
+  const REFRESH_INTERVAL = 60000; // Refresh every minute
+
+  return async (localSchema) => {
+    const now = Date.now();
+
+    // Return cached schema if still fresh
+    if (cachedSchema && lastRefresh && (now - lastRefresh) < REFRESH_INTERVAL) {
+      return cachedSchema;
+    }
+
+    // Refresh schema
+    try {
+      cachedSchema = await stitchRemoteSchemas(remoteSchemas, localSchema);
+      lastRefresh = now;
+      return cachedSchema;
+    } catch (error) {
+      logger.error('Failed to refresh stitched schema:', error);
+
+      // Return old schema if refresh fails
+      if (cachedSchema) {
+        logger.warn('Using stale schema due to refresh failure');
+        return cachedSchema;
+      }
+
+      throw error;
+    }
+  };
+}
+
+/**
+ * Example configuration for remote schemas
+ */
+const exampleRemoteSchemas = [
+  {
+    name: 'users',
+    url: 'http://localhost:8001/graphql',
+    headers: {
+      'x-api-key': process.env.USERS_API_KEY,
+    },
+    batch: true,
+    required: true,
+  },
+  {
+    name: 'products',
+    url: 'http://localhost:8002/graphql',
+    headers: {
+      'x-api-key': process.env.PRODUCTS_API_KEY,
+    },
+    batch: true,
+    required: true,
+  },
+  {
+    name: 'orders',
+    url: 'http://localhost:8003/graphql',
+    headers: {
+      'x-api-key': process.env.ORDERS_API_KEY,
+    },
+    batch: true,
+    required: false, // Optional schema
+  },
+];
+
+module.exports = {
+  createRemoteExecutor,
+  stitchRemoteSchemas,
+  createSchemaStitchingMiddleware,
+  exampleRemoteSchemas,
+};

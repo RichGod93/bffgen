@@ -1,0 +1,202 @@
+const { RESTDataSource } = require('@apollo/datasource-rest');
+const logger = require('./utils/logger');
+
+/**
+ * Base REST Data Source with common functionality
+ */
+class BaseRESTDataSource extends RESTDataSource {
+  constructor(options) {
+    super(options);
+    this.cacheTTL = options?.cacheTTL || 60; // Default 60 seconds
+  }
+
+  willSendRequest(_path, request) {
+    // Add authorization header if user context exists
+    if (this.context?.user?.token) {
+      request.headers['authorization'] = `Bearer ${this.context.user.token}`;
+    }
+
+    // Add request ID for tracing
+    if (this.context?.headers?.['x-request-id']) {
+      request.headers['x-request-id'] = this.context.headers['x-request-id'];
+    }
+
+    // Add any custom headers
+    if (this.customHeaders) {
+      Object.entries(this.customHeaders).forEach(([key, value]) => {
+        request.headers[key] = value;
+      });
+    }
+  }
+
+  async didReceiveResponse(response, _request) {
+    if (!response.ok) {
+      logger.error(`REST API Error: ${response.status} ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response;
+  }
+
+  async errorFromResponse(response) {
+    const body = await response.text();
+    logger.error(`Error response from ${response.url}: ${body}`);
+    return new Error(`${response.status}: ${body}`);
+  }
+}
+
+{{range .BackendServices}}
+/**
+ * Data source for {{.Name}} service
+ */
+class {{.Name | ToPascalCase}}Service extends BaseRESTDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.{{.Name | ToUpper}}_SERVICE_URL || '{{.BaseURL}}';
+  }
+
+  async getData() {
+    return this.get('/{{.Name}}', {
+      cacheOptions: { ttl: this.cacheTTL },
+    });
+  }
+
+  async getById(id) {
+    return this.get(`/{{.Name}}/${id}`, {
+      cacheOptions: { ttl: this.cacheTTL },
+    });
+  }
+
+  async create(data) {
+    return this.post('/{{.Name}}', {
+      body: data,
+    });
+  }
+
+  async update(id, data) {
+    return this.put(`/{{.Name}}/${id}`, {
+      body: data,
+    });
+  }
+
+  async delete(id) {
+    return this.delete(`/{{.Name}}/${id}`);
+  }
+}
+{{end}}
+
+/**
+ * Example: User service data source
+ */
+class UserService extends BaseRESTDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.USER_SERVICE_URL || 'http://localhost:8001';
+  }
+
+  async getUserById(id) {
+    return this.get(`/users/${id}`, {
+      cacheOptions: { ttl: this.cacheTTL },
+    });
+  }
+
+  async updateUser(id, data) {
+    return this.put(`/users/${id}`, {
+      body: data,
+    });
+  }
+}
+
+/**
+ * Example: Activity service data source
+ */
+class ActivityService extends BaseRESTDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.ACTIVITY_SERVICE_URL || 'http://localhost:8002';
+  }
+
+  async getRecentActivity(userId, limit = 10) {
+    return this.get(`/activities`, {
+      params: {
+        userId,
+        limit,
+        sort: '-createdAt',
+      },
+      cacheOptions: { ttl: 30 }, // Cache for 30 seconds
+    });
+  }
+}
+
+/**
+ * Example: Notification service data source
+ */
+class NotificationService extends BaseRESTDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8003';
+  }
+
+  async getNotifications(userId, unreadOnly = false) {
+    return this.get(`/notifications`, {
+      params: {
+        userId,
+        unreadOnly,
+      },
+      cacheOptions: { ttl: 10 }, // Cache for 10 seconds
+    });
+  }
+
+  async markAsRead(notificationId) {
+    return this.put(`/notifications/${notificationId}`, {
+      body: { read: true },
+    });
+  }
+}
+
+/**
+ * Example: Analytics service data source
+ */
+class AnalyticsService extends BaseRESTDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:8004';
+  }
+
+  async getUserStats(userId) {
+    return this.get(`/analytics/users/${userId}/stats`, {
+      cacheOptions: { ttl: 300 }, // Cache for 5 minutes
+    });
+  }
+}
+
+/**
+ * Create data sources with context
+ */
+function createDataSources(context) {
+  const options = {
+    cache: context.cache,
+    context,
+  };
+
+  return {
+    {{range .BackendServices}}
+    {{.Name}}Service: new {{.Name | ToPascalCase}}Service(options),
+    {{end}}
+    userService: new UserService(options),
+    activityService: new ActivityService(options),
+    notificationService: new NotificationService(options),
+    analyticsService: new AnalyticsService(options),
+  };
+}
+
+module.exports = {
+  createDataSources,
+  BaseRESTDataSource,
+  {{range .BackendServices}}
+  {{.Name | ToPascalCase}}Service,
+  {{end}}
+  UserService,
+  ActivityService,
+  NotificationService,
+  AnalyticsService,
+};

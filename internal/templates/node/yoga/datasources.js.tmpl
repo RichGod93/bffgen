@@ -1,0 +1,234 @@
+const fetch = require('node-fetch');
+const logger = require('./utils/logger');
+
+/**
+ * Base Data Source with common REST API functionality
+ */
+class BaseDataSource {
+  constructor(baseURL, options = {}) {
+    this.baseURL = baseURL;
+    this.headers = options.headers || {};
+    this.timeout = options.timeout || 5000;
+    this.cache = new Map(); // Simple in-memory cache
+    this.cacheTTL = options.cacheTTL || 60000; // 60 seconds
+  }
+
+  async fetch(path, options = {}) {
+    const url = `${this.baseURL}${path}`;
+    const cacheKey = `${options.method || 'GET'}:${url}:${JSON.stringify(options.body || {})}`;
+
+    // Check cache for GET requests
+    if (!options.method || options.method === 'GET') {
+      const cached = this.cache.get(cacheKey);
+      if (cached && cached.expiry > Date.now()) {
+        logger.debug(`Cache hit for ${url}`);
+        return cached.data;
+      }
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.headers,
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Cache successful GET requests
+      if (!options.method || options.method === 'GET') {
+        this.cache.set(cacheKey, {
+          data,
+          expiry: Date.now() + this.cacheTTL,
+        });
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      logger.error(`Fetch error for ${url}:`, error.message);
+      throw error;
+    }
+  }
+
+  async get(path, options = {}) {
+    return this.fetch(path, { ...options, method: 'GET' });
+  }
+
+  async post(path, body, options = {}) {
+    return this.fetch(path, {
+      ...options,
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async put(path, body, options = {}) {
+    return this.fetch(path, {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async delete(path, options = {}) {
+    return this.fetch(path, { ...options, method: 'DELETE' });
+  }
+
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+{{range .BackendServices}}
+/**
+ * Data source for {{.Name}} service
+ */
+class {{.Name | ToPascalCase}}Service extends BaseDataSource {
+  constructor(options) {
+    const baseURL = process.env.{{.Name | ToUpper}}_SERVICE_URL || '{{.BaseURL}}';
+    super(baseURL, options);
+  }
+
+  async getData() {
+    return this.get('/{{.Name}}');
+  }
+
+  async getItems({ limit = 10, cursor, filter }) {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      ...(cursor && { cursor }),
+      ...(filter && { filter }),
+    });
+
+    return this.get(`/{{.Name}}/items?${params.toString()}`);
+  }
+
+  async getById(id) {
+    return this.get(`/{{.Name}}/${id}`);
+  }
+
+  async createItem(data) {
+    return this.post('/{{.Name}}/items', data);
+  }
+
+  async updateItem(id, data) {
+    return this.put(`/{{.Name}}/items/${id}`, data);
+  }
+
+  async deleteItem(id) {
+    return this.delete(`/{{.Name}}/items/${id}`);
+  }
+}
+{{end}}
+
+/**
+ * User service data source
+ */
+class UserService extends BaseDataSource {
+  constructor(options) {
+    const baseURL = process.env.USER_SERVICE_URL || 'http://localhost:8001';
+    super(baseURL, options);
+  }
+
+  async getUserById(id) {
+    return this.get(`/users/${id}`);
+  }
+
+  async updateUser(id, data) {
+    return this.put(`/users/${id}`, data);
+  }
+}
+
+/**
+ * Activity service data source
+ */
+class ActivityService extends BaseDataSource {
+  constructor(options) {
+    const baseURL = process.env.ACTIVITY_SERVICE_URL || 'http://localhost:8002';
+    super(baseURL, options);
+  }
+
+  async getRecentActivities(userId, limit = 10) {
+    return this.get(`/activities?userId=${userId}&limit=${limit}`);
+  }
+}
+
+/**
+ * Notification service data source
+ */
+class NotificationService extends BaseDataSource {
+  constructor(options) {
+    const baseURL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8003';
+    super(baseURL, options);
+  }
+
+  async getNotifications(userId) {
+    return this.get(`/notifications?userId=${userId}`);
+  }
+
+  async markAsRead(id) {
+    return this.put(`/notifications/${id}`, { read: true });
+  }
+}
+
+/**
+ * Analytics service data source
+ */
+class AnalyticsService extends BaseDataSource {
+  constructor(options) {
+    const baseURL = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:8004';
+    super(baseURL, options);
+  }
+
+  async getSummary(userId) {
+    return this.get(`/analytics/summary?userId=${userId}`);
+  }
+}
+
+/**
+ * Create all data sources with context
+ */
+function createDataSources(context = {}) {
+  const options = {
+    headers: {
+      ...(context.user?.token && { authorization: `Bearer ${context.user.token}` }),
+      ...(context.headers?.['x-request-id'] && { 'x-request-id': context.headers['x-request-id'] }),
+    },
+  };
+
+  return {
+    {{range .BackendServices}}
+    {{.Name}}Service: new {{.Name | ToPascalCase}}Service(options),
+    {{end}}
+    userService: new UserService(options),
+    activityService: new ActivityService(options),
+    notificationService: new NotificationService(options),
+    analyticsService: new AnalyticsService(options),
+  };
+}
+
+module.exports = {
+  createDataSources,
+  BaseDataSource,
+  {{range .BackendServices}}
+  {{.Name | ToPascalCase}}Service,
+  {{end}}
+  UserService,
+  ActivityService,
+  NotificationService,
+  AnalyticsService,
+};

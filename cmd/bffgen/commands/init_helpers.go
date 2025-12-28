@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
@@ -73,7 +74,7 @@ func createDependencyFilesWithOptions(projectName string, langType scaffolding.L
 
 // createMainFile creates the main server file based on language/framework
 // createMainFileWithOptions creates the main server file with options
-func createMainFileWithOptions(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []BackendService, opts ProjectOptions) error {
+func createMainFileWithOptions(projectName string, langType scaffolding.LanguageType, framework string, corsConfig string, backendServs []types.BackendService, opts ProjectOptions) error {
 	switch langType {
 	case scaffolding.LanguageGo:
 		return createGoMainFile(projectName, framework, corsConfig)

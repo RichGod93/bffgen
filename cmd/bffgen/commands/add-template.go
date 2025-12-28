@@ -16,7 +16,7 @@ import (
 
 var addTemplateCmd = &cobra.Command{
 	Use:   "add-template [template-name]",
-	Short: "Add a predefined template (auth, ecommerce, content)",
+	Short: "Add a predefined template (auth, ecommerce, content, mobile-api, gateway)",
 	Long:  `Add a predefined template to your BFF configuration.`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -39,7 +39,9 @@ func selectTemplate() string {
 	fmt.Println("  1) Auth (login, register, refresh token)")
 	fmt.Println("  2) E-commerce (products, cart, checkout)")
 	fmt.Println("  3) Content (posts, comments, likes)")
-	fmt.Print("✔ Select template (1-3): ")
+	fmt.Println("  4) Mobile API (GraphQL with aggregations, offline sync, push notifications)")
+	fmt.Println("  5) Gateway (comprehensive microservices gateway with REST/GraphQL)")
+	fmt.Print("✔ Select template (1-5): ")
 
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
@@ -52,6 +54,10 @@ func selectTemplate() string {
 		return "ecommerce"
 	case "3":
 		return "content"
+	case "4":
+		return "mobile-api"
+	case "5":
+		return "gateway"
 	default:
 		fmt.Println("❌ Invalid selection, defaulting to auth")
 		return "auth"
@@ -100,7 +106,7 @@ func addTemplateGo(templateName string) error {
 	templatePath := templateName + ".yaml"
 	templateData, err := templates.TemplateFS.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content)", templateName)
+		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content, mobile-api, gateway)", templateName)
 	}
 
 	var templateConfig types.BFFConfig
@@ -174,7 +180,7 @@ func addTemplateNodeJS(templateName string) error {
 	templatePath := templateName + ".yaml"
 	templateData, err := templates.TemplateFS.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content)", templateName)
+		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content, mobile-api, gateway)", templateName)
 	}
 
 	var templateConfig types.BFFConfig
@@ -272,7 +278,7 @@ func addTemplatePython(templateName string) error {
 	templatePath := templateName + ".yaml"
 	templateData, err := templates.TemplateFS.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content)", templateName)
+		return fmt.Errorf("template file not found: %s (available: auth, ecommerce, content, mobile-api, gateway)", templateName)
 	}
 
 	var templateConfig types.BFFConfig

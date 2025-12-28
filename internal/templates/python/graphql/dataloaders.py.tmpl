@@ -1,0 +1,300 @@
+"""
+DataLoaders for efficient data fetching with batching and caching
+"""
+import httpx
+from typing import Dict, Any, Optional, List
+from functools import lru_cache
+import os
+
+from utils.logger import logger
+
+
+class BaseDataLoader:
+    """Base data loader with common HTTP functionality"""
+
+    def __init__(self, base_url: str, context: Dict[str, Any]):
+        self.base_url = base_url
+        self.context = context
+        self.session = httpx.AsyncClient(
+            timeout=30.0,
+            headers=self._get_headers()
+        )
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Get headers for requests"""
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Correlation-ID': self.context.get('correlation_id', 'unknown')
+        }
+
+        # Add authorization if available
+        auth = self.context.get('authorization')
+        if auth:
+            headers['Authorization'] = auth
+
+        return headers
+
+    async def get(self, path: str, params: Optional[Dict] = None) -> Dict[str, Any]:
+        """Make GET request"""
+        try:
+            response = await self.session.get(
+                f"{self.base_url}{path}",
+                params=params
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error in GET {path}: {e}")
+            raise
+
+    async def post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Make POST request"""
+        try:
+            response = await self.session.post(
+                f"{self.base_url}{path}",
+                json=data
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error in POST {path}: {e}")
+            raise
+
+    async def put(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Make PUT request"""
+        try:
+            response = await self.session.put(
+                f"{self.base_url}{path}",
+                json=data
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error in PUT {path}: {e}")
+            raise
+
+    async def delete(self, path: str) -> Dict[str, Any]:
+        """Make DELETE request"""
+        try:
+            response = await self.session.delete(f"{self.base_url}{path}")
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error in DELETE {path}: {e}")
+            raise
+
+    async def check_health(self) -> bool:
+        """Health check"""
+        try:
+            await self.get('/health')
+            return True
+        except Exception:
+            return False
+
+    async def close(self):
+        """Close HTTP session"""
+        await self.session.aclose()
+
+
+class UserServiceDataLoader(BaseDataLoader):
+    """User service data loader"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('USER_SERVICE_URL', 'http://localhost:8001')
+        super().__init__(base_url, context)
+
+    async def get_user(self, user_id: str) -> Dict[str, Any]:
+        return await self.get(f'/users/{user_id}')
+
+    async def get_user_preferences(self, user_id: str) -> Dict[str, Any]:
+        return await self.get(f'/users/{user_id}/preferences')
+
+    async def get_user_stats(self, user_id: str) -> Dict[str, Any]:
+        return await self.get(f'/users/{user_id}/stats')
+
+    async def get_recent_activity(self, user_id: str) -> Dict[str, Any]:
+        return await self.get(f'/users/{user_id}/activity')
+
+    async def login(self, email: str, password: str) -> Dict[str, Any]:
+        return await self.post('/auth/login', {'email': email, 'password': password})
+
+    async def register(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.post('/auth/register', input_data)
+
+    async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
+        return await self.post('/auth/refresh', {'refresh_token': refresh_token})
+
+    async def logout(self, user_id: str) -> Dict[str, Any]:
+        return await self.post('/auth/logout', {'user_id': user_id})
+
+    async def update_profile(self, user_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.put(f'/users/{user_id}/profile', input_data)
+
+    async def update_preferences(self, user_id: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return await self.put(f'/users/{user_id}/preferences', input_data)
+
+
+class ContentServiceDataLoader(BaseDataLoader):
+    """Content service data loader"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('CONTENT_SERVICE_URL', 'http://localhost:8003')
+        super().__init__(base_url, context)
+
+    async def get_feed(
+        self,
+        cursor: Optional[str] = None,
+        limit: int = 10
+    ) -> Dict[str, Any]:
+        params = {'limit': limit}
+        if cursor:
+            params['cursor'] = cursor
+        return await self.get('/content/feed', params)
+
+    async def get_content(self, content_id: str) -> Dict[str, Any]:
+        return await self.get(f'/content/{content_id}')
+
+    async def search_content(self, query: str, limit: int) -> Dict[str, Any]:
+        return await self.get('/content/search', {'query': query, 'limit': limit})
+
+    async def is_liked(self, user_id: str, content_id: str) -> bool:
+        result = await self.get(f'/content/{content_id}/liked', {'user_id': user_id})
+        return result.get('liked', False)
+
+    async def like_content(self, user_id: str, content_id: str) -> Dict[str, Any]:
+        return await self.post(f'/content/{content_id}/like', {'user_id': user_id})
+
+    async def unlike_content(self, user_id: str, content_id: str) -> Dict[str, Any]:
+        return await self.delete(f'/content/{content_id}/like')
+
+    async def share_content(
+        self,
+        user_id: str,
+        content_id: str,
+        platform: str
+    ) -> Dict[str, Any]:
+        return await self.post(
+            f'/content/{content_id}/share',
+            {'user_id': user_id, 'platform': platform}
+        )
+
+
+class NotificationServiceDataLoader(BaseDataLoader):
+    """Notification service data loader"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('NOTIFICATION_SERVICE_URL', 'http://localhost:8002')
+        super().__init__(base_url, context)
+
+    async def get_notifications(
+        self,
+        user_id: str,
+        unread_only: Optional[bool] = None,
+        limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        params = {'user_id': user_id}
+        if unread_only is not None:
+            params['unread_only'] = unread_only
+        if limit:
+            params['limit'] = limit
+        return await self.get('/notifications', params)
+
+    async def get_unread_count(self, user_id: str) -> int:
+        result = await self.get('/notifications/unread-count', {'user_id': user_id})
+        return result.get('count', 0)
+
+    async def mark_as_read(self, notification_id: str) -> Dict[str, Any]:
+        return await self.post(f'/notifications/{notification_id}/read', {})
+
+    async def mark_all_as_read(self, user_id: str) -> int:
+        result = await self.post('/notifications/read-all', {'user_id': user_id})
+        return result.get('count', 0)
+
+    async def register_device(
+        self,
+        user_id: str,
+        token: str,
+        platform: str
+    ) -> Dict[str, Any]:
+        return await self.post(
+            '/notifications/register-device',
+            {'user_id': user_id, 'token': token, 'platform': platform}
+        )
+
+    async def unregister_device(self, device_id: str) -> Dict[str, Any]:
+        return await self.delete(f'/notifications/devices/{device_id}')
+
+
+class ConfigServiceDataLoader(BaseDataLoader):
+    """Config service data loader"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('CONFIG_SERVICE_URL', 'http://localhost:8004')
+        super().__init__(base_url, context)
+
+    async def get_app_config(self) -> Dict[str, Any]:
+        return await self.get('/config/app')
+
+    async def get_feature_flags(self) -> Dict[str, Any]:
+        return await self.get('/config/features')
+
+
+class SyncServiceDataLoader(BaseDataLoader):
+    """Sync service data loader"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('SYNC_SERVICE_URL', 'http://localhost:8005')
+        super().__init__(base_url, context)
+
+    async def get_sync_status(self, user_id: str) -> Dict[str, Any]:
+        return await self.get('/sync/status', {'user_id': user_id})
+
+    async def sync_data(
+        self,
+        user_id: str,
+        last_sync_timestamp: Optional[str],
+        changes: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        return await self.post(
+            '/sync/push',
+            {
+                'user_id': user_id,
+                'last_sync_timestamp': last_sync_timestamp,
+                'changes': changes
+            }
+        )
+
+
+class AnalyticsServiceDataLoader(BaseDataLoader):
+    """Analytics service data loader (fire-and-forget)"""
+
+    def __init__(self, context: Dict[str, Any]):
+        base_url = os.getenv('ANALYTICS_SERVICE_URL', 'http://localhost:8006')
+        super().__init__(base_url, context)
+
+    async def track_event(self, event: Dict[str, Any]) -> None:
+        """Track analytics event (fire-and-forget)"""
+        try:
+            await self.post('/analytics/events', event)
+        except Exception as e:
+            # Don't fail the request if analytics fails
+            logger.warning(f"Analytics tracking failed: {e}")
+
+
+def get_dataloaders(context: Dict[str, Any]) -> Dict[str, Any]:
+    """Factory function to create all data loaders"""
+    return {
+        'user_service': UserServiceDataLoader(context),
+        'content_service': ContentServiceDataLoader(context),
+        'notification_service': NotificationServiceDataLoader(context),
+        'config_service': ConfigServiceDataLoader(context),
+        'sync_service': SyncServiceDataLoader(context),
+        'analytics_service': AnalyticsServiceDataLoader(context),
+    }
+
+
+async def close_dataloaders(dataloaders: Dict[str, Any]) -> None:
+    """Close all data loader sessions"""
+    for loader in dataloaders.values():
+        if hasattr(loader, 'close'):
+            await loader.close()

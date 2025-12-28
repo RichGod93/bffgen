@@ -1,0 +1,224 @@
+const { RESTDataSource } = require('@apollo/datasource-rest');
+const logger = require('../../utils/logger');
+
+/**
+ * Enhanced REST Data Source with advanced BFF capabilities
+ * - Request batching
+ * - Response caching
+ * - Circuit breaker
+ * - Automatic retries
+ * - Field selection/filtering
+ */
+class EnhancedRESTDataSource extends RESTDataSource {
+  constructor(options = {}) {
+    super(options);
+
+    this.serviceName = options.serviceName || 'unknown';
+    this.cacheTTL = options.cacheTTL || 60;
+    this.maxRetries = options.maxRetries || 3;
+    this.timeout = options.timeout || 5000;
+    this.circuitBreakerThreshold = options.circuitBreakerThreshold || 5;
+
+    // Circuit breaker state
+    this.failures = 0;
+    this.lastFailureTime = null;
+    this.isCircuitOpen = false;
+
+    // Request batching
+    this.batchQueue = new Map();
+    this.batchTimeout = options.batchTimeout || 10; // ms
+  }
+
+  /**
+   * Override to add common headers
+   */
+  willSendRequest(_path, request) {
+    // Add authorization
+    if (this.context?.user?.token) {
+      request.headers['authorization'] = `Bearer ${this.context.user.token}`;
+    }
+
+    // Add tracing headers
+    if (this.context?.headers?.['x-request-id']) {
+      request.headers['x-request-id'] = this.context.headers['x-request-id'];
+    }
+    if (this.context?.headers?.['x-correlation-id']) {
+      request.headers['x-correlation-id'] = this.context.headers['x-correlation-id'];
+    }
+
+    // Add custom headers
+    if (this.customHeaders) {
+      Object.entries(this.customHeaders).forEach(([key, value]) => {
+        request.headers[key] = value;
+      });
+    }
+
+    // Set timeout
+    request.signal = AbortSignal.timeout(this.timeout);
+
+    logger.debug(`[${this.serviceName}] Sending request to ${request.url}`);
+  }
+
+  /**
+   * Override to handle responses with circuit breaker
+   */
+  async didReceiveResponse(response, request) {
+    if (response.ok) {
+      // Reset circuit breaker on success
+      this.failures = 0;
+      this.isCircuitOpen = false;
+      return response;
+    }
+
+    // Record failure
+    this.recordFailure();
+
+    logger.error(`[${this.serviceName}] HTTP ${response.status} from ${request.url}`);
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  /**
+   * Circuit breaker logic
+   */
+  recordFailure() {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failures >= this.circuitBreakerThreshold) {
+      this.isCircuitOpen = true;
+      logger.warn(`[${this.serviceName}] Circuit breaker opened after ${this.failures} failures`);
+
+      // Auto-reset after 30 seconds
+      setTimeout(() => {
+        this.failures = 0;
+        this.isCircuitOpen = false;
+        logger.info(`[${this.serviceName}] Circuit breaker reset`);
+      }, 30000);
+    }
+  }
+
+  /**
+   * Check circuit breaker before making request
+   */
+  checkCircuitBreaker() {
+    if (this.isCircuitOpen) {
+      throw new Error(`[${this.serviceName}] Circuit breaker is open - service unavailable`);
+    }
+  }
+
+  /**
+   * GET with retry logic
+   */
+  async getWithRetry(path, options = {}, retries = this.maxRetries) {
+    this.checkCircuitBreaker();
+
+    try {
+      return await this.get(path, options);
+    } catch (error) {
+      if (retries > 0 && this.isRetryableError(error)) {
+        logger.warn(`[${this.serviceName}] Retrying request (${retries} attempts left)`);
+        await this.sleep(Math.pow(2, this.maxRetries - retries) * 100); // Exponential backoff
+        return this.getWithRetry(path, options, retries - 1);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * POST with retry logic
+   */
+  async postWithRetry(path, options = {}, retries = this.maxRetries) {
+    this.checkCircuitBreaker();
+
+    try {
+      return await this.post(path, options);
+    } catch (error) {
+      if (retries > 0 && this.isRetryableError(error)) {
+        logger.warn(`[${this.serviceName}] Retrying request (${retries} attempts left)`);
+        await this.sleep(Math.pow(2, this.maxRetries - retries) * 100);
+        return this.postWithRetry(path, options, retries - 1);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Batch multiple requests
+   */
+  async batchGet(ids, pathTemplate, options = {}) {
+    const promises = ids.map(id => {
+      const path = pathTemplate.replace(':id', id);
+      return this.get(path, {
+        ...options,
+        cacheOptions: { ttl: this.cacheTTL },
+      });
+    });
+
+    return Promise.all(promises);
+  }
+
+  /**
+   * Transform response data (useful for field selection)
+   */
+  transformResponse(data, fields) {
+    if (!fields || fields.length === 0) {
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      return data.map(item => this.selectFields(item, fields));
+    }
+
+    return this.selectFields(data, fields);
+  }
+
+  /**
+   * Select specific fields from response
+   */
+  selectFields(obj, fields) {
+    const result = {};
+    fields.forEach(field => {
+      if (obj.hasOwnProperty(field)) {
+        result[field] = obj[field];
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Check if error is retryable
+   */
+  isRetryableError(error) {
+    // Retry on network errors, timeouts, and 5xx errors
+    return (
+      error.message.includes('timeout') ||
+      error.message.includes('ECONNREFUSED') ||
+      error.message.includes('ENOTFOUND') ||
+      (error.extensions?.response?.status >= 500 && error.extensions?.response?.status < 600)
+    );
+  }
+
+  /**
+   * Sleep utility for retry backoff
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Override error handling
+   */
+  async errorFromResponse(response) {
+    const body = await this.parseBody(response);
+
+    logger.error(`[${this.serviceName}] Error from ${response.url}:`, {
+      status: response.status,
+      statusText: response.statusText,
+      body,
+    });
+
+    return new Error(`${response.status}: ${JSON.stringify(body)}`);
+  }
+}
+
+module.exports = { EnhancedRESTDataSource };

@@ -13,6 +13,9 @@ const (
 	LanguageNodeExpress   LanguageType = "nodejs-express"
 	LanguageNodeFastify   LanguageType = "nodejs-fastify"
 	LanguagePythonFastAPI LanguageType = "python-fastapi"
+	LanguageNodeApollo    LanguageType = "nodejs-apollo" // GraphQL Apollo Server
+	LanguageNodeYoga      LanguageType = "nodejs-yoga"   // GraphQL Yoga
+	LanguageGoGqlgen      LanguageType = "go-graphql"    // GraphQL gqlgen
 )
 
 // LanguageConfig holds configuration for different languages
@@ -31,7 +34,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 	case LanguageGo:
 		return LanguageConfig{
 			Type:         LanguageGo,
-			Name:         "Go",
+			Name:         "Go (Chi)",
 			Framework:    "chi", // default framework
 			DepsPath:     "go.mod",
 			MainFile:     "main.go",
@@ -64,6 +67,33 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			MainFile:     "main.py",
 			TemplatePath: "templates/python-fastapi",
 		}
+	case LanguageNodeApollo:
+		return LanguageConfig{
+			Type:         LanguageNodeApollo,
+			Name:         "Node.js (Apollo GraphQL)",
+			Framework:    "apollo",
+			DepsPath:     "package.json",
+			MainFile:     "index.js",
+			TemplatePath: "templates/nodejs-apollo",
+		}
+	case LanguageNodeYoga:
+		return LanguageConfig{
+			Type:         LanguageNodeYoga,
+			Name:         "Node.js (GraphQL Yoga)",
+			Framework:    "yoga",
+			DepsPath:     "package.json",
+			MainFile:     "index.js",
+			TemplatePath: "templates/nodejs-yoga",
+		}
+	case LanguageGoGqlgen:
+		return LanguageConfig{
+			Type:         LanguageGoGqlgen,
+			Name:         "Go (gqlgen GraphQL)",
+			Framework:    "gqlgen",
+			DepsPath:     "go.mod",
+			MainFile:     "server.go",
+			TemplatePath: "templates/go-graphql",
+		}
 	default:
 		return LanguageConfig{
 			Type:         LanguageGo,
@@ -83,6 +113,9 @@ func GetSupportedLanguages() []LanguageConfig {
 		GetLanguageConfig(LanguageNodeExpress),
 		GetLanguageConfig(LanguageNodeFastify),
 		GetLanguageConfig(LanguagePythonFastAPI),
+		GetLanguageConfig(LanguageNodeApollo),
+		GetLanguageConfig(LanguageNodeYoga),
+		GetLanguageConfig(LanguageGoGqlgen),
 	}
 }
 
@@ -106,7 +139,13 @@ func GetLanguageFromFramework(framework string) LanguageType {
 		return LanguageNodeExpress
 	case "fastify":
 		return LanguageNodeFastify
-	case "python-fastapi":
+	case "apollo":
+		return LanguageNodeApollo
+	case "yoga":
+		return LanguageNodeYoga
+	case "gqlgen":
+		return LanguageGoGqlgen
+	case "python-fastapi", "fastapi":
 		return LanguagePythonFastAPI
 	default:
 		return LanguageGo

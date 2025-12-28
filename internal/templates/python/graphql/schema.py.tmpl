@@ -1,0 +1,363 @@
+"""
+Mobile-optimized GraphQL schema using Strawberry
+"""
+import strawberry
+from typing import List, Optional
+from datetime import datetime
+from enum import Enum
+
+
+# Enums
+@strawberry.enum
+class Theme(Enum):
+    LIGHT = "LIGHT"
+    DARK = "DARK"
+    AUTO = "AUTO"
+
+
+@strawberry.enum
+class Visibility(Enum):
+    PUBLIC = "PUBLIC"
+    PRIVATE = "PRIVATE"
+    FRIENDS = "FRIENDS"
+
+
+@strawberry.enum
+class Platform(Enum):
+    IOS = "IOS"
+    ANDROID = "ANDROID"
+    WEB = "WEB"
+
+
+@strawberry.enum
+class SharePlatform(Enum):
+    FACEBOOK = "FACEBOOK"
+    TWITTER = "TWITTER"
+    WHATSAPP = "WHATSAPP"
+    EMAIL = "EMAIL"
+    COPY_LINK = "COPY_LINK"
+
+
+@strawberry.enum
+class NotificationType(Enum):
+    LIKE = "LIKE"
+    COMMENT = "COMMENT"
+    FOLLOW = "FOLLOW"
+    MENTION = "MENTION"
+    SYSTEM = "SYSTEM"
+    ANNOUNCEMENT = "ANNOUNCEMENT"
+
+
+@strawberry.enum
+class ActivityType(Enum):
+    CONTENT_CREATED = "CONTENT_CREATED"
+    CONTENT_LIKED = "CONTENT_LIKED"
+    CONTENT_SHARED = "CONTENT_SHARED"
+    USER_FOLLOWED = "USER_FOLLOWED"
+    PROFILE_UPDATED = "PROFILE_UPDATED"
+
+
+# Input Types
+@strawberry.input
+class RegisterInput:
+    email: str
+    password: str
+    name: str
+
+
+@strawberry.input
+class UpdateProfileInput:
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+@strawberry.input
+class PushPreferencesInput:
+    enabled: Optional[bool] = None
+    likes: Optional[bool] = None
+    comments: Optional[bool] = None
+    follows: Optional[bool] = None
+    mentions: Optional[bool] = None
+
+
+@strawberry.input
+class PrivacySettingsInput:
+    profile_visibility: Optional[Visibility] = None
+    show_email: Optional[bool] = None
+    show_activity: Optional[bool] = None
+
+
+@strawberry.input
+class PreferencesInput:
+    language: Optional[str] = None
+    theme: Optional[Theme] = None
+    notifications_enabled: Optional[bool] = None
+    push_notifications: Optional[PushPreferencesInput] = None
+    privacy: Optional[PrivacySettingsInput] = None
+
+
+# Object Types
+@strawberry.type
+class PushPreferences:
+    enabled: bool
+    likes: bool
+    comments: bool
+    follows: bool
+    mentions: bool
+
+
+@strawberry.type
+class PrivacySettings:
+    profile_visibility: Visibility
+    show_email: bool
+    show_activity: bool
+
+
+@strawberry.type
+class UserPreferences:
+    language: str
+    theme: Theme
+    notifications_enabled: bool
+    push_notifications: PushPreferences
+    privacy: PrivacySettings
+
+
+@strawberry.type
+class UserStats:
+    total_content: int
+    total_likes: int
+    total_followers: int
+    total_following: int
+
+
+@strawberry.type
+class User:
+    id: strawberry.ID
+    email: str
+    name: str
+    avatar: Optional[str] = None
+    bio: Optional[str] = None
+    created_at: str
+    preferences: Optional[UserPreferences] = None
+    stats: Optional[UserStats] = None
+
+
+@strawberry.type
+class Image:
+    id: strawberry.ID
+    url: str
+    thumbnail: str
+    width: Optional[int] = None
+    height: Optional[int] = None
+    size: Optional[int] = None
+
+
+@strawberry.type
+class Content:
+    id: strawberry.ID
+    title: str
+    summary: Optional[str] = None
+    body: Optional[str] = None
+    thumbnail: Optional[str] = None
+    images: List[Image]
+    author: User
+    likes_count: int
+    is_liked: bool
+    comments_count: int
+    created_at: str
+    updated_at: str
+
+
+@strawberry.type
+class PageInfo:
+    has_next_page: bool
+    has_previous_page: bool
+    start_cursor: Optional[str] = None
+    end_cursor: Optional[str] = None
+
+
+@strawberry.type
+class ContentEdge:
+    node: Content
+    cursor: str
+
+
+@strawberry.type
+class ContentConnection:
+    edges: List[ContentEdge]
+    page_info: PageInfo
+
+
+@strawberry.type
+class FacetItem:
+    value: str
+    count: int
+
+
+@strawberry.type
+class SearchFacets:
+    authors: List[FacetItem]
+    categories: List[FacetItem]
+
+
+@strawberry.type
+class SearchResult:
+    total: int
+    results: List[Content]
+    facets: Optional[SearchFacets] = None
+
+
+@strawberry.type
+class NotificationData:
+    content_id: Optional[strawberry.ID] = None
+    user_id: Optional[strawberry.ID] = None
+    action_type: Optional[str] = None
+
+
+@strawberry.type
+class Notification:
+    id: strawberry.ID
+    title: str
+    body: str
+    type: NotificationType
+    read: bool
+    action_url: Optional[str] = None
+    thumbnail: Optional[str] = None
+    created_at: str
+    data: Optional[NotificationData] = None
+
+
+@strawberry.type
+class ThemeConfig:
+    primary_color: str
+    secondary_color: str
+    accent_color: str
+
+
+@strawberry.type
+class FeatureFlags:
+    dark_mode: bool
+    offline_mode: bool
+    push_notifications: bool
+    social_sharing: bool
+    analytics: bool
+    advanced_search: bool
+
+
+@strawberry.type
+class AppConfig:
+    version: str
+    min_version: str
+    update_required: bool
+    update_url: Optional[str] = None
+    theme: ThemeConfig
+    features: FeatureFlags
+    api_url: str
+    cdn_url: str
+    support_url: str
+
+
+@strawberry.type
+class ActivityMetadata:
+    content_id: Optional[strawberry.ID] = None
+    user_id: Optional[strawberry.ID] = None
+    count: Optional[int] = None
+
+
+@strawberry.type
+class Activity:
+    id: strawberry.ID
+    type: ActivityType
+    description: str
+    timestamp: str
+    metadata: Optional[ActivityMetadata] = None
+
+
+@strawberry.type
+class SyncError:
+    id: strawberry.ID
+    message: str
+    retryable: bool
+
+
+@strawberry.type
+class SyncStatus:
+    last_sync: Optional[str] = None
+    pending_changes: int
+    sync_in_progress: bool
+    errors: List[SyncError]
+
+
+@strawberry.type
+class MobileHomeData:
+    user: User
+    feed: List[Content]
+    notifications: List[Notification]
+    unread_count: int
+    config: AppConfig
+    features_enabled: List[str]
+
+
+@strawberry.type
+class UserDashboard:
+    profile: User
+    preferences: UserPreferences
+    stats: UserStats
+    recent_activity: List[Activity]
+    unread_count: int
+    features_enabled: List[str]
+
+
+@strawberry.type
+class AuthPayload:
+    token: str
+    refresh_token: str
+    expires_in: int
+    user: User
+
+
+@strawberry.type
+class DeviceRegistration:
+    success: bool
+    device_id: strawberry.ID
+    message: Optional[str] = None
+
+
+@strawberry.type
+class ShareResult:
+    success: bool
+    share_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+@strawberry.type
+class SyncConflict:
+    id: strawberry.ID
+    type: str
+    local_version: str
+    remote_version: str
+
+
+@strawberry.type
+class SyncResult:
+    success: bool
+    synced_items: int
+    failed_items: int
+    conflicts: List[SyncConflict]
+    timestamp: str
+
+
+@strawberry.type
+class ServiceHealth:
+    name: str
+    status: str
+    response_time: Optional[int] = None
+
+
+@strawberry.type
+class HealthStatus:
+    status: str
+    timestamp: str
+    version: str
+    services: List[ServiceHealth]

@@ -1,0 +1,302 @@
+const { RESTDataSource } = require('@apollo/datasource-rest');
+const logger = require('./utils/logger');
+
+// Base data source with common functionality
+class BaseDataSource extends RESTDataSource {
+  constructor(options = {}) {
+    super(options);
+    this.cache = options.cache;
+  }
+
+  willSendRequest(path, request) {
+    if (this.context?.headers?.authorization) {
+      request.headers['authorization'] = this.context.headers.authorization;
+    }
+    // Add correlation ID for request tracing
+    request.headers['x-correlation-id'] = this.context?.correlationId || generateCorrelationId();
+  }
+
+  async errorFromResponse(response) {
+    const error = await super.errorFromResponse(response);
+    logger.error('Data source error:', {
+      url: response.url,
+      status: response.status,
+      message: error.message,
+    });
+    return error;
+  }
+
+  async checkHealth() {
+    try {
+      await this.get('/health');
+      return { status: 'up' };
+    } catch (error) {
+      return { status: 'down', error: error.message };
+    }
+  }
+}
+
+// User service data source
+class UserServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.USER_SERVICE_URL || 'http://localhost:8001';
+  }
+
+  async getUser(id) {
+    return this.get(`/users/${id}`, {
+      cacheOptions: { ttl: 300 }, // Cache for 5 minutes
+    });
+  }
+
+  async getUserPreferences(userId) {
+    return this.get(`/users/${userId}/preferences`, {
+      cacheOptions: { ttl: 300 },
+    });
+  }
+
+  async getUserStats(userId) {
+    return this.get(`/users/${userId}/stats`, {
+      cacheOptions: { ttl: 60 },
+    });
+  }
+
+  async getRecentActivity(userId) {
+    return this.get(`/users/${userId}/activity`, {
+      cacheOptions: { ttl: 60 },
+    });
+  }
+
+  async login({ email, password }) {
+    return this.post('/auth/login', {
+      body: { email, password },
+    });
+  }
+
+  async register(input) {
+    return this.post('/auth/register', {
+      body: input,
+    });
+  }
+
+  async refreshToken(refreshToken) {
+    return this.post('/auth/refresh', {
+      body: { refreshToken },
+    });
+  }
+
+  async logout(userId) {
+    return this.post('/auth/logout', {
+      body: { userId },
+    });
+  }
+
+  async updateProfile(userId, input) {
+    return this.put(`/users/${userId}/profile`, {
+      body: input,
+    });
+  }
+
+  async updatePreferences(userId, input) {
+    return this.put(`/users/${userId}/preferences`, {
+      body: input,
+    });
+  }
+}
+
+// Content service data source
+class ContentServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.CONTENT_SERVICE_URL || 'http://localhost:8003';
+  }
+
+  async getFeed({ cursor, limit = 10 }) {
+    const params = { limit };
+    if (cursor) {
+      params.cursor = cursor;
+    }
+    return this.get('/content/feed', {
+      params,
+      cacheOptions: { ttl: 300 }, // Cache feed for 5 minutes
+    });
+  }
+
+  async getContent(id) {
+    return this.get(`/content/${id}`, {
+      cacheOptions: { ttl: 600 }, // Cache content for 10 minutes
+    });
+  }
+
+  async searchContent({ query, limit }) {
+    return this.get('/content/search', {
+      params: { query, limit },
+      cacheOptions: { ttl: 300 },
+    });
+  }
+
+  async isLiked({ userId, contentId }) {
+    return this.get(`/content/${contentId}/liked`, {
+      params: { userId },
+      cacheOptions: { ttl: 60 },
+    });
+  }
+
+  async likeContent({ userId, contentId }) {
+    return this.post(`/content/${contentId}/like`, {
+      body: { userId },
+    });
+  }
+
+  async unlikeContent({ userId, contentId }) {
+    return this.delete(`/content/${contentId}/like`, {
+      body: { userId },
+    });
+  }
+
+  async shareContent({ userId, contentId, platform }) {
+    return this.post(`/content/${contentId}/share`, {
+      body: { userId, platform },
+    });
+  }
+}
+
+// Notification service data source
+class NotificationServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8002';
+  }
+
+  async getNotifications({ userId, unreadOnly, limit }) {
+    const params = { userId };
+    if (unreadOnly !== undefined) params.unreadOnly = unreadOnly;
+    if (limit) params.limit = limit;
+
+    return this.get('/notifications', {
+      params,
+      cacheOptions: { ttl: 30 }, // Short cache for notifications
+    });
+  }
+
+  async getUnreadCount(userId) {
+    return this.get('/notifications/unread-count', {
+      params: { userId },
+      cacheOptions: { ttl: 30 },
+    }).then(result => result.count || 0);
+  }
+
+  async markAsRead(notificationId) {
+    return this.post(`/notifications/${notificationId}/read`);
+  }
+
+  async markAllAsRead(userId) {
+    return this.post('/notifications/read-all', {
+      body: { userId },
+    }).then(result => result.count || 0);
+  }
+
+  async registerDevice({ userId, token, platform }) {
+    return this.post('/notifications/register-device', {
+      body: { userId, token, platform },
+    });
+  }
+
+  async unregisterDevice(deviceId) {
+    return this.delete(`/notifications/devices/${deviceId}`);
+  }
+}
+
+// Config service data source
+class ConfigServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.CONFIG_SERVICE_URL || 'http://localhost:8004';
+  }
+
+  async getAppConfig() {
+    return this.get('/config/app', {
+      cacheOptions: { ttl: 3600 }, // Cache config for 1 hour
+    });
+  }
+
+  async getFeatureFlags() {
+    return this.get('/config/features', {
+      cacheOptions: { ttl: 3600 },
+    });
+  }
+}
+
+// Sync service data source
+class SyncServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.SYNC_SERVICE_URL || 'http://localhost:8005';
+  }
+
+  async getSyncStatus(userId) {
+    return this.get('/sync/status', {
+      params: { userId },
+    });
+  }
+
+  async syncData({ userId, lastSyncTimestamp, changes }) {
+    return this.post('/sync/push', {
+      body: { userId, lastSyncTimestamp, changes },
+    });
+  }
+
+  async pullChanges({ userId, lastSyncTimestamp }) {
+    return this.post('/sync/pull', {
+      body: { userId, lastSyncTimestamp },
+    });
+  }
+}
+
+// Analytics service data source (fire-and-forget)
+class AnalyticsServiceDataSource extends BaseDataSource {
+  constructor(options) {
+    super(options);
+    this.baseURL = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:8006';
+  }
+
+  async trackEvent(event) {
+    try {
+      await this.post('/analytics/events', {
+        body: event,
+      });
+    } catch (error) {
+      // Log but don't throw - analytics failures shouldn't break the app
+      logger.warn('Analytics tracking failed:', error.message);
+    }
+  }
+}
+
+// Factory function to create all data sources
+function createDataSources(context) {
+  const options = { cache: context.cache };
+
+  return {
+    userService: new UserServiceDataSource({ ...options, context }),
+    contentService: new ContentServiceDataSource({ ...options, context }),
+    notificationService: new NotificationServiceDataSource({ ...options, context }),
+    configService: new ConfigServiceDataSource({ ...options, context }),
+    syncService: new SyncServiceDataSource({ ...options, context }),
+    analyticsService: new AnalyticsServiceDataSource({ ...options, context }),
+  };
+}
+
+// Generate correlation ID for request tracing
+function generateCorrelationId() {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+module.exports = {
+  createDataSources,
+  UserServiceDataSource,
+  ContentServiceDataSource,
+  NotificationServiceDataSource,
+  ConfigServiceDataSource,
+  SyncServiceDataSource,
+  AnalyticsServiceDataSource,
+};

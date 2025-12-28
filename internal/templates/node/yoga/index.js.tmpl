@@ -1,0 +1,95 @@
+const { createYoga, createSchema } = require('graphql-yoga');
+const { createServer } = require('http');
+const { readFileSync } = require('fs');
+const { join } = require('path');
+const { useResponseCache } = require('@graphql-yoga/plugin-response-cache');
+const { useDepthLimit } = require('@graphql-yoga/plugin-depth-limit');
+
+const resolvers = require('./resolvers');
+const { createDataSources } = require('./datasources');
+const { authPlugin } = require('./plugins/auth');
+const logger = require('./utils/logger');
+
+const PORT = process.env.PORT || 4000;
+
+// Load GraphQL schema
+const typeDefs = readFileSync(join(__dirname, 'schema.graphql'), 'utf-8');
+
+// Create GraphQL schema
+const schema = createSchema({
+  typeDefs,
+  resolvers,
+});
+
+// Create Yoga instance with plugins
+const yoga = createYoga({
+  schema,
+  context: async ({ request }) => {
+    // Extract headers
+    const headers = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    // Create data sources
+    const dataSources = createDataSources({
+      headers,
+    });
+
+    return {
+      headers,
+      dataSources,
+      request,
+    };
+  },
+  plugins: [
+    authPlugin(),
+    useResponseCache({
+      ttl: 60_000, // 1 minute
+      session: (request) => {
+        // Use authorization header as cache key
+        return request.headers.get('authorization') || 'anonymous';
+      },
+    }),
+    useDepthLimit({
+      maxDepth: parseInt(process.env.GRAPHQL_DEPTH_LIMIT || '10'),
+    }),
+  ],
+  graphiql: process.env.NODE_ENV !== 'production',
+  logging: {
+    debug: (...args) => logger.debug(...args),
+    info: (...args) => logger.info(...args),
+    warn: (...args) => logger.warn(...args),
+    error: (...args) => logger.error(...args),
+  },
+  maskedErrors: process.env.NODE_ENV === 'production',
+  cors: {
+    origin: process.env.CORS_ORIGINS?.split(',') || {{.CORSOriginsJS}},
+    credentials: true,
+  },
+});
+
+// Create HTTP server
+const server = createServer(yoga);
+
+server.listen(PORT, () => {
+  logger.info(`🚀 GraphQL Yoga BFF Server ready at http://localhost:${PORT}/graphql`);
+  logger.info(`📊 GraphiQL IDE: http://localhost:${PORT}/graphql`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});

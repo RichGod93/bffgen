@@ -1,0 +1,176 @@
+"""
+Mobile GraphQL BFF server using FastAPI and Strawberry GraphQL
+"""
+import os
+from typing import Optional
+from contextlib import asynccontextmanager
+
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+from strawberry.subscriptions import GRAPHQL_TRANSPORT_WS_PROTOCOL, GRAPHQL_WS_PROTOCOL
+from fastapi import FastAPI, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
+
+from graphql.schema import Query, Mutation, Subscription
+from graphql.dataloaders import get_dataloaders, close_dataloaders
+from middleware.auth import get_current_user
+from utils.logger import logger
+
+
+# Lifespan context manager for startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan"""
+    logger.info("Starting Mobile GraphQL BFF server...")
+    yield
+    logger.info("Shutting down Mobile GraphQL BFF server...")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Mobile GraphQL BFF",
+    description="Mobile-optimized GraphQL Backend for Frontend",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS configuration for mobile
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=86400,  # 24 hours for mobile preflight caching
+)
+
+
+# Create Strawberry GraphQL schema
+schema = strawberry.Schema(
+    query=Query,
+    mutation=Mutation,
+    subscription=Subscription
+)
+
+
+# Context getter for GraphQL
+async def get_context(
+    request: Request,
+    user: Optional[dict] = Depends(get_current_user)
+):
+    """Build GraphQL context with user and data loaders"""
+    # Generate correlation ID for request tracing
+    correlation_id = request.headers.get('x-correlation-id') or f"mobile-{os.urandom(8).hex()}"
+
+    context = {
+        'request': request,
+        'user': user,
+        'authorization': request.headers.get('authorization'),
+        'correlation_id': correlation_id,
+    }
+
+    # Add dataloaders to context
+    dataloaders = get_dataloaders(context)
+    context['dataloaders'] = dataloaders
+
+    return context
+
+
+# GraphQL router with subscriptions support
+graphql_app = GraphQLRouter(
+    schema,
+    context_getter=get_context,
+    subscription_protocols=[
+        GRAPHQL_TRANSPORT_WS_PROTOCOL,
+        GRAPHQL_WS_PROTOCOL
+    ],
+    graphiql=os.getenv("ENABLE_GRAPHIQL", "true").lower() == "true"
+)
+
+# Mount GraphQL router
+app.include_router(graphql_app, prefix="/graphql")
+
+
+# Health check endpoints
+@app.get("/health")
+async def health_check():
+    """Basic health check"""
+    return {
+        "status": "healthy",
+        "service": "mobile-graphql-bff",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness check (checks dependencies)"""
+    services = {
+        "users": os.getenv("USER_SERVICE_URL"),
+        "content": os.getenv("CONTENT_SERVICE_URL"),
+        "notifications": os.getenv("NOTIFICATION_SERVICE_URL"),
+    }
+
+    return {
+        "status": "ready",
+        "services": services
+    }
+
+
+@app.get("/live")
+async def liveness_check():
+    """Liveness check"""
+    return {"status": "alive"}
+
+
+# Error handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "message": str(exc) if os.getenv("DEBUG") else "An error occurred"
+        }
+    )
+
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Mobile GraphQL BFF",
+        "version": "1.0.0",
+        "endpoints": {
+            "graphql": "/graphql",
+            "health": "/health",
+            "ready": "/ready",
+            "live": "/live"
+        }
+    }
+
+
+if __name__ == "__main__":
+    # Get configuration from environment
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    reload = os.getenv("RELOAD", "false").lower() == "true"
+    workers = int(os.getenv("WORKERS", 1))
+
+    # Run server
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=reload,
+        workers=workers if not reload else 1,
+        log_level="info",
+        access_log=True
+    )

@@ -11,6 +11,7 @@ import (
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/internal/types"
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
@@ -92,7 +93,7 @@ func generatePackageJsonContent(projectName string, langType scaffolding.Languag
 }
 
 // createNodeExpressMainFileWithOptions creates Express index.js from template with options
-func createNodeExpressMainFileWithOptions(projectName string, backendServs []BackendService, opts ProjectOptions) error {
+func createNodeExpressMainFileWithOptions(projectName string, backendServs []types.BackendService, opts ProjectOptions) error {
 	loader := templates.NewTemplateLoader(scaffolding.LanguageNodeExpress)
 
 	// Convert backend services to template format
@@ -216,7 +217,7 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []Bac
 }
 
 // createNodeFastifyMainFileWithOptions creates Fastify index.js from template with options
-func createNodeFastifyMainFileWithOptions(projectName string, backendServs []BackendService, opts ProjectOptions) error {
+func createNodeFastifyMainFileWithOptions(projectName string, backendServs []types.BackendService, opts ProjectOptions) error {
 	loader := templates.NewTemplateLoader(scaffolding.LanguageNodeFastify)
 
 	// Convert backend services to template format

@@ -1,0 +1,379 @@
+name: gateway
+version: 1.0.0
+description: Comprehensive microservices gateway with REST/GraphQL support, service discovery, and API composition
+author: bffgen
+category: gateway
+
+# Supported languages for this template
+language: multi # Supports: go, nodejs-express, nodejs-fastify, nodejs-apollo, python-fastapi
+
+features:
+  - Unified API gateway for multiple microservices
+  - REST and GraphQL endpoint support
+  - Service discovery and health checking
+  - Request routing and load balancing
+  - API composition and aggregation
+  - Rate limiting per service and global
+  - Circuit breaker with fallback responses
+  - Request/response transformation
+  - Authentication and authorization (JWT, OAuth2, API Keys)
+  - Request tracing and correlation IDs
+  - Metrics collection and monitoring
+  - Centralized logging
+  - CORS and security headers
+  - API versioning support
+  - WebSocket proxying
+  - Response caching with Redis
+  - Request validation and sanitization
+  - Graceful shutdown and zero-downtime deployments
+
+# Template variables
+variables:
+  - name: PROJECT_NAME
+    description: Name of the gateway project
+    default: api-gateway
+    required: true
+
+  - name: PORT
+    description: Gateway port
+    default: "8080"
+    required: false
+
+  - name: ENABLE_GRAPHQL
+    description: Enable GraphQL federation/stitching
+    default: "true"
+    required: false
+
+  - name: ENABLE_RATE_LIMITING
+    description: Enable rate limiting
+    default: "true"
+    required: false
+
+  - name: RATE_LIMIT_WINDOW
+    description: Rate limit window in seconds
+    default: "60"
+    required: false
+
+  - name: RATE_LIMIT_MAX
+    description: Maximum requests per window
+    default: "100"
+    required: false
+
+  - name: ENABLE_CACHING
+    description: Enable response caching
+    default: "true"
+    required: false
+
+  - name: CACHE_TTL
+    description: Default cache TTL in seconds
+    default: "300"
+    required: false
+
+  - name: ENABLE_TRACING
+    description: Enable distributed tracing
+    default: "true"
+    required: false
+
+# Backend services configuration
+services:
+  auth:
+    baseUrl: "http://localhost:8001"
+    healthCheckPath: "/health"
+    timeout: 5000
+    retries: 3
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "login"
+        path: "/auth/login"
+        method: "POST"
+        exposeAs: "/api/v1/auth/login"
+        rateLimit: 10
+        cache: false
+        public: true
+      - name: "register"
+        path: "/auth/register"
+        method: "POST"
+        exposeAs: "/api/v1/auth/register"
+        rateLimit: 5
+        cache: false
+        public: true
+      - name: "refresh"
+        path: "/auth/refresh"
+        method: "POST"
+        exposeAs: "/api/v1/auth/refresh"
+        cache: false
+        public: true
+      - name: "profile"
+        path: "/auth/profile"
+        method: "GET"
+        exposeAs: "/api/v1/auth/profile"
+        cache: true
+        cacheTTL: 60
+        requiresAuth: true
+
+  users:
+    baseUrl: "http://localhost:8002"
+    healthCheckPath: "/health"
+    timeout: 5000
+    retries: 3
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "getUsers"
+        path: "/users"
+        method: "GET"
+        exposeAs: "/api/v1/users"
+        cache: true
+        cacheTTL: 300
+        requiresAuth: true
+      - name: "getUser"
+        path: "/users/:id"
+        method: "GET"
+        exposeAs: "/api/v1/users/:id"
+        cache: true
+        cacheTTL: 300
+        requiresAuth: true
+      - name: "createUser"
+        path: "/users"
+        method: "POST"
+        exposeAs: "/api/v1/users"
+        requiresAuth: true
+        roles: ["admin"]
+      - name: "updateUser"
+        path: "/users/:id"
+        method: "PUT"
+        exposeAs: "/api/v1/users/:id"
+        requiresAuth: true
+      - name: "deleteUser"
+        path: "/users/:id"
+        method: "DELETE"
+        exposeAs: "/api/v1/users/:id"
+        requiresAuth: true
+        roles: ["admin"]
+
+  products:
+    baseUrl: "http://localhost:8003"
+    healthCheckPath: "/health"
+    timeout: 5000
+    retries: 3
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "getProducts"
+        path: "/products"
+        method: "GET"
+        exposeAs: "/api/v1/products"
+        cache: true
+        cacheTTL: 600
+        public: true
+      - name: "getProduct"
+        path: "/products/:id"
+        method: "GET"
+        exposeAs: "/api/v1/products/:id"
+        cache: true
+        cacheTTL: 600
+        public: true
+      - name: "searchProducts"
+        path: "/products/search"
+        method: "GET"
+        exposeAs: "/api/v1/products/search"
+        cache: true
+        cacheTTL: 300
+        public: true
+      - name: "createProduct"
+        path: "/products"
+        method: "POST"
+        exposeAs: "/api/v1/products"
+        requiresAuth: true
+        roles: ["admin", "seller"]
+      - name: "updateProduct"
+        path: "/products/:id"
+        method: "PUT"
+        exposeAs: "/api/v1/products/:id"
+        requiresAuth: true
+        roles: ["admin", "seller"]
+
+  orders:
+    baseUrl: "http://localhost:8004"
+    healthCheckPath: "/health"
+    timeout: 10000
+    retries: 3
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "getOrders"
+        path: "/orders"
+        method: "GET"
+        exposeAs: "/api/v1/orders"
+        cache: true
+        cacheTTL: 60
+        requiresAuth: true
+      - name: "getOrder"
+        path: "/orders/:id"
+        method: "GET"
+        exposeAs: "/api/v1/orders/:id"
+        cache: true
+        cacheTTL: 60
+        requiresAuth: true
+      - name: "createOrder"
+        path: "/orders"
+        method: "POST"
+        exposeAs: "/api/v1/orders"
+        requiresAuth: true
+      - name: "updateOrder"
+        path: "/orders/:id"
+        method: "PUT"
+        exposeAs: "/api/v1/orders/:id"
+        requiresAuth: true
+        roles: ["admin"]
+      - name: "cancelOrder"
+        path: "/orders/:id/cancel"
+        method: "POST"
+        exposeAs: "/api/v1/orders/:id/cancel"
+        requiresAuth: true
+
+  notifications:
+    baseUrl: "http://localhost:8005"
+    healthCheckPath: "/health"
+    timeout: 3000
+    retries: 2
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "getNotifications"
+        path: "/notifications"
+        method: "GET"
+        exposeAs: "/api/v1/notifications"
+        requiresAuth: true
+      - name: "markAsRead"
+        path: "/notifications/:id/read"
+        method: "POST"
+        exposeAs: "/api/v1/notifications/:id/read"
+        requiresAuth: true
+
+  analytics:
+    baseUrl: "http://localhost:8006"
+    healthCheckPath: "/health"
+    timeout: 5000
+    retries: 3
+    circuitBreaker:
+      enabled: true
+      threshold: 5
+      timeout: 30000
+    endpoints:
+      - name: "trackEvent"
+        path: "/analytics/events"
+        method: "POST"
+        exposeAs: "/api/v1/analytics/events"
+        requiresAuth: true
+      - name: "getDashboard"
+        path: "/analytics/dashboard"
+        method: "GET"
+        exposeAs: "/api/v1/analytics/dashboard"
+        cache: true
+        cacheTTL: 300
+        requiresAuth: true
+        roles: ["admin"]
+
+# API Composition endpoints (aggregated calls)
+compositions:
+  - name: "userDashboard"
+    path: "/api/v1/dashboard"
+    method: "GET"
+    description: "Aggregated user dashboard data"
+    requiresAuth: true
+    aggregations:
+      - service: users
+        endpoint: getUser
+        params: ["userId"]
+      - service: orders
+        endpoint: getOrders
+        params: ["userId"]
+      - service: notifications
+        endpoint: getNotifications
+        params: ["userId"]
+
+  - name: "productDetails"
+    path: "/api/v1/products/:id/details"
+    method: "GET"
+    description: "Product with related data"
+    public: true
+    aggregations:
+      - service: products
+        endpoint: getProduct
+        params: ["id"]
+      - service: users
+        endpoint: getUser
+        params: ["sellerId"]
+
+# GraphQL configuration (if enabled)
+graphql:
+  enabled: true
+  endpoint: /graphql
+  playground: true
+  introspection: true
+  federatedServices:
+    - name: users
+      url: http://localhost:8002/graphql
+    - name: products
+      url: http://localhost:8003/graphql
+    - name: orders
+      url: http://localhost:8004/graphql
+
+# Security configuration
+security:
+  jwt:
+    enabled: true
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER}
+    audience: ${JWT_AUDIENCE}
+  cors:
+    enabled: true
+    origins: ["http://localhost:3000", "https://app.example.com"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    allowedHeaders: ["Content-Type", "Authorization"]
+  helmet:
+    enabled: true
+  apiKeys:
+    enabled: true
+    header: X-API-Key
+
+# Monitoring and observability
+monitoring:
+  healthCheck:
+    enabled: true
+    path: /health
+  metrics:
+    enabled: true
+    path: /metrics
+  tracing:
+    enabled: true
+    provider: jaeger
+    endpoint: http://localhost:14268/api/traces
+
+# Post-generation instructions
+postInstall:
+  - message: "Microservices Gateway created successfully!"
+  - message: "Next steps:"
+  - message: "  1. cd {{.PROJECT_NAME}}"
+  - message: "  2. Install dependencies"
+  - message: "  3. Configure backend services in .env"
+  - message: "  4. Set JWT_SECRET environment variable"
+  - message: "  5. Start development server"
+  - message: ""
+  - message: "Gateway will be available at http://localhost:{{.PORT}}"
+  - message: "Health check: http://localhost:{{.PORT}}/health"
+  - message: "Metrics: http://localhost:{{.PORT}}/metrics"
+  - message: ""
+  - message: "Documentation: https://github.com/RichGod93/bffgen/docs/gateway.md"

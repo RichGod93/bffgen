@@ -140,11 +140,16 @@ release_notes.md
 # AWK helper scripts (utilities)
 *.awk
 
-# Task documentation at root (should be in docs/tasks/)
-docs/tasks/*
-docs/ARCHITECTURE.md
-docs/NODEJS_TESTING.md
+# Internal task tracking and planning (not for public repository)
+docs/tasks/
+docs/thesis/
+docs/ARCHITECTURE.md  # Old/deprecated version
+docs/NODEJS_TESTING.md  # Internal testing notes
 docs/templates/*
+
+# Artemis/planning artifacts (internal use only)
+.gemini/
+brain/
 
 # Generated test projects
 nodejs-examples/
