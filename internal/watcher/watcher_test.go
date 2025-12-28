@@ -3,6 +3,7 @@ package watcher
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -142,9 +143,12 @@ func TestConfigWatcher_handleChange(t *testing.T) {
 		t.Fatalf("Failed to create config file: %v", err)
 	}
 
+	var mu sync.Mutex
 	changeCount := 0
 	onChange := func(path string) error {
+		mu.Lock()
 		changeCount++
+		mu.Unlock()
 		return nil
 	}
 
@@ -164,18 +168,26 @@ func TestConfigWatcher_handleChange(t *testing.T) {
 		time.Sleep(400 * time.Millisecond)
 
 		// Should only have one change due to debouncing
-		if changeCount != 1 {
-			t.Errorf("Expected 1 change after debounce, got %d", changeCount)
+		mu.Lock()
+		count := changeCount
+		mu.Unlock()
+		if count != 1 {
+			t.Errorf("Expected 1 change after debounce, got %d", count)
 		}
 	})
 
 	t.Run("does not trigger when stopped", func(t *testing.T) {
+		mu.Lock()
 		initialCount := changeCount
+		mu.Unlock()
 		watcher.stopped = true
 		watcher.handleChange(configPath)
 		time.Sleep(400 * time.Millisecond)
 
-		if changeCount != initialCount {
+		mu.Lock()
+		count := changeCount
+		mu.Unlock()
+		if count != initialCount {
 			t.Error("handleChange should not trigger callback when stopped")
 		}
 	})
