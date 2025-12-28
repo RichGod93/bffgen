@@ -32,7 +32,7 @@ func GetDefaultTemplatesDir() (string, error) {
 
 // List returns all available templates
 func (m *Manager) List() ([]*Template, error) {
-	var templates []*Template
+	templates := make([]*Template, 0)
 
 	// Check bundled templates (shipped with bffgen)
 	if bundled, err := m.loadBundledTemplates(); err == nil {

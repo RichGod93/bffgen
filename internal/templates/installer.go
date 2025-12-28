@@ -6,14 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/schollz/progressbar/v3"
 )
 
 // Installer handles template installation from remote sources
 type Installer struct {
 	templatesDir string
-	progressBar  *progressbar.ProgressBar
 }
 
 // NewInstaller creates a new template installer

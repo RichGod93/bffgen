@@ -41,8 +41,8 @@ func (d testDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		}
 	}
 
-	fmt.Fprintf(w, fn(str)+"\n")
-	fmt.Fprintf(w, "   "+lipgloss.NewStyle().Faint(true).Render(desc))
+	fmt.Fprintf(w, "%s\n", fn(str))
+	fmt.Fprintf(w, "   %s", lipgloss.NewStyle().Faint(true).Render(desc))
 }
 
 type TestSelectorModel struct {
