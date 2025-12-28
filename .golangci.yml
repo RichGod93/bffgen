@@ -23,6 +23,8 @@ run:
     - node_modules
     - dist
     - test-project
+    - templates
+    - examples
 
 issues:
   max-same-issues: 0
