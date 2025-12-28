@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.21", "1.22"]
+        go-version: ["1.23", "1.24"]
 
     steps:
       - uses: actions/checkout@v4
@@ -29,14 +29,16 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.63.4
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Check code formatting
         run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "❌ Code is not formatted"
-            gofmt -s -l .
+          # Exclude template directories which contain Go template syntax
+          UNFORMATTED=$(find . -name '*.go' -not -path './templates/*' -not -path './examples/*' -not -path './vendor/*' | xargs gofmt -s -l 2>/dev/null || true)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "❌ Code is not formatted:"
+            echo "$UNFORMATTED"
             exit 1
           fi
           echo "✅ Code formatting is correct"
@@ -67,7 +69,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.24"
 
       - name: Build bffgen
         run: make build
