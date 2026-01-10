@@ -26,6 +26,9 @@ type TemplateData struct {
 	BackendServicesEnv string // Environment variables for backend services
 	BackendsJSON       string // JSON array of backend services
 	BackendServices    []BackendServiceData
+
+	// Dependency Versions - populated from manifest
+	Versions map[string]string // Key: package name, Value: version string
 }
 
 // BackendServiceData represents a backend service for templates
@@ -122,8 +125,8 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 			path = filepath.Join("node", "fastify", filename)
 		case scaffolding.LanguageNodeApollo:
 			path = filepath.Join("node", "apollo", filename)
-		case scaffolding.LanguageNodeYoga:
-			path = filepath.Join("node", "yoga", filename)
+		// case scaffolding.LanguageNodeYoga:
+		// 	path = filepath.Join("node", "yoga", filename)
 		default:
 			return "", fmt.Errorf("unsupported language type: %s", tl.langType)
 		}
@@ -144,7 +147,12 @@ func (tl *TemplateLoader) RenderTemplate(framework, filename string, data *Templ
 		return "", err
 	}
 
-	tmpl, err := template.New(filename).Parse(tmplContent)
+	// Create template with custom functions
+	funcMap := template.FuncMap{
+		"GetVersion": data.GetVersion,
+	}
+
+	tmpl, err := template.New(filename).Funcs(funcMap).Parse(tmplContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template %s: %w", filename, err)
 	}

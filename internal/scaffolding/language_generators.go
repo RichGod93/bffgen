@@ -14,8 +14,8 @@ const (
 	LanguageNodeFastify   LanguageType = "nodejs-fastify"
 	LanguagePythonFastAPI LanguageType = "python-fastapi"
 	LanguageNodeApollo    LanguageType = "nodejs-apollo" // GraphQL Apollo Server
-	LanguageNodeYoga      LanguageType = "nodejs-yoga"   // GraphQL Yoga
-	LanguageGoGqlgen      LanguageType = "go-graphql"    // GraphQL gqlgen
+	// LanguageNodeYoga   LanguageType = "nodejs-yoga"   // GraphQL Yoga - REMOVED: Incomplete implementation
+	LanguageGoGqlgen LanguageType = "go-graphql" // GraphQL gqlgen
 )
 
 // LanguageConfig holds configuration for different languages
@@ -47,7 +47,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			Framework:    "express",
 			DepsPath:     "package.json",
 			MainFile:     "index.js",
-			TemplatePath: "templates/nodejs-express",
+			TemplatePath: "node/express",
 		}
 	case LanguageNodeFastify:
 		return LanguageConfig{
@@ -56,7 +56,7 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			Framework:    "fastify",
 			DepsPath:     "package.json",
 			MainFile:     "index.js",
-			TemplatePath: "templates/nodejs-fastify",
+			TemplatePath: "node/fastify",
 		}
 	case LanguagePythonFastAPI:
 		return LanguageConfig{
@@ -74,17 +74,17 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			Framework:    "apollo",
 			DepsPath:     "package.json",
 			MainFile:     "index.js",
-			TemplatePath: "templates/nodejs-apollo",
+			TemplatePath: "node/apollo",
 		}
-	case LanguageNodeYoga:
-		return LanguageConfig{
-			Type:         LanguageNodeYoga,
-			Name:         "Node.js (GraphQL Yoga)",
-			Framework:    "yoga",
-			DepsPath:     "package.json",
-			MainFile:     "index.js",
-			TemplatePath: "templates/nodejs-yoga",
-		}
+	// case LanguageNodeYoga: // REMOVED - incomplete implementation
+	//	return LanguageConfig{
+	//		Type:         LanguageNodeYoga,
+	//		Name:         "Node.js (GraphQL Yoga)",
+	//		Framework:    "yoga",
+	//		DepsPath:     "package.json",
+	//		MainFile:     "index.js",
+	//		TemplatePath: "node/yoga",
+	//	}
 	case LanguageGoGqlgen:
 		return LanguageConfig{
 			Type:         LanguageGoGqlgen,
@@ -114,7 +114,7 @@ func GetSupportedLanguages() []LanguageConfig {
 		GetLanguageConfig(LanguageNodeFastify),
 		GetLanguageConfig(LanguagePythonFastAPI),
 		GetLanguageConfig(LanguageNodeApollo),
-		GetLanguageConfig(LanguageNodeYoga),
+		// GetLanguageConfig(LanguageNodeYoga), // REMOVED - incomplete
 		GetLanguageConfig(LanguageGoGqlgen),
 	}
 }
@@ -141,8 +141,8 @@ func GetLanguageFromFramework(framework string) LanguageType {
 		return LanguageNodeFastify
 	case "apollo":
 		return LanguageNodeApollo
-	case "yoga":
-		return LanguageNodeYoga
+	// case "yoga": // REMOVED - incomplete implementation
+	//	return LanguageNodeYoga
 	case "gqlgen":
 		return LanguageGoGqlgen
 	case "python-fastapi", "fastapi":
@@ -197,70 +197,33 @@ func (g *Generator) generatePythonFastAPIProject(projectName string, config Lang
 }
 
 // generatePythonRequirements creates requirements.txt content for Python projects
+// DEPRECATED: This function uses hardcoded versions. Use template files instead:
+// internal/templates/python/common/requirements.txt.tmpl
+// This function is kept for backward compatibility only.
 func (g *Generator) generatePythonRequirements(projectName string) string {
-	return `fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
-slowapi==0.1.9
-httpx==0.26.0
-redis==5.0.1
+	// TODO: Remove this function and use template loading instead
+	// For now, return empty to force template usage
+	return `# See requirements.txt.tmpl for dependencies
+# This hardcoded version is deprecated
 `
 }
 
 // generatePackageContent creates package.json content for Node.js projects
+// DEPRECATED: This function uses hardcoded versions. Use template files instead:
+// internal/templates/node/express/package.json.tmpl
+// internal/templates/node/fastify/package.json.tmpl
+// This function is kept for backward compatibility only.
 func (g *Generator) generatePackageContent(projectName, framework string) string {
-	var dependencies string
-	var mainContent string
-
-	switch framework {
-	case "express":
-		dependencies = `    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
-    "jsonwebtoken": "^9.0.2",
-    "cookie-parser": "^1.4.6",
-    "express-validator": "^7.0.1"`
-		mainContent = g.generateExpressMainContent(projectName)
-	case "fastify":
-		dependencies = `    "@fastify/cors": "^8.3.0",
-    "@fastify/helmet": "^11.1.1",
-    "@fastify/rate-limit": "^7.7.0",
-    "fastify": "^4.24.3",
-    "fastify-jwt": "^7.2.0",
-    "fastify-cookie": "^8.3.0"`
-		mainContent = g.generateFastifyMainContent(projectName)
-	default:
-		return ""
-	}
-
+	// TODO: Remove this function and use template loading instead
 	return fmt.Sprintf(`{
   "name": "%s",
   "version": "1.0.0",
-  "description": "Backend-for-Frontend service generated by bffgen",
+  "description": "Backend-for-Frontend service generated by bffgen - USE TEMPLATES",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "jest"
-  },
-  "keywords": ["bff", "backend-for-frontend", "api"],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-%s
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1",
-    "jest": "^29.7.0"
-  },
   "engines": {
     "node": ">=18.0.0"
   }
-}`, projectName, dependencies) + "\n" + mainContent
+}`, projectName)
 }
 
 // generateExpressMainContent creates Express.js main server content

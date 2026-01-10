@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-01-10
+
+### Added
+- **Dynamic Dependency Management System** - Major architectural improvement
+  - Central version manifest (`internal/registry/versions.yaml`) - single source of truth for 50+ dependencies
+  - NPM registry client for fetching latest package versions from npmjs.org
+  - PyPI registry client for Python package versions from pypi.org
+  - 24-hour disk cache for fetched versions (`~/.bffgen/cache/versions/`)
+  - New `bffgen update-deps` CLI command to update dependency versions
+    - `--dry-run` flag to preview updates
+    - `--runtime` flag to update specific runtime only
+  - Template function `GetVersion` for dynamic version substitution
+  - Concurrent package fetching for improved performance
+
+### Changed
+- Converted Express templates to use dynamic versions from manifest
+- Converted Fastify templates to use dynamic versions from manifest
+- Converted Python FastAPI templates to use dynamic versions from manifest
+- Template rendering now supports custom function maps
+- Dependency versions no longer hardcoded in templates
+
+### Improved
+- Eliminated need to rebuild binary for dependency updates
+- Reduced maintenance burden - one YAML file instead of multiple templates
+- Foundation for automated CI/CD dependency updates
+- Faster iteration on dependency changes
+
+### Technical Details
+- New packages: `internal/registry/` with manifest loader, NPM client, PyPI client, and caching
+- New file: `internal/templates/versions.go` with template helper functions
+- Modified: `internal/templates/loader.go` to support `GetVersion` function map
+- ~850 lines of new code
+
+## [3.1.0] - 2026-01-10
+
+### Fixed
+- **CI/CD Version Mismatch** - Updated release workflow to use Go 1.24 (matching go.mod)
+- **Template Path Errors** - Corrected all Node.js runtime template paths from `nodejs-*` to `node/*`
+- **Incomplete GraphQL Support** - Removed nodejs-yoga runtime (incomplete implementation)
+
+### Added
+- **Windows ARM64 Support** - Added to both CI/CD builds and NPM package
+  - Surface Pro X and other Windows on ARM devices now supported
+  - Binary releases include windows-arm64 target
+  - NPM installation works on Windows ARM64
+
+###Changed
+- **Updated Node.js Version Requirement** - Minimum version now 18.0.0 (from 14.0.0)
+  - Aligns with modern LTS versions
+  - Drops EOL Node.js 14 support
+- **Updated Dependencies to Latest Stable Versions**:
+  - **Express**: 4.19.2, Helmet 8.0.0, Winston 3.15.0, dotenv 16.4.5
+  - **Fastify**: 5.1.0 (major upgrade), @fastify/* plugins updated to compatible versions
+  - **Python**: FastAPI 0.115.0+, Uvicorn 0.30.0+, Pydantic 2.9.0+
+- Deprecated hardcoded dependency generation functions in `language_generators.go`
+- Updated README to accurately reflect supported runtimes (removed nodejs-yoga mentions)
+
+### Removed
+- nodejs-yoga GraphQL runtime support (incomplete, misleading users)
+- GRAPHQL_SUPPORT.md (moved to docs/ for clarity)
+
 ## [3.0.0] - 2025-12-28
 
 ### Added
@@ -93,6 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[3.2.0]: https://github.com/RichGod93/bffgen/compare/v3.1.0...v3.2.0
+[3.1.0]: https://github.com/RichGod93/bffgen/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/RichGod93/bffgen/compare/v2.2.1...v3.0.0
 [2.2.1]: https://github.com/RichGod93/bffgen/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/RichGod93/bffgen/compare/v2.1.0...v2.2.0

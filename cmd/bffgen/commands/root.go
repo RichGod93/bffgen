@@ -67,6 +67,7 @@ func Execute(version, buildTime, commit string) error {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(testCmd)
 	rootCmd.AddCommand(templateCmd)
+	rootCmd.AddCommand(updateDepsCmd) // Dynamic dependency management
 
 	// Legacy commands (for backward compatibility)
 	rootCmd.AddCommand(addRouteCmd)

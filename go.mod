@@ -1,8 +1,6 @@
 module github.com/RichGod93/bffgen
 
-go 1.24
-
-toolchain go1.24.0
+go 1.24.0
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0

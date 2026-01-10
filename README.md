@@ -105,7 +105,9 @@ uvicorn main:app --reload
 - **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
 - **Node.js Express** - Popular, flexible web framework
 - **Node.js Fastify** - Fast, schema-based framework
-- **Python FastAPI** - Modern, async Python web framework with automatic API docs (NEW v2.2)
+- **Node.js Apollo GraphQL** - GraphQL server with Apollo
+- **Python FastAPI** - Modern, async Python web framework with automatic API docs
+- **Go gqlgen GraphQL** - Type-safe GraphQL for Go
 - **Template-Based Generation** - Embedded templates for consistency
 - **Auto-Detection** - Commands detect project type automatically
 - **Language-Specific Optimization** - Tailored code generation for each runtime

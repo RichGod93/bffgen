@@ -16,6 +16,7 @@ const PLATFORM_MAP = {
   },
   win32: {
     x64: "windows-amd64",
+    arm64: "windows-arm64",
   },
 };
 
@@ -25,6 +26,7 @@ const SUPPORTED_PLATFORMS = [
   "linux-x64",
   "linux-arm64",
   "win32-x64",
+  "win32-arm64",
 ];
 
 /**

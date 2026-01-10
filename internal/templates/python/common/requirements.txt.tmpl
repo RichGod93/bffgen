@@ -1,31 +1,31 @@
 # FastAPI Core Dependencies
-fastapi>=0.109.0,<0.111.0
-uvicorn[standard]>=0.27.0,<0.30.0
-pydantic>=2.5.3,<3.0.0
-pydantic-settings>=2.1.0,<3.0.0
+fastapi{{GetVersion "fastapi"}}
+uvicorn[standard]{{GetVersion "uvicorn"}}
+pydantic{{GetVersion "pydantic"}}
+pydantic-settings{{GetVersion "pydantic-settings"}}
 
 # Authentication & Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.6
+python-jose[cryptography]{{GetVersion "python-jose"}}
+passlib[bcrypt]{{GetVersion "passlib"}}
+python-multipart{{GetVersion "python-multipart"}}
 
 # Rate Limiting
-slowapi>=0.1.9
+slowapi{{GetVersion "slowapi"}}
 
 # HTTP Client
-httpx>=0.26.0,<0.28.0
+httpx{{GetVersion "httpx"}}
 
 # Caching
-redis>=5.0.1,<6.0.0
+redis{{GetVersion "redis"}}
 
 # Environment Variables
-python-dotenv>=1.0.0
+python-dotenv{{GetVersion "python-dotenv"}}
 
 # Development Dependencies
-pytest>=7.4.3
-pytest-asyncio>=0.23.3
-pytest-cov>=4.1.0
-black>=23.12.1
-ruff>=0.1.9
-mypy>=1.8.0
+pytest{{GetVersion "pytest"}}
+pytest-asyncio{{GetVersion "pytest-asyncio"}}
+pytest-cov{{GetVersion "pytest-cov"}}
+black{{GetVersion "black"}}
+ruff{{GetVersion "ruff"}}
+mypy{{GetVersion "mypy"}}
 
