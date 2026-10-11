@@ -23,15 +23,8 @@ module.exports = {
     '!**/__tests__/**'
   ],
 
-  // Coverage thresholds
-  coverageThresholds: {
-    global: {
-      branches: 70,
-      functions: 70,
-      lines: 70,
-      statements: 70
-    }
-  },
+  // Coverage thresholds - raise these as you add tests, e.g.
+  // coverageThreshold: { global: { branches: 70, functions: 70, lines: 70, statements: 70 } },
 
   // Coverage reporters
   coverageReporters: ['text', 'lcov', 'html'],
@@ -67,10 +60,11 @@ module.exports = {
   // Force exit after tests complete
   forceExit: true,
 
-  // Transform (if using ES modules or TypeScript)
-  // transform: {
-  //   '^.+\\.js$': 'babel-jest'
-  // },
+  // Transform ESM-only dependencies (e.g. cookie@2, used by Fastify's inject) to CommonJS
+  transform: {
+    '^.+\\.js$': ['babel-jest', { plugins: ['@babel/plugin-transform-modules-commonjs'] }]
+  },
+  transformIgnorePatterns: ['/node_modules/(?!cookie/)'],
 
   // Module name mapper (for aliases)
   moduleNameMapper: {
@@ -88,11 +82,5 @@ module.exports = {
 
   // Notify on completion
   notify: false,
-
-  // Watch plugins (for watch mode)
-  watchPlugins: [
-    'jest-watch-typeahead/filename',
-    'jest-watch-typeahead/testname',
-  ],
 };
 

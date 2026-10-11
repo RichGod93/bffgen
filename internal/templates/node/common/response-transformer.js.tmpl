@@ -15,7 +15,7 @@ class ResponseTransformer {
   static pick(obj, fields) {
     if (!obj) return obj;
     return fields.reduce((acc, field) => {
-      if (obj.hasOwnProperty(field)) {
+      if (Object.prototype.hasOwnProperty.call(obj, field)) {
         acc[field] = obj[field];
       }
       return acc;
@@ -45,7 +45,7 @@ class ResponseTransformer {
     if (!obj) return obj;
     const result = { ...obj };
     Object.entries(mapping).forEach(([oldKey, newKey]) => {
-      if (result.hasOwnProperty(oldKey)) {
+      if (Object.prototype.hasOwnProperty.call(result, oldKey)) {
         result[newKey] = result[oldKey];
         delete result[oldKey];
       }

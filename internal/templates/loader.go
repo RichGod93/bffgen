@@ -89,7 +89,7 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 	commonFiles := []string{
 		"env.tmpl", "env.test.tmpl", "gitignore.tmpl", "bffgen.config.json.tmpl",
 		"service-base.js.tmpl", "service-template.js.tmpl",
-		"jest.config.js.tmpl", "setup-tests.js.tmpl",
+		"jest.config.js.tmpl", "setup-tests.js.tmpl", "eslint.config.js.tmpl",
 		"test-fixtures.js.tmpl", "test-integration.template.js.tmpl",
 		"swagger-config.js.tmpl", "logger.js.tmpl",
 		// New aggregation utilities

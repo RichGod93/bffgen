@@ -4,9 +4,9 @@
 # Update with: bffgen update-deps
 
 metadata:
-  version: "3.2.0"
-  last_updated: "2026-01-10T02:00:00Z"
-  bffgen_version: "3.2.0"
+  version: "3.3.0"
+  last_updated: "2026-10-11T00:00:00Z"
+  bffgen_version: "3.3.0"
 
 # Node.js Express Runtime
 nodejs-express:
@@ -40,7 +40,10 @@ nodejs-express:
   jest: "^29.7.0"
   supertest: "^7.0.0"
   nock: "^13.5.5"
-  eslint: "^8.57.1"
+  eslint: "^9.39.5"
+  "@eslint/js": "^9.39.5"
+  globals: "^16.5.0"
+  "@babel/plugin-transform-modules-commonjs": "^7.29.7"
   prettier: "^3.3.3"
 
 # Node.js Fastify Runtime
@@ -60,6 +63,7 @@ nodejs-fastify:
   
   # Utilities
   fastify-plugin: "^5.0.1"
+  jsonwebtoken: "^9.0.2"
   pino: "^9.5.0"
   pino-pretty: "^11.3.0"
   dotenv: "^16.4.5"
@@ -71,7 +75,10 @@ nodejs-fastify:
   nodemon: "^3.1.7"
   jest: "^29.7.0"
   nock: "^13.5.5"
-  eslint: "^8.57.1"
+  eslint: "^9.39.5"
+  "@eslint/js": "^9.39.5"
+  globals: "^16.5.0"
+  "@babel/plugin-transform-modules-commonjs": "^7.29.7"
   prettier: "^3.3.3"
 
 # Node.js Apollo GraphQL Runtime

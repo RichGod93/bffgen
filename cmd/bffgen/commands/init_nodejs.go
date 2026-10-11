@@ -147,6 +147,11 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 		return err
 	}
 
+	eslintConfigContent, err := loader.RenderTemplate("express", "eslint.config.js.tmpl", data)
+	if err != nil {
+		return err
+	}
+
 	bffgenConfigContent, err := loader.RenderTemplate("express", "bffgen.config.json.tmpl", data)
 	if err != nil {
 		return err
@@ -166,6 +171,10 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "eslint.config.js"), []byte(eslintConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -277,6 +286,11 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 		return err
 	}
 
+	eslintConfigContent, err := loader.RenderTemplate("fastify", "eslint.config.js.tmpl", data)
+	if err != nil {
+		return err
+	}
+
 	bffgenConfigContent, err := loader.RenderTemplate("fastify", "bffgen.config.json.tmpl", data)
 	if err != nil {
 		return err
@@ -296,6 +310,10 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "eslint.config.js"), []byte(eslintConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 

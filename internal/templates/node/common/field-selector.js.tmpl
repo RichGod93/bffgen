@@ -6,8 +6,6 @@
  * Allows clients to specify which fields they want: ?fields=id,name,email
  */
 
-const ResponseTransformer = require('./response-transformer');
-
 class FieldSelector {
   /**
    * Select fields from data based on query parameter
@@ -48,7 +46,7 @@ class FieldSelector {
       if (includeNested && field.includes('.')) {
         // Handle nested fields like "user.name"
         this.selectNestedField(obj, field, result);
-      } else if (obj.hasOwnProperty(field)) {
+      } else if (Object.prototype.hasOwnProperty.call(obj, field)) {
         result[field] = obj[field];
       }
     });
@@ -80,7 +78,7 @@ class FieldSelector {
     }
 
     const lastPart = parts[parts.length - 1];
-    if (current.hasOwnProperty(lastPart)) {
+    if (Object.prototype.hasOwnProperty.call(current, lastPart)) {
       resultCurrent[lastPart] = current[lastPart];
     }
   }
