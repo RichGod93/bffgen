@@ -208,21 +208,23 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
+// Start server only when run directly (not when imported by tests)
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log('🚀 {{.ProjectName}} BFF server running on port ' + PORT);
+    console.log('📋 Health check: http://localhost:' + PORT + '/health');
+    console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
   });
-});
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log('🚀 {{.ProjectName}} BFF server running on port ' + PORT);
-  console.log('📋 Health check: http://localhost:' + PORT + '/health');
-  console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
-});
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server');
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+  });
+}
 
 module.exports = app;
 

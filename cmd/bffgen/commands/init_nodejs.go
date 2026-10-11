@@ -120,6 +120,12 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 		BackendServices:    services,
 	}
 
+	versions, err := templates.LoadVersions(data.Runtime)
+	if err != nil {
+		return err
+	}
+	data.Versions = versions
+
 	// Render templates
 	indexContent, err := loader.RenderTemplate("express", "index.js.tmpl", data)
 	if err != nil {
@@ -137,6 +143,11 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	gitignoreContent, err := loader.RenderTemplate("express", "gitignore.tmpl", data)
+	if err != nil {
+		return err
+	}
+
+	eslintConfigContent, err := loader.RenderTemplate("express", "eslint.config.js.tmpl", data)
 	if err != nil {
 		return err
 	}
@@ -160,6 +171,10 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "eslint.config.js"), []byte(eslintConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 
@@ -244,6 +259,12 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 		BackendServices:    services,
 	}
 
+	versions, err := templates.LoadVersions(data.Runtime)
+	if err != nil {
+		return err
+	}
+	data.Versions = versions
+
 	// Render templates
 	indexContent, err := loader.RenderTemplate("fastify", "index.js.tmpl", data)
 	if err != nil {
@@ -261,6 +282,11 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	gitignoreContent, err := loader.RenderTemplate("fastify", "gitignore.tmpl", data)
+	if err != nil {
+		return err
+	}
+
+	eslintConfigContent, err := loader.RenderTemplate("fastify", "eslint.config.js.tmpl", data)
 	if err != nil {
 		return err
 	}
@@ -284,6 +310,10 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 	}
 
 	if err := os.WriteFile(filepath.Join(projectName, ".gitignore"), []byte(gitignoreContent), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(projectName, "eslint.config.js"), []byte(eslintConfigContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
 

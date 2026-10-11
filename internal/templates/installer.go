@@ -179,7 +179,8 @@ func (i *Installer) cloneRepository(gitURL, destPath string) error {
 	}
 
 	// Clone with progress
-	cmd := exec.Command("git", "clone", "--depth", "1", gitURL, destPath)
+	// "--" stops gitURL from being parsed as a git option (e.g. --upload-pack=...)
+	cmd := exec.Command("git", "clone", "--depth", "1", "--", gitURL, destPath) // #nosec G204 -- no shell; arguments passed directly
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

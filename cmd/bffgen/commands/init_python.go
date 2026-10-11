@@ -30,13 +30,37 @@ func createPythonDependencyFiles(projectName string, opts ProjectOptions) error 
 
 // createRequirementsTxt creates requirements.txt for pip
 func createRequirementsTxt(projectName string, opts ProjectOptions) error {
-	content, err := templates.TemplateFS.ReadFile("python/common/requirements.txt.tmpl")
+	content, err := renderRequirementsTxt()
 	if err != nil {
-		return fmt.Errorf("failed to read requirements template: %w", err)
+		return err
 	}
 
 	filePath := filepath.Join(projectName, "requirements.txt")
 	return os.WriteFile(filePath, content, utils.ProjectFilePerm)
+}
+
+// renderRequirementsTxt renders requirements.txt with versions from the dependency manifest
+func renderRequirementsTxt() ([]byte, error) {
+	tmplContent, err := templates.TemplateFS.ReadFile("python/common/requirements.txt.tmpl")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read requirements template: %w", err)
+	}
+
+	versions, err := templates.LoadVersions("python-fastapi")
+	if err != nil {
+		return nil, err
+	}
+
+	tmpl, err := template.New("requirements").Funcs(templates.VersionFuncMap(versions)).Parse(string(tmplContent))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse requirements template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, nil); err != nil {
+		return nil, fmt.Errorf("failed to render requirements template: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // createPyprojectToml creates pyproject.toml for Poetry

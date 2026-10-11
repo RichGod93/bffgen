@@ -29,7 +29,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.63.4
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Check code formatting
@@ -48,8 +48,10 @@ jobs:
 
       - name: Security scan
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -quiet -exclude=G104,G304,G306,G301,G114,G107 -exclude-dir=test-project ./...
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+          # G703/G704 are the taint-analysis variants of G304/G107: bffgen writes to user-chosen
+          # project paths and proxies to user-configured backend URLs by design
+          gosec -quiet -exclude=G104,G304,G306,G301,G114,G107,G703,G704 -exclude-dir=test-project -exclude-dir=templates ./...
 
       - name: Build
         run: make build

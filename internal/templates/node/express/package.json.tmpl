@@ -10,8 +10,8 @@
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "test:integration": "jest --testPathPattern=integration",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write 'src/**/*.js'",
     "format:check": "prettier --check 'src/**/*.js'",
     "validate": "npm run lint && npm run format:check && npm test",
@@ -42,9 +42,12 @@
   "devDependencies": {
     "nodemon": "{{GetVersion "nodemon"}}",
     "jest": "{{GetVersion "jest"}}",
+    "@babel/plugin-transform-modules-commonjs": "{{GetVersion "@babel/plugin-transform-modules-commonjs"}}",
     "supertest": "{{GetVersion "supertest"}}",
     "nock": "{{GetVersion "nock"}}",
     "eslint": "{{GetVersion "eslint"}}",
+    "@eslint/js": "{{GetVersion "@eslint/js"}}",
+    "globals": "{{GetVersion "globals"}}",
     "prettier": "{{GetVersion "prettier"}}"
   },
   "engines": {

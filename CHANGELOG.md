@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-10-11
+
+Generated Express and Fastify projects now pass `npm run lint` and `npm test` out of the box.
+
+### Added
+- **ESLint configuration for generated Node.js projects** - `bffgen init` now writes an
+  `eslint.config.js` (ESLint 9 flat config, `@eslint/js` recommended rules, Node and Jest globals).
+  Previously `npm run lint` failed because no config file existed. `lint` now checks the whole
+  project (`eslint .`), including tests.
+
+### Changed
+- Generated Express/Fastify projects use **ESLint 9** (was ESLint 8, which is end-of-life).
+- Generated Fastify `src/index.js` exports `buildApp()`, which returns a configured Fastify instance;
+  the server only starts listening when the file is run directly. Express `src/index.js` likewise only
+  calls `listen()` when run directly. This lets tests import the app without binding a port.
+- Generated controller/service handler names are now camelCase identifiers derived from the route,
+  e.g. `GET /api/users/:id` → `getApiUsersById` (was `getapiusers:id`).
+
+### Fixed
+- **Generated dependency versions were empty** - `bffgen init` for Express and Fastify wrote every
+  dependency in `package.json` as `""`, so npm installed the latest major versions (e.g. Express 5,
+  ESLint 10) instead of the versions in `internal/registry/versions.yaml`. Versions are now loaded
+  from the manifest.
+- **Python `requirements.txt` was not rendered** - FastAPI projects contained literal
+  `{{GetVersion "..."}}` lines, which broke `pip install -r requirements.txt`. It is now rendered
+  with the manifest versions.
+- `GetVersion` in templates now fails generation when a package is missing from the manifest,
+  instead of silently emitting an empty version.
+- **Syntax errors in generated controllers and services** - any endpoint with a path parameter
+  (e.g. `/users/:id`) produced an invalid method name, so the files could not be loaded.
+- **Generated GET/HEAD routes failed with Express 4** - routes forwarded `req.body` (`{}` under
+  `express.json()`) on GET requests, and `fetch` rejects GET/HEAD requests with a body. Bodies are now
+  only forwarded for methods that accept one.
+- **Fastify JWT authentication returned 500** - `src/index.js` requires `jsonwebtoken`, but it was
+  missing from the generated `package.json`.
+- **Generated Jest setup did not run** - `jest.config.js` referenced the uninstalled
+  `jest-watch-typeahead` plugin and misspelled `coverageThreshold`; the Express health test imported
+  the app from the wrong path; Fastify's ESM-only `cookie@2` dependency could not be loaded by Jest
+  (now transformed via `@babel/plugin-transform-modules-commonjs`).
+- **Fastify health tests asserted nothing** - every assertion was commented out. They now exercise
+  `/health`, `/ready`, and the 404 handler via `app.inject()`.
+- Lint errors in generated utilities (`no-prototype-builtins`, unused import, useless try/catch).
+
+### Security
+- `bffgen template install` now passes `--` before the repository URL to `git clone`, so a URL
+  beginning with `-` cannot be interpreted as a git option.
+
+### Internal
+- CI: upgrade golangci-lint to v1.64.8 (v1.63.4 could not lint a Go 1.24 module, so CI had been
+  failing since v3.0.0), pin gosec to v2.29.0, exclude non-compilable `templates/` from gosec, and fix the pre-existing
+  lint findings (unchecked errors, dead code, ineffectual assignments).
+
 ## [3.2.0] - 2026-01-10
 
 ### Added

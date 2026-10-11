@@ -223,8 +223,7 @@ async function %sRoutes(fastify, options) {
         headers: {
           'Content-Type': 'application/json',
           ...(request.headers.authorization && { 'Authorization': request.headers.authorization })
-        },
-        ...(request.body && { body: JSON.stringify(request.body) })
+        },%s
       });
       
       if (!response.ok) {
@@ -242,6 +241,7 @@ async function %sRoutes(fastify, options) {
   });
 `, strings.ToLower(method), path, authMiddleware, method, path, serviceName,
 				strings.ToUpper(serviceName), baseURL, backendPath, method,
+				forwardBody(method, "\n        ", "request"),
 				serviceName, serviceName, serviceName))
 		}
 
@@ -293,8 +293,7 @@ router.%s('%s', %sasyncHandler(async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         ...(req.headers.authorization && { 'Authorization': req.headers.authorization })
-      },
-      ...(req.body && { body: JSON.stringify(req.body) })
+      },%s
     });
     
     if (!response.ok) {
@@ -316,6 +315,7 @@ router.%s('%s', %sasyncHandler(async (req, res) => {
 }));
 `, strings.ToLower(method), path, authMiddleware,
 				strings.ToUpper(serviceName), baseURL, backendPath, method,
+				forwardBody(method, "\n      ", "req"),
 				serviceName, serviceName, serviceName))
 		}
 
@@ -361,15 +361,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 			continue
 		}
 
-		// Generate handler name from method and path
-		handlerName := strings.ToLower(method) + strings.ReplaceAll(toTitleCase(strings.ReplaceAll(path, "/", " ")), " ", "")
-		if len(handlerName) > 50 {
-			// Simplify if too long
-			pathParts := strings.Split(strings.Trim(path, "/"), "/")
-			if len(pathParts) > 0 {
-				handlerName = strings.ToLower(method) + toTitleCase(pathParts[len(pathParts)-1])
-			}
-		}
+		handlerName := nodeHandlerName(method, path)
 
 		endpointData = append(endpointData, map[string]interface{}{
 			"Path":              path,
@@ -377,7 +369,7 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 			"BackendPath":       backendPath,
 			"RequiresAuth":      requiresAuth,
 			"HandlerName":       handlerName,
-			"HandlerNamePascal": toTitleCase(handlerName),
+			"HandlerNamePascal": strings.ToUpper(handlerName[:1]) + handlerName[1:],
 		})
 	}
 
@@ -463,14 +455,7 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 			continue
 		}
 
-		// Generate handler name
-		handlerName := strings.ToLower(method) + strings.ReplaceAll(toTitleCase(strings.ReplaceAll(path, "/", " ")), " ", "")
-		if len(handlerName) > 50 {
-			pathParts := strings.Split(strings.Trim(path, "/"), "/")
-			if len(pathParts) > 0 {
-				handlerName = strings.ToLower(method) + toTitleCase(pathParts[len(pathParts)-1])
-			}
-		}
+		handlerName := nodeHandlerName(method, path)
 
 		endpointData = append(endpointData, map[string]interface{}{
 			"Method":      method,
@@ -642,4 +627,36 @@ func autoRegisterRoutes(framework string, backends []interface{}) error {
 	}
 
 	return nil
+}
+
+// nodeHandlerName builds a valid camelCase JavaScript identifier from an HTTP method and route path,
+// e.g. GET /api/user-profiles/:id -> getApiUserProfilesById
+func nodeHandlerName(method, path string) string {
+	var b strings.Builder
+	b.WriteString(strings.ToLower(method))
+
+	for _, segment := range strings.Split(path, "/") {
+		isParam := strings.HasPrefix(segment, ":") || strings.HasPrefix(segment, "{")
+		words := strings.FieldsFunc(segment, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+		})
+		if isParam && len(words) > 0 {
+			b.WriteString("By")
+		}
+		for _, word := range words {
+			b.WriteString(strings.ToUpper(word[:1]) + word[1:])
+		}
+	}
+
+	return b.String()
+}
+
+// forwardBody returns the fetch option that forwards the request body, or "" for GET/HEAD,
+// which fetch rejects when a body is present
+func forwardBody(method, indent, reqVar string) string {
+	switch strings.ToUpper(method) {
+	case "GET", "HEAD":
+		return ""
+	}
+	return fmt.Sprintf("%s...(%s.body && { body: JSON.stringify(%s.body) })", indent, reqVar, reqVar)
 }

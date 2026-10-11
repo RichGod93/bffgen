@@ -18,17 +18,13 @@ class {{.ServiceNamePascal}}Controller {
    * {{if .RequiresAuth}}@requires Authentication{{else}}@public{{end}}
    */
   async {{.HandlerName}}(request, reply) {
-    try {
-      const result = await this.service.{{.HandlerName}}(
-        request.params, 
-        request.query, 
-        request.body, 
-        request.headers
-      );
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    // Errors propagate to Fastify's error handler
+    return this.service.{{.HandlerName}}(
+      request.params,
+      request.query,
+      request.body,
+      request.headers
+    );
   }
 {{end}}
 }
