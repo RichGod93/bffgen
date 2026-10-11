@@ -69,10 +69,8 @@ func TestRequestBatcher_Batch(t *testing.T) {
 			wg.Add(1)
 			go func(id string) {
 				defer wg.Done()
-				_, err := batcher.Batch(context.Background(), "test-key", batchFn, id)
-				if err != nil {
-					// Errors are expected in some cases due to result mapping
-				}
+				// Errors are expected in some cases due to result mapping
+				_, _ = batcher.Batch(context.Background(), "test-key", batchFn, id)
 			}(string(rune('a' + i)))
 		}
 

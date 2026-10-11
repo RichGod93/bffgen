@@ -112,7 +112,9 @@ func runUpdateDeps(cmd *cobra.Command, args []string) error {
 
 				// Cache the result
 				if cache != nil {
-					cache.Set(rt, pkg, newVersion)
+					if err := cache.Set(rt, pkg, newVersion); err != nil {
+						fmt.Printf("  ⚠️  failed to cache %s: %v\n", pkg, err)
+					}
 				}
 			}
 

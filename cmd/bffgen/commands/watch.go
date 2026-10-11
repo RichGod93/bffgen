@@ -71,7 +71,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create watcher: %w", err)
 	}
-	defer configWatcher.Stop()
+	defer func() { _ = configWatcher.Stop() }()
 
 	// Start watching
 	if err := configWatcher.Start(); err != nil {

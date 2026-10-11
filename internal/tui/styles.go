@@ -14,7 +14,6 @@ var (
 	errorColor     = lipgloss.AdaptiveColor{Light: "#DC2626", Dark: "#EF4444"}
 	warningColor   = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#F59E0B"}
 	mutedColor     = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
-	subtleColor    = lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#1F2937"}
 
 	// Base styles
 	BaseStyle = lipgloss.NewStyle().

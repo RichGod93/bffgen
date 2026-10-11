@@ -48,6 +48,15 @@ Generated Express and Fastify projects now pass `npm run lint` and `npm test` ou
   `/health`, `/ready`, and the 404 handler via `app.inject()`.
 - Lint errors in generated utilities (`no-prototype-builtins`, unused import, useless try/catch).
 
+### Security
+- `bffgen template install` now passes `--` before the repository URL to `git clone`, so a URL
+  beginning with `-` cannot be interpreted as a git option.
+
+### Internal
+- CI: upgrade golangci-lint to v1.64.8 (v1.63.4 could not lint a Go 1.24 module, so CI had been
+  failing since v3.0.0), exclude non-compilable `templates/` from gosec, and fix the pre-existing
+  lint findings (unchecked errors, dead code, ineffectual assignments).
+
 ## [3.2.0] - 2026-01-10
 
 ### Added

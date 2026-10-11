@@ -59,10 +59,6 @@ var initCmd = &cobra.Command{
 		framework := "chi"
 		var backendServices []types.BackendService
 		var corsOriginsList []string
-		var architecture string // Used by TUI
-		var routeOption string  // Used by TUI
-		_ = architecture        // Suppress unused warning when not using TUI
-		_ = routeOption         // Suppress unused warning when not using TUI
 
 		// Check if template flag is provided
 		if templateFlag != "" {
@@ -77,7 +73,7 @@ var initCmd = &cobra.Command{
 		useTUI := langFlag == "" && runtimeFlag == "" && !noTUI
 		if useTUI {
 			var ok bool
-			languageType, framework, corsOriginsList, architecture, backendServices, routeOption, ok = runTUI(projectName)
+			languageType, framework, corsOriginsList, _, backendServices, _, ok = runTUI(projectName)
 			if !ok {
 				fmt.Println("\n⚠️  Project initialization cancelled.")
 				os.Exit(0)
