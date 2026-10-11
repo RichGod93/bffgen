@@ -120,6 +120,12 @@ func createNodeExpressMainFileWithOptions(projectName string, backendServs []typ
 		BackendServices:    services,
 	}
 
+	versions, err := templates.LoadVersions(data.Runtime)
+	if err != nil {
+		return err
+	}
+	data.Versions = versions
+
 	// Render templates
 	indexContent, err := loader.RenderTemplate("express", "index.js.tmpl", data)
 	if err != nil {
@@ -243,6 +249,12 @@ func createNodeFastifyMainFileWithOptions(projectName string, backendServs []typ
 		BackendsJSON:       templates.GenerateBackendsJSON(services),
 		BackendServices:    services,
 	}
+
+	versions, err := templates.LoadVersions(data.Runtime)
+	if err != nil {
+		return err
+	}
+	data.Versions = versions
 
 	// Render templates
 	indexContent, err := loader.RenderTemplate("fastify", "index.js.tmpl", data)

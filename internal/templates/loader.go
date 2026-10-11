@@ -149,7 +149,7 @@ func (tl *TemplateLoader) RenderTemplate(framework, filename string, data *Templ
 
 	// Create template with custom functions
 	funcMap := template.FuncMap{
-		"GetVersion": data.GetVersion,
+		"GetVersion": data.RequireVersion,
 	}
 
 	tmpl, err := template.New(filename).Funcs(funcMap).Parse(tmplContent)

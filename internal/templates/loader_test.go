@@ -165,9 +165,10 @@ func TestRenderTemplate(t *testing.T) {
 			filename:  "package.json.tmpl",
 			data: &TemplateData{
 				ProjectName: "my-bff",
+				Versions:    mustLoadVersions("nodejs-express"),
 			},
 			wantErr:  false,
-			contains: []string{"my-bff", "express", "nodemon"},
+			contains: []string{"my-bff", `"express": "^`, "nodemon"},
 		},
 	}
 
@@ -547,8 +548,9 @@ func TestTemplateRendering(t *testing.T) {
 			filename:  "package.json.tmpl",
 			data: &TemplateData{
 				ProjectName: "my-project",
+				Versions:    mustLoadVersions("nodejs-express"),
 			},
-			wantContains: []string{`"name": "my-project"`, `"express"`},
+			wantContains: []string{`"name": "my-project"`, `"express": "^`},
 			wantErr:      false,
 		},
 	}
@@ -577,4 +579,12 @@ func TestTemplateRendering(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustLoadVersions(runtime string) map[string]string {
+	versions, err := LoadVersions(runtime)
+	if err != nil {
+		panic(err)
+	}
+	return versions
 }

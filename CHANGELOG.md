@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Generated dependency versions were empty** - `bffgen init` for Express and Fastify wrote every
+  dependency in `package.json` as `""`, so npm installed the latest major versions (e.g. Express 5,
+  ESLint 10) instead of the versions in `internal/registry/versions.yaml`. Versions are now loaded
+  from the manifest.
+- **Python `requirements.txt` was not rendered** - FastAPI projects contained literal
+  `{{GetVersion "..."}}` lines, which broke `pip install -r requirements.txt`. It is now rendered
+  with the manifest versions.
+- `GetVersion` in templates now fails generation when a package is missing from the manifest,
+  instead of silently emitting an empty version.
+
 ## [3.2.0] - 2026-01-10
 
 ### Added
