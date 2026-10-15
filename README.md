@@ -6,7 +6,7 @@
 [![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
 [![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg)](https://python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/badge/Latest-v2.2.1-brightgreen.svg)](https://github.com/RichGod93/bffgen/releases/v2.2.1)
+[![npm](https://img.shields.io/npm/v/bffgen.svg)](https://www.npmjs.com/package/bffgen)
 [![Python Support](https://img.shields.io/badge/Python-FastAPI-blue.svg)](https://github.com/RichGod93/bffgen)
 
 ---
@@ -17,7 +17,7 @@
 
 ```bash
 # Install
-go install github.com/RichGod93/bffgen/cmd/bffgen@v1.0.1
+npm install -g bffgen
 
 # Create Go BFF (Chi, Echo, or Fiber)
 bffgen init my-go-bff --lang go --framework chi
@@ -187,17 +187,10 @@ npx bffgen init my-python-bff --lang python-fastapi
 
 ### Go Install
 
-**Latest (v2.2.1 - Python FastAPI Support):**
-
-```bash
-go install github.com/RichGod93/bffgen/cmd/bffgen@v2.2.1
-```
-
-**Latest Stable:**
-
-```bash
-go install github.com/RichGod93/bffgen/cmd/bffgen@latest
-```
+> **Note:** `go install` currently installs an old v1.x release. Go requires a `/v3` suffix in
+> the module path for v3 releases, and the module path doesn't have it yet. Until it does, install
+> with npm, download a binary from [GitHub Releases](https://github.com/RichGod93/bffgen/releases),
+> or build from source.
 
 ### From Source
 
@@ -727,8 +720,8 @@ bffgen add-infra --all
 - 📖 [Enhanced Scaffolding Guide](docs/ENHANCED_SCAFFOLDING.md)
 - 🚀 [Infrastructure Scaffolding](docs/INFRASTRUCTURE.md)
 - 📋 [Quick Reference](docs/QUICK_REFERENCE.md)
-- 🏗️ [Architecture](docs/ARCHITECTURE.md)
-- 🧪 [Node.js Testing](docs/NODEJS_TESTING.md)
+- 🛡️ [Generated Node.js Routes](docs/NODEJS_ROUTES.md)
+- 🧩 [Node.js Aggregation](docs/NODEJS_AGGREGATION.md)
 - 🆕 [v2.0 Features & Migration](docs/V2_MIGRATION.md)
 
 ---

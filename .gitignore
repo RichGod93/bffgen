@@ -143,8 +143,10 @@ release_notes.md
 # Internal task tracking and planning (not for public repository)
 docs/tasks/
 docs/thesis/
-docs/ARCHITECTURE.md  # Old/deprecated version
-docs/NODEJS_TESTING.md  # Internal testing notes
+# Old/deprecated version
+docs/ARCHITECTURE.md
+# Internal testing notes
+docs/NODEJS_TESTING.md
 docs/templates/*
 
 # Artemis/planning artifacts (internal use only)

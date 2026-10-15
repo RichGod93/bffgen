@@ -283,7 +283,7 @@ pytest
 - [Quick Reference Guide](../docs/QUICK_REFERENCE.md)
 - [Python Support Guide](../docs/PYTHON_SUPPORT.md)
 - [Enhanced Scaffolding Guide](../docs/ENHANCED_SCAFFOLDING.md)
-- [Migration Guide](../docs/MIGRATION_GUIDE.md)
+- [Migration Guide](../docs/V2_MIGRATION.md)
 - [Schema Documentation](../schemas/bffgen-v1.json)
 
 ### Example Projects

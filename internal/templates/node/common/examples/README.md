@@ -204,9 +204,9 @@ async getDashboard(req, res, next) {
 
 ## Related Documentation
 
-- [Node.js Aggregation Guide](../../../../docs/NODEJS_AGGREGATION.md)
+- [Node.js Aggregation Guide](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_AGGREGATION.md)
 - [Utility API Reference](../utils/)
-- [Testing Guide](../../../../docs/NODEJS_TESTING.md)
+- [Generated Routes: timeouts, retries, circuit breaker](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_ROUTES.md)
 
 ---
 
@@ -214,6 +214,6 @@ async getDashboard(req, res, next) {
 
 For questions or issues:
 
-1. Check the [Aggregation Guide](../../../../docs/NODEJS_AGGREGATION.md)
+1. Check the [Aggregation Guide](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_AGGREGATION.md)
 2. Review utility source code in `src/utils/`
 3. Open an issue on GitHub
