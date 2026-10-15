@@ -1,0 +1,241 @@
+"""
+Upstream proxy runtime
+Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+bffgen ships a newer version and keeps your previous copy as upstream.py.bak.
+
+Generated routers call create_upstream(...).proxy(request, method, path) to forward a
+request to a backend service.
+
+Each backend gets one HttpClient (per-attempt timeout, retries for idempotent methods)
+and one CircuitBreaker, shared by all of its routes. Settings come from
+bffgen.config.py.json and can be overridden per backend with environment variables
+(or .env), e.g. for USERS:
+  USERS_URL                        base URL
+  USERS_TIMEOUT                    per-attempt timeout in ms
+  USERS_RETRIES                    extra attempts for GET/HEAD/OPTIONS
+  USERS_CIRCUIT_FAILURE_THRESHOLD  consecutive failures that open the circuit
+  USERS_CIRCUIT_RESET_TIMEOUT      ms the circuit stays open before a trial request
+
+Backend responses below 500 are passed through unchanged. Failures are answered as:
+  504 Gateway Timeout      UPSTREAM_TIMEOUT      no response within the timeout
+  503 Service Unavailable  UPSTREAM_UNAVAILABLE  backend unreachable
+  503 Service Unavailable  CIRCUIT_OPEN          circuit open; Retry-After gives the seconds left
+  502 Bad Gateway          UPSTREAM_ERROR        backend returned 5xx (its body is not passed on)
+with the body {"error", "message", "code", "service"}.
+"""
+
+import logging
+import math
+import os
+import re
+from typing import Any, Dict, Mapping, Optional
+from urllib.parse import quote
+
+from dotenv import load_dotenv
+from fastapi import Request
+from fastapi.responses import JSONResponse, Response
+
+from services.http_client import HttpClient, UpstreamError
+from utils.circuit_breaker import CircuitBreaker, CircuitOpenError
+
+logger = logging.getLogger(__name__)
+
+# Make <NAME>_URL and friends in .env visible here; real environment variables win
+load_dotenv()
+
+# Request headers passed on to backends. Hop-by-hop and host headers are never forwarded.
+FORWARDED_REQUEST_HEADERS = (
+    "accept",
+    "accept-language",
+    "authorization",
+    "if-modified-since",
+    "if-none-match",
+)
+
+# Backend response headers passed back to clients. content-length and content-encoding are
+# left to the framework because httpx has already decoded the body.
+FORWARDED_RESPONSE_HEADERS = (
+    "cache-control",
+    "content-type",
+    "etag",
+    "last-modified",
+    "location",
+)
+
+NO_BODY_STATUSES = {204, 205, 304}
+
+STATUS_TEXT = {502: "Bad Gateway", 503: "Service Unavailable", 504: "Gateway Timeout"}
+
+_PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+_upstreams: Dict[str, "Upstream"] = {}
+
+
+def build_path(template: str, params: Mapping[str, Any]) -> str:
+    """
+    Substitute {params} in a backend path template, URL-encoding each value.
+    build_path("/users/{id}", {"id": "42"}) -> "/users/42"
+    """
+
+    def replace(match: "re.Match[str]") -> str:
+        name = match.group(1)
+        value = params.get(name)
+        if value is None or value == "":
+            raise ValueError(f'Missing path parameter "{name}" for backend path {template}')
+        return quote(str(value), safe="")
+
+    return _PARAM.sub(replace, template)
+
+
+def _request_headers(request: Request) -> Dict[str, str]:
+    headers = {name: request.headers[name] for name in FORWARDED_REQUEST_HEADERS if name in request.headers}
+    request_id = request.headers.get("x-request-id") or getattr(request.state, "request_id", None)
+    if request_id:
+        headers["x-request-id"] = str(request_id)
+    return headers
+
+
+def _env_number(name: str, fallback: float) -> float:
+    raw = os.environ.get(name, "")
+    try:
+        value = float(raw)
+    except ValueError:
+        return fallback
+    return value if value >= 0 and math.isfinite(value) else fallback
+
+
+def error_response(error: Exception) -> JSONResponse:
+    """
+    Response for a failed backend call. `error` is an UpstreamError or a CircuitOpenError,
+    whose status_code is 502, 503 or 504.
+    """
+    headers = {}
+    if isinstance(error, CircuitOpenError):
+        headers["retry-after"] = str(max(1, math.ceil(error.retry_after)))
+    return JSONResponse(
+        status_code=error.status_code,
+        headers=headers,
+        content={
+            "error": STATUS_TEXT[error.status_code],
+            "message": error.message,
+            "code": error.code,
+            "service": error.service,
+        },
+    )
+
+
+class Upstream:
+    """
+    One backend: its HTTP client and circuit breaker.
+
+    Args:
+        name: Backend name from bffgen.config.py.json
+        env_key: Prefix of the environment variables for this backend
+        base_url: Default base URL
+        timeout: Per-attempt timeout in ms
+        retries: Extra attempts for idempotent methods
+        circuit_breaker: {"enabled", "failureThreshold", "resetTimeout" (ms)}
+    """
+
+    def __init__(
+        self,
+        name: str,
+        env_key: str,
+        base_url: str,
+        timeout: float = 10000,
+        retries: int = 2,
+        circuit_breaker: Optional[Dict[str, Any]] = None,
+    ):
+        self.name = name
+        breaker_config = circuit_breaker or {}
+        url = os.environ.get(f"{env_key}_URL") or os.environ.get(f"{env_key}_SERVICE_URL") or base_url
+        self.client = HttpClient(
+            url,
+            name=name,
+            timeout=_env_number(f"{env_key}_TIMEOUT", timeout),
+            retries=int(_env_number(f"{env_key}_RETRIES", retries)),
+        )
+        self.breaker: Optional[CircuitBreaker] = None
+        if breaker_config.get("enabled", True):
+            self.breaker = CircuitBreaker(
+                name=name,
+                failure_threshold=int(
+                    _env_number(f"{env_key}_CIRCUIT_FAILURE_THRESHOLD", breaker_config.get("failureThreshold", 5))
+                ),
+                timeout=_env_number(f"{env_key}_CIRCUIT_RESET_TIMEOUT", breaker_config.get("resetTimeout", 30000))
+                / 1000,
+            )
+
+    async def send(self, path: str, method: str, headers: Mapping[str, str], content: Optional[bytes]):
+        """Send a request to the backend through the circuit breaker"""
+        if self.breaker is None:
+            return await self.client.send(path, method=method, headers=headers, content=content)
+        return await self.breaker.call(self.client.send, path, method=method, headers=headers, content=content)
+
+    async def request(
+        self, method: str, path: str, json_body: Any = None, headers: Optional[Mapping[str, str]] = None
+    ) -> Any:
+        """
+        Call the backend through the circuit breaker and return the parsed body.
+        Raises HttpError (4xx), UpstreamError or CircuitOpenError.
+        """
+        if self.breaker is None:
+            return await self.client.request(path, method=method, headers=headers, json_body=json_body)
+        return await self.breaker.call(
+            self.client.request, path, method=method, headers=headers, json_body=json_body
+        )
+
+    async def proxy(self, request: Request, method: str, path: str) -> Response:
+        """
+        Forward the current request to the backend and return its response.
+
+        Args:
+            request: The incoming FastAPI request
+            method: Backend HTTP method
+            path: Backend path; may contain {params}, filled from the request's path params
+        """
+        # FastAPI answers HEAD with the GET route; keep it a HEAD upstream
+        if request.method == "HEAD":
+            method = "HEAD"
+        backend_path = build_path(path, request.path_params)
+        # Raw query string as received. request.url is rebuilt from the decoded path, so an
+        # encoded "?" inside a path parameter would leak into request.url.query.
+        query = request.scope.get("query_string", b"").decode("latin-1")
+        if query:
+            backend_path += f"?{query}"
+        headers = _request_headers(request)
+        content = None
+        if method not in ("GET", "HEAD"):
+            content = await request.body()
+            if content and "content-type" in request.headers:
+                headers["content-type"] = request.headers["content-type"]
+
+        try:
+            response = await self.send(backend_path, method, headers, content or None)
+        except (UpstreamError, CircuitOpenError) as error:
+            # Rejections by an open circuit are expected and frequent; keep them out of warning logs
+            log = logger.debug if isinstance(error, CircuitOpenError) else logger.warning
+            log(f"{method} {self.name}{backend_path} failed: {error.code} ({error.message})")
+            return error_response(error)
+
+        response_headers = {
+            name: response.headers[name] for name in FORWARDED_RESPONSE_HEADERS if name in response.headers
+        }
+        body = b"" if method == "HEAD" or response.status_code in NO_BODY_STATUSES else response.content
+        return Response(content=body, status_code=response.status_code, headers=response_headers)
+
+
+def create_upstream(name: str, **options: Any) -> Upstream:
+    """
+    Get the upstream for a backend, creating it on first use. Routes for the same backend
+    share one instance.
+    """
+    if name not in _upstreams:
+        _upstreams[name] = Upstream(name, **options)
+    return _upstreams[name]
+
+
+async def close_upstreams() -> None:
+    """Close all backend connections; call on application shutdown"""
+    for upstream in _upstreams.values():
+        await upstream.client.aclose()
