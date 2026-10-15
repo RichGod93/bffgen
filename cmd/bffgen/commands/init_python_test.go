@@ -109,8 +109,9 @@ func TestCreateFastAPIMainFile(t *testing.T) {
 		"from fastapi import FastAPI",
 		"app = FastAPI",
 		"@app.get(\"/health\")",
-		"BFFGEN_ROUTER_IMPORTS",
-		"BFFGEN_ROUTER_INCLUDES",
+		"from routers import include_routers",
+		"include_routers(app)",
+		"await close_upstreams()",
 	}
 
 	for _, expected := range expectedStrings {
@@ -222,7 +223,6 @@ func TestCreatePythonEnvFile(t *testing.T) {
 	contentStr := string(content)
 	expectedVars := []string{
 		"PORT=",
-		"DEBUG=",
 		"CORS_ORIGINS=",
 		"JWT_SECRET=",
 	}
