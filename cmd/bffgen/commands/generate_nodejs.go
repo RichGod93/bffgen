@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -71,6 +72,23 @@ func generateNodeJS() error {
 	}
 
 	progress.Success("Configuration loaded")
+
+	// Generated routes require the runtime files; create or upgrade them first
+	write := !checkMode && !dryRun
+	actions, err := ensureNodeRuntimeFiles(".", framework, write)
+	if err != nil {
+		return fmt.Errorf("failed to update runtime files: %w", err)
+	}
+	for _, a := range actions {
+		switch {
+		case !write:
+			fmt.Printf("🔍 Would %s %s\n", strings.TrimSuffix(a.Action, "d"), a.Path)
+		case a.Backup != "":
+			fmt.Printf("♻️  Updated %s to the current bffgen runtime (previous copy: %s)\n", a.Path, a.Backup)
+		default:
+			fmt.Printf("✅ Created %s\n", a.Path)
+		}
+	}
 
 	fmt.Printf("📝 Generating routes for %s\n", framework)
 	progress.Start(fmt.Sprintf("Generating files for %d backends", len(backends)))
@@ -186,9 +204,10 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 	endpoints, _ := backend["endpoints"].([]interface{})
 
 	data := &templates.RouteTemplateData{
-		ServiceName: serviceName,
-		EnvKey:      strings.ToUpper(serviceName),
-		BaseURL:     baseURL,
+		ServiceName:  serviceName,
+		FunctionName: nodeIdentifier(serviceName) + "Routes",
+		EnvKey:       nodeEnvKey(serviceName),
+		BaseURL:      baseURL,
 	}
 
 	for _, ep := range endpoints {
@@ -206,13 +225,22 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 			continue
 		}
 
+		method = strings.ToUpper(method)
+		if !nodeRouteMethods[method] {
+			return "", fmt.Errorf("endpoint %s %s: unsupported method", method, path)
+		}
+		path, backendPath = normalizeRouteParams(path), normalizeRouteParams(backendPath)
+		if err := validateNodeRoutePaths(path, backendPath); err != nil {
+			return "", fmt.Errorf("endpoint %s %s: %w", method, path, err)
+		}
+
+		data.AnyAuth = data.AnyAuth || requiresAuth
 		data.Endpoints = append(data.Endpoints, templates.RouteEndpointData{
 			Method:       method,
 			MethodLower:  strings.ToLower(method),
 			Path:         path,
 			BackendPath:  backendPath,
 			RequiresAuth: requiresAuth,
-			HasBody:      methodHasBody(method),
 		})
 	}
 
@@ -387,7 +415,7 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 		ServiceName:       serviceName,
 		ServiceNamePascal: templates.ToPascalCase(serviceName),
 		BaseURL:           baseURL,
-		EnvKey:            strings.ToUpper(serviceName),
+		EnvKey:            nodeEnvKey(serviceName),
 		Endpoints:         convertToEndpointData(endpointData),
 	}
 
@@ -559,12 +587,84 @@ func nodeHandlerName(method, path string) string {
 	return b.String()
 }
 
-// methodHasBody reports whether a request body should be forwarded for method.
-// fetch rejects GET/HEAD requests that carry a body.
-func methodHasBody(method string) bool {
-	switch strings.ToUpper(method) {
-	case "GET", "HEAD":
-		return false
+// nodeRouteMethods are the HTTP methods a generated route can proxy
+var nodeRouteMethods = map[string]bool{
+	"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true, "HEAD": true, "OPTIONS": true,
+}
+
+var (
+	braceParam = regexp.MustCompile(`\{([A-Za-z_$][\w$]*)\}`)
+	colonParam = regexp.MustCompile(`:([A-Za-z_$][\w$]*)`)
+	// Characters allowed in a route path: RFC 3986 path characters, minus quotes and backslashes,
+	// which would break out of the generated JS string literals
+	safeRoutePath = regexp.MustCompile(`^/[A-Za-z0-9\-._~!$&()*+,;=:@%/]*$`)
+)
+
+// normalizeRouteParams rewrites OpenAPI-style {id} parameters to Express/Fastify :id parameters
+func normalizeRouteParams(path string) string {
+	return braceParam.ReplaceAllString(path, ":$1")
+}
+
+// routeParams returns the :param names in a route path, in order
+func routeParams(path string) []string {
+	var names []string
+	for _, m := range colonParam.FindAllStringSubmatch(path, -1) {
+		names = append(names, m[1])
 	}
-	return true
+	return names
+}
+
+// validateNodeRoutePaths checks that both paths are safe to embed in generated JS and that every
+// parameter the backend path needs is provided by the exposed path
+func validateNodeRoutePaths(exposeAs, backendPath string) error {
+	if !safeRoutePath.MatchString(exposeAs) {
+		return fmt.Errorf("exposeAs %q must start with / and contain only URL path characters", exposeAs)
+	}
+	if !safeRoutePath.MatchString(backendPath) {
+		return fmt.Errorf("path %q must start with / and contain only URL path characters", backendPath)
+	}
+
+	exposed := map[string]bool{}
+	for _, name := range routeParams(exposeAs) {
+		exposed[name] = true
+	}
+	for _, name := range routeParams(backendPath) {
+		if !exposed[name] {
+			return fmt.Errorf("backend path %s uses :%s, which exposeAs %s does not define", backendPath, name, exposeAs)
+		}
+	}
+	return nil
+}
+
+// nodeEnvKey returns the environment variable prefix for a backend, e.g. user-service -> USER_SERVICE
+func nodeEnvKey(serviceName string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r - 'a' + 'A'
+		}
+		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			return r
+		}
+		return '_'
+	}, serviceName)
+}
+
+// nodeIdentifier returns a camelCase JS identifier for a backend name, e.g. user-service -> userService
+func nodeIdentifier(serviceName string) string {
+	words := strings.FieldsFunc(serviceName, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	})
+	var b strings.Builder
+	for i, word := range words {
+		if i == 0 {
+			b.WriteString(strings.ToLower(word[:1]) + word[1:])
+		} else {
+			b.WriteString(strings.ToUpper(word[:1]) + word[1:])
+		}
+	}
+	id := b.String()
+	if id == "" || id[0] >= '0' && id[0] <= '9' {
+		id = "service" + id
+	}
+	return id
 }

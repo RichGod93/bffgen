@@ -56,10 +56,12 @@ type ControllerTemplateData struct {
 
 // RouteTemplateData holds data for rendering a Node.js route file (routes-template.js.tmpl)
 type RouteTemplateData struct {
-	ServiceName string
-	EnvKey      string
-	BaseURL     string
-	Endpoints   []RouteEndpointData
+	ServiceName  string
+	FunctionName string // JS identifier for the Fastify plugin function
+	EnvKey       string // prefix of the backend's environment variables, e.g. USERS
+	BaseURL      string
+	AnyAuth      bool // at least one endpoint requires authentication
+	Endpoints    []RouteEndpointData
 }
 
 // RouteEndpointData is one proxied route in a Node.js route file
@@ -67,9 +69,8 @@ type RouteEndpointData struct {
 	Method       string // upper case, e.g. GET
 	MethodLower  string // router/fastify method name, e.g. get
 	Path         string // path exposed by the BFF (exposeAs)
-	BackendPath  string // path on the backend service
+	BackendPath  string // path on the backend service; :params are filled from Path at runtime
 	RequiresAuth bool
-	HasBody      bool // false for GET/HEAD, which must not forward a body
 }
 
 // EndpointData represents an API endpoint
@@ -113,6 +114,8 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 		// New aggregation utilities
 		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",
 		"response-transformer.js.tmpl", "request-batcher.js.tmpl", "field-selector.js.tmpl",
+		// Runtime used by generated routes
+		"upstream.js.tmpl",
 		// GraphQL utilities
 		"graphql/rest-datasource.js.tmpl", "graphql/schema-stitching.js.tmpl",
 		// Docker and scripts
