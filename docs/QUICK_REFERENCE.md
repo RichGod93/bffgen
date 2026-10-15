@@ -234,9 +234,12 @@ COOKIE_SECRET=your-cookie-secret
 LOG_LEVEL=debug
 
 # Backend Services
+# (prefix = backend name in upper case, e.g. USERS; see docs/NODEJS_ROUTES.md)
 {SERVICE_NAME}_URL=http://localhost:5000/api
-{SERVICE_NAME}_TIMEOUT=30000
-{SERVICE_NAME}_RETRIES=3
+{SERVICE_NAME}_TIMEOUT=10000                  # per-attempt timeout in ms
+{SERVICE_NAME}_RETRIES=2                      # extra attempts for GET/HEAD/OPTIONS
+{SERVICE_NAME}_CIRCUIT_FAILURE_THRESHOLD=5
+{SERVICE_NAME}_CIRCUIT_RESET_TIMEOUT=30000
 
 # Rate Limiting
 RATE_LIMIT=100
