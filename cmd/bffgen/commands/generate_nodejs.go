@@ -80,16 +80,7 @@ func generateNodeJS() error {
 	if err != nil {
 		return fmt.Errorf("failed to update runtime files: %w", err)
 	}
-	for _, a := range actions {
-		switch {
-		case !write:
-			fmt.Printf("🔍 Would %s %s\n", strings.TrimSuffix(a.Action, "d"), a.Path)
-		case a.Backup != "":
-			fmt.Printf("♻️  Updated %s to the current bffgen runtime (previous copy: %s)\n", a.Path, a.Backup)
-		default:
-			fmt.Printf("✅ Created %s\n", a.Path)
-		}
-	}
+	printRuntimeActions(actions, write)
 
 	fmt.Printf("📝 Generating routes for %s\n", framework)
 	progress.Start(fmt.Sprintf("Generating files for %d backends", len(backends)))

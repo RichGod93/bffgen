@@ -278,3 +278,36 @@ func TestApplyResilienceConfig(t *testing.T) {
 		})
 	}
 }
+
+// TestPythonRuntime runs testdata/python_runtime_test.py against freshly written Python runtime
+// files. It needs a Python with fastapi, httpx and python-dotenv (BFFGEN_TEST_PYTHON selects
+// the interpreter; default python3) and is skipped otherwise.
+func TestPythonRuntime(t *testing.T) {
+	python := os.Getenv("BFFGEN_TEST_PYTHON")
+	if python == "" {
+		python = "python3"
+	}
+	if err := exec.Command(python, "-c", "import fastapi, httpx, dotenv").Run(); err != nil {
+		t.Skipf("%s with fastapi, httpx and python-dotenv not available", python)
+	}
+
+	dir := t.TempDir()
+	if _, err := ensurePythonRuntimeFiles(dir, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range []string{"utils", "services"} {
+		if err := os.WriteFile(filepath.Join(dir, pkg, "__init__.py"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	script, err := filepath.Abs(filepath.Join("testdata", "python_runtime_test.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(python, "-I", script, dir)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("python runtime tests failed: %v\n%s", err, out)
+	}
+}

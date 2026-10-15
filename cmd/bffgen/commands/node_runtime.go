@@ -1,5 +1,5 @@
 // File: node_runtime.go
-// Purpose: Runtime support files that generated Node.js routes depend on
+// Purpose: Runtime support files that generated Node.js and Python routes depend on
 
 package commands
 
@@ -15,63 +15,92 @@ import (
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
-// nodeRuntimeVersion is the version of the runtime files that generated routes expect.
-// Each runtime template carries a "bffgen:runtime <n>" marker. Bump the number in this
-// constant and in the templates whenever newly generated routes need a changed runtime.
-const nodeRuntimeVersion = 1
+// Runtime versions that generated routes expect. Each runtime template carries a
+// "bffgen:runtime <n>" marker. Bump the number here and in the templates whenever newly
+// generated routes need a changed runtime.
+const (
+	nodeRuntimeVersion   = 1
+	pythonRuntimeVersion = 1
+)
 
-var nodeRuntimeMarker = regexp.MustCompile(`bffgen:runtime (\d+)`)
+var runtimeMarker = regexp.MustCompile(`bffgen:runtime (\d+)`)
 
-// nodeRuntimeFiles are written by init and kept current by generate
-var nodeRuntimeFiles = []struct {
+// runtimeFile maps a template to the project file it is written to
+type runtimeFile struct {
 	template string
 	path     string
-}{
+}
+
+// nodeRuntimeFiles are written by init and kept current by generate
+var nodeRuntimeFiles = []runtimeFile{
 	{"upstream.js.tmpl", filepath.Join("src", "utils", "upstream.js")},
 	{"service-base.js.tmpl", filepath.Join("src", "services", "httpClient.js")},
 	{"circuit-breaker.js.tmpl", filepath.Join("src", "utils", "circuit-breaker.js")},
 }
 
-// nodeRuntimeAction describes what ensureNodeRuntimeFiles did (or would do) to one file
-type nodeRuntimeAction struct {
+// pythonRuntimeFiles are written by init and kept current by generate (templates under python/common)
+var pythonRuntimeFiles = []runtimeFile{
+	{"upstream.py.tmpl", filepath.Join("utils", "upstream.py")},
+	{"http_client.py.tmpl", filepath.Join("services", "http_client.py")},
+	{"circuit_breaker.py.tmpl", filepath.Join("utils", "circuit_breaker.py")},
+}
+
+// runtimeAction describes what ensureRuntimeFiles did (or would do) to one file
+type runtimeAction struct {
 	Path   string
 	Action string // "created" or "updated"
 	Backup string // previous copy, for "updated"
 }
 
-// ensureNodeRuntimeFiles makes sure the runtime files in projectDir exist and match
-// nodeRuntimeVersion. Missing files are created. A file with an older (or no) runtime marker
-// is replaced, and the previous copy is kept as <file>.bak. Files that already carry the
-// current marker are left alone, including any local edits. With write=false nothing is
-// written and the returned actions describe what would happen.
-func ensureNodeRuntimeFiles(projectDir, framework string, write bool) ([]nodeRuntimeAction, error) {
+// ensureNodeRuntimeFiles keeps the Node.js runtime files in projectDir current (see ensureRuntimeFiles)
+func ensureNodeRuntimeFiles(projectDir, framework string, write bool) ([]runtimeAction, error) {
 	langType := scaffolding.LanguageNodeExpress
 	if framework == "fastify" {
 		langType = scaffolding.LanguageNodeFastify
 	}
 	loader := templates.NewTemplateLoader(langType)
+	render := func(name string) (string, error) {
+		return loader.RenderTemplate(framework, name, &templates.TemplateData{Framework: framework})
+	}
+	return ensureRuntimeFiles(projectDir, nodeRuntimeFiles, nodeRuntimeVersion, render, write)
+}
 
-	var actions []nodeRuntimeAction
-	for _, file := range nodeRuntimeFiles {
+// ensurePythonRuntimeFiles keeps the Python runtime files in projectDir current (see ensureRuntimeFiles)
+func ensurePythonRuntimeFiles(projectDir string, write bool) ([]runtimeAction, error) {
+	render := func(name string) (string, error) {
+		content, err := templates.TemplateFS.ReadFile("python/common/" + name)
+		return string(content), err
+	}
+	return ensureRuntimeFiles(projectDir, pythonRuntimeFiles, pythonRuntimeVersion, render, write)
+}
+
+// ensureRuntimeFiles makes sure the runtime files in projectDir exist and match version.
+// Missing files are created. A file with an older (or no) runtime marker is replaced, and the
+// previous copy is kept as <file>.bak. Files that already carry the current marker are left
+// alone, including any local edits. With write=false nothing is written and the returned
+// actions describe what would happen.
+func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, render func(string) (string, error), write bool) ([]runtimeAction, error) {
+	var actions []runtimeAction
+	for _, file := range files {
 		path := filepath.Join(projectDir, file.path)
 
 		existing, err := os.ReadFile(path)
 		switch {
 		case os.IsNotExist(err):
-			actions = append(actions, nodeRuntimeAction{Path: file.path, Action: "created"})
+			actions = append(actions, runtimeAction{Path: file.path, Action: "created"})
 		case err != nil:
 			return actions, err
-		case runtimeVersionOf(existing) == nodeRuntimeVersion:
+		case runtimeVersionOf(existing) == version:
 			continue
 		default:
-			actions = append(actions, nodeRuntimeAction{Path: file.path, Action: "updated", Backup: file.path + ".bak"})
+			actions = append(actions, runtimeAction{Path: file.path, Action: "updated", Backup: file.path + ".bak"})
 		}
 
 		if !write {
 			continue
 		}
 
-		content, err := loader.RenderTemplate(framework, file.template, &templates.TemplateData{Framework: framework})
+		content, err := render(file.template)
 		if err != nil {
 			return actions, fmt.Errorf("failed to render %s: %w", file.template, err)
 		}
@@ -91,9 +120,23 @@ func ensureNodeRuntimeFiles(projectDir, framework string, write bool) ([]nodeRun
 	return actions, nil
 }
 
+// printRuntimeActions reports what ensureRuntimeFiles did, or would do when write is false
+func printRuntimeActions(actions []runtimeAction, write bool) {
+	for _, a := range actions {
+		switch {
+		case !write:
+			fmt.Printf("🔍 Would %s %s\n", map[string]string{"created": "create", "updated": "update"}[a.Action], a.Path)
+		case a.Backup != "":
+			fmt.Printf("♻️  Updated %s to the current bffgen runtime (previous copy: %s)\n", a.Path, a.Backup)
+		default:
+			fmt.Printf("✅ Created %s\n", a.Path)
+		}
+	}
+}
+
 // runtimeVersionOf returns the bffgen:runtime version in a file, or 0 if it has none
 func runtimeVersionOf(content []byte) int {
-	m := nodeRuntimeMarker.FindSubmatch(content)
+	m := runtimeMarker.FindSubmatch(content)
 	if m == nil {
 		return 0
 	}

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -17,31 +19,31 @@ import (
 	"github.com/RichGod93/bffgen/internal/utils"
 )
 
-// generatePython generates code for Python projects
+// pythonConfigFile is the bffgen config file of Python projects
+const pythonConfigFile = "bffgen.config.py.json"
+
+// generatePython generates routers and services for FastAPI projects
 func generatePython() error {
-	// Create progress tracker
 	progress := utils.NewQuietProgress(verbose)
+	write := !checkMode && !dryRun
 
 	if checkMode {
 		fmt.Println("🔍 Check mode: Analyzing what would be changed")
 	} else if dryRun {
 		fmt.Println("🔍 Dry run: Showing what would be changed")
 	} else {
-		fmt.Println("🔧 Generating Python routes from bffgen.config.py.json")
+		fmt.Println("🔧 Generating Python routes from " + pythonConfigFile)
 	}
 	fmt.Println()
 
 	progress.Start("Loading configuration")
 
-	// Check if config file exists
-	if _, err := os.Stat("bffgen.config.py.json"); os.IsNotExist(err) {
-		fmt.Println("❌ bffgen.config.py.json not found in current directory")
+	configData, err := os.ReadFile(pythonConfigFile)
+	if os.IsNotExist(err) {
+		fmt.Println("❌ " + pythonConfigFile + " not found in current directory")
 		fmt.Println("💡 Run 'bffgen init <project-name> --lang python-fastapi' first or navigate to a BFF project directory")
 		return fmt.Errorf("config file not found")
 	}
-
-	// Load bffgen.config.py.json
-	configData, err := os.ReadFile("bffgen.config.py.json")
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
@@ -51,86 +53,101 @@ func generatePython() error {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	// Get backends
 	backends, ok := config["backends"].([]interface{})
 	if !ok || len(backends) == 0 {
-		LogWarning("No backends configured in bffgen.config.py.json")
-		fmt.Println("💡 Add backends manually to bffgen.config.py.json or use 'bffgen add-template'")
+		LogWarning("No backends configured in " + pythonConfigFile)
+		fmt.Println("💡 Add backends manually to " + pythonConfigFile + " or use 'bffgen add-template'")
 		return nil
 	}
 
-	LogVerboseCommand("Found %d backends to generate", len(backends))
-
-	// Detect async mode
-	asyncMode := true
 	if project, ok := config["project"].(map[string]interface{}); ok {
-		if async, ok := project["async"].(bool); ok {
-			asyncMode = async
+		if async, ok := project["async"].(bool); ok && !async {
+			fmt.Println("ℹ️  Generated proxy routes are always async; project.async only affects your own code")
 		}
 	}
 
 	progress.Success("Configuration loaded")
 
-	fmt.Printf("📝 Generating routes for FastAPI (async: %v)\n", asyncMode)
-	progress.Start(fmt.Sprintf("Generating files for %d backends", len(backends)))
-
-	// Generate router files, services for each backend
-	routersGenerated := 0
-	servicesGenerated := 0
-
+	// Build all backends first so an invalid config writes nothing
+	var generated []*pythonBackendData
 	for _, backend := range backends {
 		backendMap, ok := backend.(map[string]interface{})
 		if !ok {
 			continue
 		}
-
-		serviceName, _ := backendMap["name"].(string)
-		if serviceName == "" {
+		data, err := buildPythonBackend(backendMap)
+		if err != nil {
+			return err
+		}
+		if data == nil {
 			continue
 		}
+		generated = append(generated, data)
+	}
 
-		// Skip backends with no endpoints
-		endpoints, ok := backendMap["endpoints"].([]interface{})
-		if !ok || len(endpoints) == 0 {
-			LogVerboseCommand("Skipping %s (no endpoints defined)", serviceName)
+	// Generated routers require the runtime files; create or upgrade them first
+	actions, err := ensurePythonRuntimeFiles(".", write)
+	if err != nil {
+		return fmt.Errorf("failed to update runtime files: %w", err)
+	}
+	printRuntimeActions(actions, write)
+
+	files := map[string]string{}
+	var modules []string
+	for _, data := range generated {
+		router, err := renderPythonTemplate("python/fastapi/router_template.py.tmpl", data)
+		if err != nil {
+			return err
+		}
+		service, err := renderPythonTemplate("python/fastapi/service_template.py.tmpl", data)
+		if err != nil {
+			return err
+		}
+		files[filepath.Join("routers", data.Module+"_router.py")] = router
+		files[filepath.Join("services", data.Module+"_service.py")] = service
+		modules = append(modules, data.Module)
+	}
+	registry, err := renderPythonTemplate("python/fastapi/routers_init.py.tmpl", map[string]interface{}{"Modules": modules})
+	if err != nil {
+		return err
+	}
+	files[filepath.Join("routers", "__init__.py")] = registry
+
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		if !write {
+			fmt.Printf("🔍 Would write %s\n", path)
 			continue
 		}
-
-		baseURL, _ := backendMap["url"].(string)
-
-		// Generate router file
-		if err := generateFastAPIRouter(serviceName, endpoints, baseURL, asyncMode); err != nil {
-			return fmt.Errorf("failed to generate router for %s: %w", serviceName, err)
+		if err := os.MkdirAll(filepath.Dir(path), utils.ProjectDirPerm); err != nil {
+			return err
 		}
-		routersGenerated++
-
-		// Generate service file
-		if err := generateFastAPIService(serviceName, endpoints, baseURL, asyncMode); err != nil {
-			return fmt.Errorf("failed to generate service for %s: %w", serviceName, err)
+		if err := os.WriteFile(path, []byte(files[path]), utils.ProjectFilePerm); err != nil {
+			return err
 		}
-		servicesGenerated++
-
-		LogVerboseCommand("Generated router and service for %s", serviceName)
+		LogVerboseCommand("Wrote %s", path)
 	}
 
-	progress.Success(fmt.Sprintf("Generated %d routers and %d services", routersGenerated, servicesGenerated))
-
-	// Auto-register routers in main.py
-	if !checkMode && !dryRun {
-		progress.Start("Registering routers in main.py")
-		if err := autoRegisterPythonRouters(backends); err != nil {
-			return fmt.Errorf("failed to register routers: %w", err)
-		}
-		progress.Success("Routers registered in main.py")
+	if !write {
+		return nil
 	}
 
+	if err := registerPythonRouters("main.py"); err != nil {
+		return fmt.Errorf("failed to register routers: %w", err)
+	}
+	warnStrictPythonSettings("config.py")
+
+	progress.Success(fmt.Sprintf("Generated %d routers and %d services", len(generated), len(generated)))
 	fmt.Println()
 	fmt.Println("✅ Code generation complete!")
 	fmt.Println()
 	fmt.Println("📁 Generated files:")
-	fmt.Printf("   - %d router files in routers/\n", routersGenerated)
-	fmt.Printf("   - %d service files in services/\n", servicesGenerated)
-	fmt.Println("   - Updated main.py with router imports")
+	fmt.Printf("   - %d router files in routers/ (registered in routers/__init__.py)\n", len(generated))
+	fmt.Printf("   - %d service files in services/\n", len(generated))
 	fmt.Println()
 	fmt.Println("🚀 Next steps:")
 	fmt.Println("   1. Review generated files")
@@ -140,188 +157,271 @@ func generatePython() error {
 	return nil
 }
 
-// generateFastAPIRouter generates router file for a service
-func generateFastAPIRouter(serviceName string, endpoints []interface{}, baseURL string, async bool) error {
-	tmplContent, err := templates.TemplateFS.ReadFile("python/fastapi/router_template.py.tmpl")
-	if err != nil {
-		return fmt.Errorf("failed to read router template: %w", err)
+// pythonBackendData is the template data for one backend's router and service
+type pythonBackendData struct {
+	ServiceName string
+	Module      string // snake_case module name, e.g. user_service
+	ClassName   string // service class, e.g. UserServiceService
+	EnvKey      string
+	BaseURL     string
+	AnyAuth     bool
+	Endpoints   []pythonEndpointData
+
+	Timeout          int
+	Retries          int
+	BreakerEnabled   bool
+	FailureThreshold int
+	ResetTimeout     int
+}
+
+// pythonEndpointData is one proxied route
+type pythonEndpointData struct {
+	Method       string   // upper case
+	Path         string   // exposed path, {param} style
+	BackendPath  string   // backend path, {param} style
+	Params       []string // path parameters, in order
+	HandlerName  string
+	RequiresAuth bool
+	HasBody      bool
+}
+
+// pythonReservedNames can't be used as path parameter names: Python keywords and the
+// argument names of generated route handlers and service methods
+var pythonReservedNames = map[string]bool{
+	"False": true, "None": true, "True": true, "and": true, "as": true, "assert": true, "async": true,
+	"await": true, "break": true, "class": true, "continue": true, "def": true, "del": true, "elif": true,
+	"else": true, "except": true, "finally": true, "for": true, "from": true, "global": true, "if": true,
+	"import": true, "in": true, "is": true, "lambda": true, "nonlocal": true, "not": true, "or": true,
+	"pass": true, "raise": true, "return": true, "try": true, "while": true, "with": true, "yield": true,
+	"request": true, "self": true, "query": true, "body": true, "headers": true, "path": true,
+}
+
+var colonToBraceParam = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_]*)`)
+
+// buildPythonBackend validates one backend from bffgen.config.py.json and returns its
+// template data, or nil if it has no endpoints.
+//
+// Endpoints use the Python config format, where "path" is the path the BFF exposes and
+// "upstreamPath" the backend path (default: the same). Node-style endpoints with
+// "exposeAs" (exposed) and "path" (backend) are accepted too. Both :id and {id}
+// parameters work.
+func buildPythonBackend(backend map[string]interface{}) (*pythonBackendData, error) {
+	name, _ := backend["name"].(string)
+	endpoints, _ := backend["endpoints"].([]interface{})
+	if name == "" || len(endpoints) == 0 {
+		return nil, nil
 	}
 
-	tmpl, err := template.New("router").Parse(string(tmplContent))
-	if err != nil {
-		return fmt.Errorf("failed to parse router template: %w", err)
+	baseURL, _ := backend["baseUrl"].(string)
+	if baseURL == "" {
+		baseURL, _ = backend["url"].(string)
+	}
+	if baseURL == "" {
+		return nil, fmt.Errorf("backend %s: baseUrl is required", name)
 	}
 
-	// Determine router prefix
-	routerPrefix := fmt.Sprintf("/api/%s", strings.ToLower(serviceName))
+	data := &pythonBackendData{
+		ServiceName: name,
+		Module:      pythonModuleName(name),
+		ClassName:   toCamelCase(pythonModuleName(name)) + "Service",
+		EnvKey:      nodeEnvKey(name),
+		BaseURL:     baseURL,
+	}
 
-	// Convert endpoints
-	convertedEndpoints := make([]map[string]interface{}, 0)
+	if err := applyPythonResilienceConfig(data, backend); err != nil {
+		return nil, fmt.Errorf("backend %s: %w", name, err)
+	}
+
+	usedNames := map[string]bool{}
 	for _, ep := range endpoints {
-		epMap, ok := ep.(map[string]interface{})
+		endpoint, ok := ep.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		method, _ := epMap["method"].(string)
-		path, _ := epMap["path"].(string)
-		name, _ := epMap["name"].(string)
-		upstreamPath, _ := epMap["upstreamPath"].(string)
+		method, _ := endpoint["method"].(string)
+		exposed, _ := endpoint["path"].(string)
+		backendPath, _ := endpoint["upstreamPath"].(string)
+		if exposeAs, ok := endpoint["exposeAs"].(string); ok && exposeAs != "" {
+			exposed, backendPath = exposeAs, exposed
+		}
+		if backendPath == "" {
+			backendPath = exposed
+		}
+		requiresAuth, _ := endpoint["requiresAuth"].(bool)
+		endpointName, _ := endpoint["name"].(string)
 
-		if method == "" || path == "" {
+		if exposed == "" || method == "" {
 			continue
 		}
 
-		// Strip router prefix from path to avoid duplication
-		routePath := strings.TrimPrefix(path, routerPrefix)
-		if routePath == "" {
-			routePath = "/"
+		method = strings.ToUpper(method)
+		if !nodeRouteMethods[method] {
+			return nil, fmt.Errorf("backend %s, endpoint %s %s: unsupported method", name, method, exposed)
 		}
 
-		method = strings.ToLower(method)
-		functionName := sanitizeFunctionName(name, path, method)
-		hasBody := method == "post" || method == "put" || method == "patch"
+		// Validate in :param form (shared with Node.js), then render in FastAPI's {param} form
+		exposed, backendPath = normalizeRouteParams(exposed), normalizeRouteParams(backendPath)
+		if err := validateNodeRoutePaths(exposed, backendPath); err != nil {
+			return nil, fmt.Errorf("backend %s, endpoint %s %s: %w", name, method, exposed, err)
+		}
+		params := routeParams(exposed)
+		for _, param := range params {
+			if pythonReservedNames[param] {
+				return nil, fmt.Errorf("backend %s, endpoint %s %s: path parameter %q is a reserved name in Python; rename it", name, method, exposed, param)
+			}
+		}
 
-		convertedEndpoints = append(convertedEndpoints, map[string]interface{}{
-			"Method":       method,
-			"Path":         routePath,
-			"FunctionName": functionName,
-			"Description":  fmt.Sprintf("%s %s endpoint", strings.ToUpper(method), path),
-			"HasBody":      hasBody,
-			"UpstreamPath": upstreamPath,
+		handler := toSnakeCase(endpointName)
+		if handler == "" {
+			handler = toSnakeCase(nodeHandlerName(method, exposed))
+		}
+		if handler[0] >= '0' && handler[0] <= '9' || pythonReservedNames[handler] {
+			handler = "route_" + handler
+		}
+		for base, n := handler, 2; usedNames[handler]; n++ {
+			handler = fmt.Sprintf("%s_%d", base, n)
+		}
+		usedNames[handler] = true
+
+		data.AnyAuth = data.AnyAuth || requiresAuth
+		data.Endpoints = append(data.Endpoints, pythonEndpointData{
+			Method:       method,
+			Path:         colonToBraceParam.ReplaceAllString(exposed, "{$1}"),
+			BackendPath:  colonToBraceParam.ReplaceAllString(backendPath, "{$1}"),
+			Params:       params,
+			HandlerName:  handler,
+			RequiresAuth: requiresAuth,
+			HasBody:      method != "GET" && method != "HEAD",
 		})
 	}
 
-	data := map[string]interface{}{
-		"ServiceName":      serviceName,
-		"ServiceNameLower": strings.ToLower(serviceName),
-		"ServiceNameCamel": toCamelCase(serviceName),
-		"ServiceNameUpper": strings.ToUpper(serviceName),
-		"Endpoints":        convertedEndpoints,
-		"Async":            async,
+	if len(data.Endpoints) == 0 {
+		return nil, nil
 	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("failed to execute router template: %w", err)
-	}
-
-	// Write to routers/ directory
-	routerFile := filepath.Join("routers", fmt.Sprintf("%s_router.py", strings.ToLower(serviceName)))
-	return os.WriteFile(routerFile, buf.Bytes(), utils.ProjectFilePerm)
+	return data, nil
 }
 
-// generateFastAPIService generates service file for a service
-func generateFastAPIService(serviceName string, endpoints []interface{}, baseURL string, async bool) error {
-	tmplContent, err := templates.TemplateFS.ReadFile("python/fastapi/service_template.py.tmpl")
-	if err != nil {
-		return fmt.Errorf("failed to read service template: %w", err)
+// applyPythonResilienceConfig reads timeout, retries and circuitBreaker like the Node.js
+// generator (times in ms or duration strings). Python configs used to give times in seconds,
+// so times under 100 ms are rejected rather than silently making every call time out.
+func applyPythonResilienceConfig(data *pythonBackendData, backend map[string]interface{}) error {
+	backendCopy := map[string]interface{}{}
+	for k, v := range backend {
+		backendCopy[k] = v
 	}
-
-	tmpl, err := template.New("service").Parse(string(tmplContent))
-	if err != nil {
-		return fmt.Errorf("failed to parse service template: %w", err)
-	}
-
-	// Convert endpoints
-	convertedEndpoints := make([]map[string]interface{}, 0)
-	for _, ep := range endpoints {
-		epMap, ok := ep.(map[string]interface{})
-		if !ok {
-			continue
+	// The old Python example used circuitBreaker.recoveryTimeout
+	if breaker, ok := backend["circuitBreaker"].(map[string]interface{}); ok {
+		if _, ok := breaker["resetTimeout"]; !ok && breaker["recoveryTimeout"] != nil {
+			b := map[string]interface{}{}
+			for k, v := range breaker {
+				b[k] = v
+			}
+			b["resetTimeout"] = breaker["recoveryTimeout"]
+			backendCopy["circuitBreaker"] = b
 		}
-
-		method, _ := epMap["method"].(string)
-		path, _ := epMap["path"].(string)
-		name, _ := epMap["name"].(string)
-		upstreamPath, _ := epMap["upstreamPath"].(string)
-
-		if method == "" || path == "" {
-			continue
-		}
-
-		if upstreamPath == "" {
-			upstreamPath = path
-		}
-
-		method = strings.ToLower(method)
-		functionName := sanitizeFunctionName(name, path, method)
-		hasBody := method == "post" || method == "put" || method == "patch"
-
-		convertedEndpoints = append(convertedEndpoints, map[string]interface{}{
-			"Method":       method,
-			"Path":         path,
-			"FunctionName": functionName,
-			"Description":  fmt.Sprintf("Call %s endpoint", upstreamPath),
-			"HasBody":      hasBody,
-			"UpstreamPath": upstreamPath,
-		})
 	}
 
-	data := map[string]interface{}{
-		"ServiceName":      serviceName,
-		"ServiceNameCamel": toCamelCase(serviceName),
-		"ServiceNameUpper": strings.ToUpper(serviceName),
-		"BaseURL":          baseURL,
-		"Endpoints":        convertedEndpoints,
-		"Async":            async,
+	var r templates.RouteTemplateData
+	if err := applyResilienceConfig(&r, backendCopy); err != nil {
+		return err
 	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return fmt.Errorf("failed to execute service template: %w", err)
+	if r.Timeout < 100 {
+		return fmt.Errorf("timeout %d is in milliseconds; did you mean %d or \"%ds\"?", r.Timeout, r.Timeout*1000, r.Timeout)
 	}
-
-	// Write to services/ directory
-	serviceFile := filepath.Join("services", fmt.Sprintf("%s_service.py", strings.ToLower(serviceName)))
-	return os.WriteFile(serviceFile, buf.Bytes(), utils.ProjectFilePerm)
+	if r.ResetTimeout < 100 {
+		return fmt.Errorf("circuitBreaker.resetTimeout %d is in milliseconds; did you mean %d or \"%ds\"?", r.ResetTimeout, r.ResetTimeout*1000, r.ResetTimeout)
+	}
+	data.Timeout, data.Retries = r.Timeout, r.Retries
+	data.BreakerEnabled, data.FailureThreshold, data.ResetTimeout = r.BreakerEnabled, r.FailureThreshold, r.ResetTimeout
+	return nil
 }
 
-// autoRegisterPythonRouters registers routers in main.py
-func autoRegisterPythonRouters(backends []interface{}) error {
-	mainFile := "main.py"
+// pythonModuleName returns a valid Python module name for a backend, e.g. user-service -> user_service
+func pythonModuleName(serviceName string) string {
+	module := toSnakeCase(serviceName)
+	if module == "" || module[0] >= '0' && module[0] <= '9' || pythonReservedNames[module] {
+		module = "service_" + module
+	}
+	return module
+}
+
+// renderPythonTemplate renders an embedded Python template
+func renderPythonTemplate(name string, data interface{}) (string, error) {
+	content, err := templates.TemplateFS.ReadFile(name)
+	if err != nil {
+		return "", fmt.Errorf("failed to read %s: %w", name, err)
+	}
+	tmpl, err := template.New(filepath.Base(name)).Parse(string(content))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse %s: %w", name, err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("failed to render %s: %w", name, err)
+	}
+	return buf.String(), nil
+}
+
+// Router registration markers in main.py files created before bffgen 3.5
+const (
+	legacyImportMarker  = "# BFFGEN_ROUTER_IMPORTS - Auto-generated router imports will be inserted here by bffgen generate"
+	legacyIncludeMarker = "# BFFGEN_ROUTER_INCLUDES - Auto-generated router includes will be inserted here by bffgen generate"
+	legacyMarkerEnd     = "# Do not modify this marker comment"
+)
+
+// registerPythonRouters makes sure main.py registers the generated routers. Current projects
+// call include_routers(app) from routers/__init__.py and need no change. In older projects
+// the lines between each legacy marker and its "Do not modify" line are replaced (not
+// appended to), so repeated runs don't duplicate imports.
+func registerPythonRouters(mainFile string) error {
 	content, err := os.ReadFile(mainFile)
 	if err != nil {
-		return fmt.Errorf("failed to read main.py: %w", err)
+		return fmt.Errorf("failed to read %s: %w", mainFile, err)
+	}
+	text := string(content)
+	if strings.Contains(text, "include_routers(app)") {
+		return nil
 	}
 
-	contentStr := string(content)
-
-	// Generate import statements
-	imports := []string{}
-	includes := []string{}
-
-	for _, backend := range backends {
-		backendMap, ok := backend.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		serviceName, _ := backendMap["name"].(string)
-		if serviceName == "" {
-			continue
-		}
-
-		serviceNameLower := strings.ToLower(serviceName)
-		imports = append(imports, fmt.Sprintf("from routers.%s_router import router as %s_router", serviceNameLower, serviceNameLower))
-		includes = append(includes, fmt.Sprintf("app.include_router(%s_router)", serviceNameLower))
+	updated, okImports := replaceLegacyBlock(text, legacyImportMarker, "from routers import include_routers")
+	updated, okIncludes := replaceLegacyBlock(updated, legacyIncludeMarker, "include_routers(app)")
+	if !okImports || !okIncludes {
+		fmt.Printf("⚠️  %s doesn't register routers; add these lines to it:\n", mainFile)
+		fmt.Println("      from routers import include_routers")
+		fmt.Println("      include_routers(app)")
+		return nil
 	}
+	return os.WriteFile(mainFile, []byte(updated), utils.ProjectFilePerm)
+}
 
-	// Find and replace import marker
-	importMarker := "# BFFGEN_ROUTER_IMPORTS - Auto-generated router imports will be inserted here by bffgen generate"
-	if strings.Contains(contentStr, importMarker) {
-		importBlock := strings.Join(imports, "\n")
-		contentStr = strings.Replace(contentStr, importMarker, importMarker+"\n"+importBlock, 1)
+var settingsIgnoresExtra = regexp.MustCompile(`extra\s*=\s*["']ignore["']`)
+
+// warnStrictPythonSettings warns when config.py comes from a project created before bffgen
+// 3.5, whose Settings rejected unknown .env keys: such projects crash at startup on the
+// DEBUG=true line init wrote to .env, and on <NAME>_URL entries. config.py belongs to the
+// user, so it is not changed.
+func warnStrictPythonSettings(configFile string) {
+	content, err := os.ReadFile(configFile)
+	if err != nil || !strings.Contains(string(content), "BaseSettings") || settingsIgnoresExtra.Match(content) {
+		return
 	}
+	fmt.Printf("⚠️  %s rejects unknown .env keys, so the app fails to start on DEBUG=true or <NAME>_URL\n", configFile)
+	fmt.Println(`   lines in .env. Add  extra = "ignore"  to the Settings Config class (or model_config).`)
+}
 
-	// Find and replace include marker
-	includeMarker := "# BFFGEN_ROUTER_INCLUDES - Auto-generated router includes will be inserted here by bffgen generate"
-	if strings.Contains(contentStr, includeMarker) {
-		includeBlock := strings.Join(includes, "\n")
-		contentStr = strings.Replace(contentStr, includeMarker, includeMarker+"\n"+includeBlock, 1)
+// replaceLegacyBlock replaces the lines between marker and the next legacyMarkerEnd line with block
+func replaceLegacyBlock(text, marker, block string) (string, bool) {
+	start := strings.Index(text, marker)
+	if start == -1 {
+		return text, false
 	}
-
-	return os.WriteFile(mainFile, []byte(contentStr), utils.ProjectFilePerm)
+	bodyStart := start + len(marker)
+	end := strings.Index(text[bodyStart:], legacyMarkerEnd)
+	if end == -1 {
+		return text, false
+	}
+	return text[:bodyStart] + "\n" + block + "\n" + text[bodyStart+end:], true
 }
 
 // sanitizeFunctionName creates a valid Python function name from endpoint details

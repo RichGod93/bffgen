@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-10-15
+
+Python (FastAPI) projects now work, and their generated routes match the Express and Fastify
+ones: path parameters, query strings, auth, timeouts, retries, a circuit breaker per backend,
+and 504/503/502 on backend failure. See [Python/FastAPI Support](docs/PYTHON_SUPPORT.md#what-generated-routes-do).
+
+### Fixed
+- **Fresh FastAPI projects crashed at startup**: `.env` contained `DEBUG=true`, which the
+  generated settings rejected as an unknown key. `config.py` now ignores unknown `.env` keys.
+  Existing projects: add `extra = "ignore"` to the `Config` class in `config.py`
+  (`bffgen generate` prints this hint).
+- **Generated FastAPI routes could not reach any backend**: the configured `baseUrl` never
+  reached the generated service, and `<NAME>_URL` was ignored, so every route returned 500.
+- `{id}` in a backend path was sent as Python's built-in `id` function; path parameters are now
+  substituted and URL-encoded (`:id` works too). Query strings are forwarded.
+- `requiresAuth` was ignored; such routes now require a valid JWT and return 401 otherwise.
+- Backend 4xx responses became 500 with the exception text; they are now passed through.
+- Regenerating appended the router imports to `main.py` again on every run. Routers are now
+  listed in a generated `routers/__init__.py`; older `main.py` files are fixed up in place.
+- `main.py` in `async: false` projects called the middleware's `call_next` without `await`.
+- `add-template` wrote template services in random order; it now sorts them (Node.js and Python).
+
+### Added
+- Per-backend `timeout`, `retries` and `circuitBreaker` settings for Python projects (same
+  format as Node.js: times in ms), with `<NAME>_TIMEOUT`, `<NAME>_RETRIES`,
+  `<NAME>_CIRCUIT_FAILURE_THRESHOLD` and `<NAME>_CIRCUIT_RESET_TIMEOUT` overrides that can
+  also live in `.env`.
+- Python runtime files `utils/upstream.py` and `services/http_client.py`; `generate` adds them
+  to existing projects and upgrades `utils/circuit_breaker.py`, keeping the old copy as `.bak`.
+- Generated service classes with typed methods per endpoint, sharing the routes' client and
+  breaker.
+- `tests/conftest.py` provides an `auth_headers` fixture with a valid JWT.
+
+### Changed
+- Generated FastAPI routes use the full `path` from the config instead of an `/api/<backend>`
+  router prefix, and are always async (`project.async` no longer affects them).
+- Python configs give times in milliseconds, like Node.js. `generate` rejects `timeout` or
+  `resetTimeout` values under 100 ms, which were meant as seconds (`"30s"` also works).
+  `circuitBreaker.recoveryTimeout` is accepted as an alias of `resetTimeout`.
+- `dependencies.py`: `get_current_user` now returns the JWT payload (it always returned `None`),
+  and `require_auth` uses the same JWT check as generated routes.
+- `CircuitBreaker` (Python) admits a single trial request when half-open, ignores 4xx errors,
+  defaults to a 30 s `timeout`, and raises `CircuitOpenError` (a `CircuitBreakerError`) with
+  `retry_after`.
+
 ## [3.4.0] - 2026-10-15
 
 Generated Express and Fastify routes are now real proxies: they forward path parameters and

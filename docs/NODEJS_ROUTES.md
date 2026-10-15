@@ -1,5 +1,8 @@
 # Generated Node.js Routes
 
+> Python (FastAPI) projects generate routes with the same behaviour; see
+> [Python/FastAPI Support](PYTHON_SUPPORT.md#what-generated-routes-do).
+
 `bffgen generate` turns each backend in `bffgen.config.json` into a route file,
 `src/routes/<backend>.js`, for Express or Fastify. This page describes what those routes do:
 how requests are forwarded, how timeouts, retries and the circuit breaker work, and which

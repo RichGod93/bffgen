@@ -101,7 +101,7 @@ func createFastAPIMainFile(projectName string, opts ProjectOptions) error {
 	}
 
 	data := map[string]interface{}{
-		"ProjectName": projectName,
+		"ProjectName": filepath.Base(projectName),
 		"Async":       opts.AsyncEndpoints,
 	}
 
@@ -111,7 +111,25 @@ func createFastAPIMainFile(projectName string, opts ProjectOptions) error {
 	}
 
 	filePath := filepath.Join(projectName, "main.py")
-	return os.WriteFile(filePath, buf.Bytes(), utils.ProjectFilePerm)
+	if err := os.WriteFile(filePath, buf.Bytes(), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	// main.py imports the router registry, which bffgen generate fills in
+	registry, err := renderPythonTemplate("python/fastapi/routers_init.py.tmpl", map[string]interface{}{"Modules": []string{}})
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(projectName, "routers"), utils.ProjectDirPerm); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(projectName, "routers", "__init__.py"), []byte(registry), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	// Runtime that generated routers use to call backends; main.py closes it on shutdown
+	_, err = ensurePythonRuntimeFiles(projectName, true)
+	return err
 }
 
 // createFastAPIConfig creates config.py for FastAPI projects
@@ -194,15 +212,10 @@ func createPythonCacheManager(projectName string) error {
 }
 
 // createPythonCircuitBreaker creates circuit breaker utility
+// (with the HTTP client and upstream proxy runtime it belongs to)
 func createPythonCircuitBreaker(projectName string) error {
-	content, err := templates.TemplateFS.ReadFile("python/common/circuit_breaker.py.tmpl")
-	if err != nil {
-		return fmt.Errorf("failed to read circuit_breaker template: %w", err)
-	}
-
-	utilsDir := filepath.Join(projectName, "utils")
-	filePath := filepath.Join(utilsDir, "circuit_breaker.py")
-	return os.WriteFile(filePath, content, utils.ProjectFilePerm)
+	_, err := ensurePythonRuntimeFiles(projectName, true)
+	return err
 }
 
 // createPythonMiddleware creates middleware files

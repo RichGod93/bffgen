@@ -155,7 +155,7 @@ uvicorn main:app --reload
 - **Test Infrastructure** - Jest setup with sample tests and 70% coverage goals
 - **API Documentation** - Swagger UI at `/api-docs` with OpenAPI 3.0 spec
 - **Structured Logging** - Winston (Express) or Pino (Fastify) with file rotation
-- **Resilient Routes** - Generated routes forward path params and query strings, with per-backend timeouts, retries for idempotent requests, a circuit breaker, and 502/503/504 on backend failure ([details](docs/NODEJS_ROUTES.md))
+- **Resilient Routes** - Generated routes (Express, Fastify and FastAPI) forward path params and query strings, with per-backend timeouts, retries for idempotent requests, a circuit breaker, and 502/503/504 on backend failure ([Node.js](docs/NODEJS_ROUTES.md), [Python](docs/PYTHON_SUPPORT.md#what-generated-routes-do))
 - **CLI Flags** - Non-interactive mode with full customization
 
 ### 🚀 **Infrastructure Scaffolding (NEW)**

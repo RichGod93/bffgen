@@ -1,0 +1,181 @@
+"""
+HTTP client for backend services
+Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+bffgen ships a newer version and keeps your previous copy as http_client.py.bak.
+
+- Each attempt has its own timeout, covering the whole request including the body.
+- Only idempotent methods (GET, HEAD, OPTIONS) are retried, with exponential backoff,
+  after a timeout, a connection failure or a 5xx response.
+- Failures raise UpstreamError with one of these codes:
+    UPSTREAM_TIMEOUT      the backend did not answer in time
+    UPSTREAM_UNAVAILABLE  the backend could not be reached (connection refused, DNS, reset)
+    UPSTREAM_ERROR        the backend answered with a 5xx status
+"""
+
+import asyncio
+import json
+import logging
+from typing import Any, Dict, Mapping, Optional
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+RETRYABLE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# HTTP status the BFF answers with for each failure; also used as status_code so FastAPI
+# exception handlers can respond correctly when the error is raised from your own code
+STATUS_BY_CODE = {
+    "UPSTREAM_TIMEOUT": 504,
+    "UPSTREAM_UNAVAILABLE": 503,
+    "UPSTREAM_ERROR": 502,
+}
+
+
+class UpstreamError(Exception):
+    """A backend call failed: timeout, connection failure or 5xx response"""
+
+    def __init__(self, code: str, message: str, service: str, upstream_status: Optional[int] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.service = service
+        self.upstream_status = upstream_status
+        self.status_code = STATUS_BY_CODE[code]
+
+
+class HttpError(Exception):
+    """Raised by request() and the get/post/... helpers for 4xx responses"""
+
+    def __init__(self, status: int, body: Any, service: str):
+        super().__init__(f"HTTP {status}")
+        self.status = status
+        self.status_code = status
+        self.body = body
+        self.service = service
+
+
+class HttpClient:
+    """
+    Async HTTP client for one backend.
+
+    Args:
+        base_url: Base URL of the backend
+        name: Backend name, used in errors and logs
+        timeout: Per-attempt timeout in ms (default 10000)
+        retries: Extra attempts for idempotent methods (default 2)
+        retry_delay: Base backoff in ms, doubled per retry (default 100)
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        name: Optional[str] = None,
+        timeout: float = 10000,
+        retries: int = 2,
+        retry_delay: float = 100,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.name = name or self.base_url
+        self.timeout = timeout
+        self.retries = retries
+        self.retry_delay = retry_delay
+        self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=None,  # the per-attempt deadline in send() covers the whole request
+                limits=httpx.Limits(max_connections=1000, max_keepalive_connections=200),
+            )
+        return self._client
+
+    async def send(
+        self,
+        path: str,
+        method: str = "GET",
+        headers: Optional[Mapping[str, str]] = None,
+        content: Optional[bytes] = None,
+    ) -> httpx.Response:
+        """
+        Send a request and return the response with its body read. Returns any status
+        below 500; raises UpstreamError for timeouts, connection failures and 5xx responses.
+        """
+        url = f"{self.base_url}{path}"
+        attempts = self.retries + 1 if method in RETRYABLE_METHODS else 1
+
+        for attempt in range(1, attempts + 1):
+            try:
+                response = await asyncio.wait_for(
+                    self.client.request(method, url, headers=headers, content=content),
+                    timeout=self.timeout / 1000,
+                )
+                if response.status_code < 500:
+                    return response
+                error = UpstreamError(
+                    "UPSTREAM_ERROR",
+                    f"{self.name} returned {response.status_code}",
+                    self.name,
+                    upstream_status=response.status_code,
+                )
+            except (asyncio.TimeoutError, httpx.TimeoutException):
+                error = UpstreamError(
+                    "UPSTREAM_TIMEOUT", f"{self.name} did not respond within {self.timeout:g} ms", self.name
+                )
+            except httpx.TransportError:
+                error = UpstreamError("UPSTREAM_UNAVAILABLE", f"{self.name} is unreachable", self.name)
+
+            if attempt >= attempts:
+                raise error
+            logger.warning(f"{method} {url} failed ({error.code}), retrying ({attempt}/{attempts - 1})")
+            await asyncio.sleep(self.retry_delay * 2 ** (attempt - 1) / 1000)
+
+        raise AssertionError("unreachable")
+
+    async def request(
+        self,
+        path: str,
+        method: str = "GET",
+        headers: Optional[Mapping[str, str]] = None,
+        json_body: Any = None,
+    ) -> Any:
+        """
+        Make a request and return the parsed body (JSON, or text for other content types).
+        Raises HttpError for 4xx responses and UpstreamError for failures (see send()).
+        """
+        request_headers: Dict[str, str] = dict(headers or {})
+        content = None
+        if json_body is not None:
+            content = json.dumps(json_body).encode()
+            request_headers.setdefault("content-type", "application/json")
+
+        response = await self.send(path, method=method, headers=request_headers, content=content)
+        if "application/json" in response.headers.get("content-type", "") and response.content:
+            body: Any = response.json()
+        else:
+            body = response.text
+
+        if response.status_code >= 400:
+            raise HttpError(response.status_code, body, self.name)
+        return body
+
+    async def get(self, path: str, **kwargs: Any) -> Any:
+        return await self.request(path, method="GET", **kwargs)
+
+    async def post(self, path: str, data: Any = None, **kwargs: Any) -> Any:
+        return await self.request(path, method="POST", json_body=data, **kwargs)
+
+    async def put(self, path: str, data: Any = None, **kwargs: Any) -> Any:
+        return await self.request(path, method="PUT", json_body=data, **kwargs)
+
+    async def patch(self, path: str, data: Any = None, **kwargs: Any) -> Any:
+        return await self.request(path, method="PATCH", json_body=data, **kwargs)
+
+    async def delete(self, path: str, **kwargs: Any) -> Any:
+        return await self.request(path, method="DELETE", **kwargs)
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None

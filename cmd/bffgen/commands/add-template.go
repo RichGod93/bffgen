@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/RichGod93/bffgen/internal/templates"
@@ -211,7 +212,14 @@ func addTemplateNodeJS(templateName string) error {
 
 	// Add template services as backends
 	mergedCount := 0
-	for serviceName, templateService := range templateConfig.Services {
+	// Sorted, so the same template always produces the same config
+	serviceNames := make([]string, 0, len(templateConfig.Services))
+	for serviceName := range templateConfig.Services {
+		serviceNames = append(serviceNames, serviceName)
+	}
+	sort.Strings(serviceNames)
+	for _, serviceName := range serviceNames {
+		templateService := templateConfig.Services[serviceName]
 		// Create backend entry
 		backend := map[string]interface{}{
 			"name":    serviceName,
@@ -305,7 +313,14 @@ func addTemplatePython(templateName string) error {
 
 	// Add template services as backends
 	mergedCount := 0
-	for serviceName, templateService := range templateConfig.Services {
+	// Sorted, so the same template always produces the same config
+	serviceNames := make([]string, 0, len(templateConfig.Services))
+	for serviceName := range templateConfig.Services {
+		serviceNames = append(serviceNames, serviceName)
+	}
+	sort.Strings(serviceNames)
+	for _, serviceName := range serviceNames {
+		templateService := templateConfig.Services[serviceName]
 		// Create backend entry
 		backend := map[string]interface{}{
 			"name": serviceName,
