@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.4.0] - 2026-10-15
 
 Generated Express and Fastify routes are now real proxies: they forward path parameters and
 query strings, time out, retry safely, stop calling failing backends, and tell clients what
@@ -46,6 +46,12 @@ went wrong. See [Generated Node.js Routes](docs/NODEJS_ROUTES.md).
 - Non-JSON and empty (`204`) backend responses made generated routes fail with 500.
 - `generate` now reports endpoints whose backend `path` uses a parameter missing from
   `exposeAs`, or whose paths contain characters that would break the generated code.
+
+### Documentation
+- README: the version badge now tracks npm, and the `go install` instructions, which installed an
+  old v1.x release or failed, are replaced with a note explaining why and how to install instead.
+- `docs/REGENERATION_SAFE_SCAFFOLDING.md` now states which Node.js files `generate` overwrites.
+- Removed unverified time-savings figures from the docs, and fixed broken documentation links.
 
 ## [3.3.0] - 2026-10-11
 

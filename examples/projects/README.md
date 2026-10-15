@@ -166,10 +166,6 @@ Projects are production-ready and include:
 - Graceful shutdown handling
 - Process manager compatibility (PM2)
 
-## Research Context
-
-This repository is part of an MSc thesis exploring automated Backend-for-Frontend generation patterns, comparing different runtime implementations, and evaluating the effectiveness of code generation for BFF architectures.
-
 ## Contributing
 
 These projects serve as reference implementations. Feel free to:
@@ -186,7 +182,6 @@ MIT
 
 - **BFFGen Documentation**: [github.com/RichGod93/bffgen](https://github.com/RichGod93/bffgen)
 - **BFF Pattern**: [Pattern: Backends For Frontends](https://samnewman.io/patterns/architectural/bff/)
-- **Thesis Documentation**: See individual project documentation for research notes
 
 ## Support
 

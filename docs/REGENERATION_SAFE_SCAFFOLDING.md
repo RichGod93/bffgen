@@ -2,6 +2,22 @@
 
 bffgen implements a comprehensive regeneration-safe scaffolding system that ensures idempotent writes, preserves user modifications, and provides powerful diffing capabilities.
 
+> **Node.js projects (Express, Fastify): current behaviour.** The marker system below applies
+> only to the route registration block in `src/index.js`. Running `bffgen generate`:
+>
+> - **Overwrites** `src/routes/<backend>.js`, `src/controllers/<backend>.controller*.js` and
+>   `src/services/<backend>.service.js`. Keep custom code in other files.
+> - **Rewrites** the section between `// bffgen:begin:routes` and `// bffgen:end:routes` in
+>   `src/index.js`. The rest of the file is preserved.
+> - **Creates or upgrades** the runtime files `src/utils/upstream.js`,
+>   `src/services/httpClient.js` and `src/utils/circuit-breaker.js`. A file is replaced only if
+>   its `bffgen:runtime` marker is older than the current one, and the previous copy is kept as
+>   `<file>.bak` (see [Generated Node.js Routes](NODEJS_ROUTES.md#runtime-files)).
+>
+> `--dry-run` and `--check` don't change runtime files, but they still write route, controller
+> and service files in Node.js projects. Extending regeneration safety and a side-effect-free
+> `--dry-run` to Node.js is planned.
+
 ## Features
 
 ### 🔒 Code Fence Markers

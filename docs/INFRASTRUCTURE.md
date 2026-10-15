@@ -6,7 +6,6 @@ bffgen provides opt-in infrastructure scaffolding to help you deploy production-
 
 **Key Benefits:**
 
-- Save 2-3 hours of infrastructure setup time
 - Production-ready configurations out of the box
 - Consistent patterns across Go and Node.js projects
 - Easy customization for your specific needs
@@ -852,7 +851,6 @@ If you have an existing bffgen project without infrastructure:
 
 Infrastructure scaffolding in bffgen provides:
 
-✅ **Time Savings:** 2-3 hours of setup automated  
 ✅ **Production Ready:** Security, optimization, monitoring built-in  
 ✅ **Consistent:** Same patterns for Go and Node.js  
 ✅ **Flexible:** Opt-in features, easy to customize  
