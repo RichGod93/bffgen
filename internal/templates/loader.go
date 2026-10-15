@@ -54,6 +54,24 @@ type ControllerTemplateData struct {
 	Endpoints         []EndpointData
 }
 
+// RouteTemplateData holds data for rendering a Node.js route file (routes-template.js.tmpl)
+type RouteTemplateData struct {
+	ServiceName string
+	EnvKey      string
+	BaseURL     string
+	Endpoints   []RouteEndpointData
+}
+
+// RouteEndpointData is one proxied route in a Node.js route file
+type RouteEndpointData struct {
+	Method       string // upper case, e.g. GET
+	MethodLower  string // router/fastify method name, e.g. get
+	Path         string // path exposed by the BFF (exposeAs)
+	BackendPath  string // path on the backend service
+	RequiresAuth bool
+	HasBody      bool // false for GET/HEAD, which must not forward a body
+}
+
 // EndpointData represents an API endpoint
 type EndpointData struct {
 	Name              string
