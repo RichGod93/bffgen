@@ -7,7 +7,10 @@ const { createUpstream } = require('../utils/upstream');
 
 const upstream = createUpstream('{{js .ServiceName}}', {
   envKey: '{{.EnvKey}}',
-  baseURL: '{{js .BaseURL}}'
+  baseURL: '{{js .BaseURL}}',
+  timeout: {{.Timeout}},
+  retries: {{.Retries}},
+  circuitBreaker: { enabled: {{.BreakerEnabled}}, failureThreshold: {{.FailureThreshold}}, resetTimeout: {{.ResetTimeout}} }
 });
 
 async function {{.FunctionName}}(fastify) {

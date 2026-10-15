@@ -28,6 +28,8 @@ var nodeRuntimeFiles = []struct {
 	path     string
 }{
 	{"upstream.js.tmpl", filepath.Join("src", "utils", "upstream.js")},
+	{"service-base.js.tmpl", filepath.Join("src", "services", "httpClient.js")},
+	{"circuit-breaker.js.tmpl", filepath.Join("src", "utils", "circuit-breaker.js")},
 }
 
 // nodeRuntimeAction describes what ensureNodeRuntimeFiles did (or would do) to one file

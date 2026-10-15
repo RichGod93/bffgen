@@ -4,11 +4,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/internal/templates"
 )
 
 func TestNodeHandlerName(t *testing.T) {
@@ -224,6 +226,54 @@ func TestNodeInit_WritesESLintConfig(t *testing.T) {
 			}
 			if !strings.Contains(string(content), "js.configs.recommended") {
 				t.Error("eslint.config.js does not extend the recommended config")
+			}
+		})
+	}
+}
+
+func TestApplyResilienceConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		backend map[string]interface{}
+		want    templates.RouteTemplateData
+		wantErr bool
+	}{
+		{
+			name:    "defaults",
+			backend: map[string]interface{}{},
+			want:    templates.RouteTemplateData{Timeout: 10000, Retries: 2, BreakerEnabled: true, FailureThreshold: 5, ResetTimeout: 30000},
+		},
+		{
+			name: "explicit values",
+			backend: map[string]interface{}{"timeout": 2000.0, "retries": 0.0,
+				"circuitBreaker": map[string]interface{}{"enabled": false, "failureThreshold": 3.0, "resetTimeout": "1m"}},
+			want: templates.RouteTemplateData{Timeout: 2000, Retries: 0, BreakerEnabled: false, FailureThreshold: 3, ResetTimeout: 60000},
+		},
+		{
+			name:    "duration string timeout",
+			backend: map[string]interface{}{"timeout": "1.5s"},
+			want:    templates.RouteTemplateData{Timeout: 1500, Retries: 2, BreakerEnabled: true, FailureThreshold: 5, ResetTimeout: 30000},
+		},
+		{name: "negative retries", backend: map[string]interface{}{"retries": -1.0}, wantErr: true},
+		{name: "fractional retries", backend: map[string]interface{}{"retries": 1.5}, wantErr: true},
+		{name: "bad duration", backend: map[string]interface{}{"timeout": "soon"}, wantErr: true},
+		{name: "zero timeout", backend: map[string]interface{}{"timeout": 0.0}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got templates.RouteTemplateData
+			err := applyResilienceConfig(&got, tt.backend)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected an error, got %+v", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 		})
 	}

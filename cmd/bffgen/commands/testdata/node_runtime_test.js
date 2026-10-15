@@ -114,3 +114,105 @@ test('<ENVKEY>_URL overrides the configured base URL', async () => {
     assert.strictEqual(reply.statusCode, 200);
   } finally { b.close(); delete process.env.ENVTEST_URL; }
 });
+
+const HttpClient = require(path.join(projectDir, 'src/services/httpClient'));
+const CircuitBreaker = require(path.join(projectDir, 'src/utils/circuit-breaker'));
+
+test('timeouts are per attempt and bounded by (retries + 1) x timeout', async () => {
+  const b = await backend(() => { /* never answers */ });
+  try {
+    const client = new HttpClient(b.url, { name: 'slow', timeout: 100, retries: 1, retryDelay: 10 });
+    const started = Date.now();
+    await assert.rejects(client.send('/x'), { code: 'UPSTREAM_TIMEOUT', service: 'slow' });
+    const elapsed = Date.now() - started;
+    assert.strictEqual(b.calls.length, 2);
+    assert.ok(elapsed >= 200 && elapsed < 1000, `took ${elapsed} ms`);
+  } finally { b.close(); }
+});
+
+test('connection failures are UPSTREAM_UNAVAILABLE', async () => {
+  const client = new HttpClient('http://127.0.0.1:9', { name: 'down', retries: 0 });
+  await assert.rejects(client.send('/x'), { code: 'UPSTREAM_UNAVAILABLE' });
+});
+
+test('5xx responses are retried for GET but never for POST', async () => {
+  const b = await backend((req, res) => json(res, 503, { error: 'busy' }));
+  try {
+    const client = new HttpClient(b.url, { name: 'busy', retries: 2, retryDelay: 1 });
+    await assert.rejects(client.send('/x'), { code: 'UPSTREAM_ERROR', upstreamStatus: 503 });
+    assert.strictEqual(b.calls.length, 3);
+    await assert.rejects(client.send('/x', { method: 'POST', body: '{}' }), { code: 'UPSTREAM_ERROR' });
+    assert.strictEqual(b.calls.length, 4, 'POST must not be retried');
+  } finally { b.close(); }
+});
+
+test('a retry that succeeds returns the response', async () => {
+  let n = 0;
+  const b = await backend((req, res) => (++n === 1 ? json(res, 502, {}) : json(res, 200, { ok: true })));
+  try {
+    const client = new HttpClient(b.url, { retries: 1, retryDelay: 1 });
+    assert.deepStrictEqual(await client.get('/x'), { ok: true });
+  } finally { b.close(); }
+});
+
+test('request() throws HttpError with the backend body for 4xx', async () => {
+  const b = await backend((req, res) => json(res, 422, { field: 'name' }));
+  try {
+    const client = new HttpClient(b.url);
+    await assert.rejects(client.post('/x', { a: 1 }), { name: 'HttpError', status: 422, body: { field: 'name' } });
+  } finally { b.close(); }
+});
+
+test('circuit breaker opens after consecutive failures and rejects fast', async () => {
+  const breaker = new CircuitBreaker({ name: 'b', failureThreshold: 2, resetTimeout: 1000 });
+  const fail = () => Promise.reject(Object.assign(new Error('down'), { code: 'UPSTREAM_UNAVAILABLE' }));
+  await assert.rejects(breaker.execute(fail));
+  await assert.rejects(breaker.execute(fail));
+  assert.strictEqual(breaker.state, 'OPEN');
+
+  let called = false;
+  await assert.rejects(breaker.execute(() => { called = true; }), err => {
+    assert.strictEqual(err.code, 'CIRCUIT_OPEN');
+    assert.ok(err.retryAfterMs > 0 && err.retryAfterMs <= 1000);
+    return true;
+  });
+  assert.strictEqual(called, false);
+});
+
+test('4xx errors do not count as breaker failures', async () => {
+  const breaker = new CircuitBreaker({ failureThreshold: 1 });
+  await assert.rejects(breaker.execute(() => Promise.reject(Object.assign(new Error('nope'), { status: 404 }))));
+  assert.strictEqual(breaker.state, 'CLOSED');
+});
+
+test('half-open admits one trial request; success closes, failure reopens', async () => {
+  const breaker = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 20 });
+  await assert.rejects(breaker.execute(() => Promise.reject(new Error('down'))));
+  await new Promise(r => setTimeout(r, 30));
+
+  let release;
+  const trial = breaker.execute(() => new Promise(r => { release = r; }));
+  assert.strictEqual(breaker.state, 'HALF_OPEN');
+  await assert.rejects(breaker.execute(() => 'second'), { code: 'CIRCUIT_OPEN' });
+  release('ok');
+  assert.strictEqual(await trial, 'ok');
+  assert.strictEqual(breaker.state, 'CLOSED');
+
+  await assert.rejects(breaker.execute(() => Promise.reject(new Error('down'))));
+  await new Promise(r => setTimeout(r, 30));
+  await assert.rejects(breaker.execute(() => Promise.reject(new Error('still down'))));
+  assert.strictEqual(breaker.state, 'OPEN');
+});
+
+test('each backend has its own breaker, shared by its routes', async () => {
+  const up = upstreamFor('http://127.0.0.1:9', { timeout: 500, retries: 0, circuitBreaker: { failureThreshold: 1, resetTimeout: 60000 } });
+  const healthy = await backend((req, res) => json(res, 200, {}));
+  try {
+    await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/a' }), { code: 'UPSTREAM_UNAVAILABLE' });
+    await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/b' }), { code: 'CIRCUIT_OPEN' });
+
+    const reply = fakeReply();
+    await upstreamFor(healthy.url).proxy(fakeRequest(), reply, { method: 'GET', path: '/x' });
+    assert.strictEqual(reply.statusCode, 200);
+  } finally { healthy.close(); }
+});

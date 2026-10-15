@@ -8,12 +8,16 @@
 const HttpClient = require('./httpClient');
 const logger = require('../utils/logger');
 
+// Unset variables fall back to the HttpClient defaults
+const envNumber = name => (process.env[name] ? Number(process.env[name]) : undefined);
+
 class {{.ServiceNamePascal}}Service {
   constructor() {
-    this.baseURL = process.env.{{.EnvKey}}_URL || '{{.BaseURL}}';
+    this.baseURL = process.env.{{.EnvKey}}_URL || process.env.{{.EnvKey}}_SERVICE_URL || '{{.BaseURL}}';
     this.client = new HttpClient(this.baseURL, {
-      timeout: parseInt(process.env.{{.EnvKey}}_TIMEOUT) || 30000,
-      retries: parseInt(process.env.{{.EnvKey}}_RETRIES) || 3
+      name: '{{.ServiceName}}',
+      timeout: envNumber('{{.EnvKey}}_TIMEOUT'),
+      retries: envNumber('{{.EnvKey}}_RETRIES')
     });
   }
 

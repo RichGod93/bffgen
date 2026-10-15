@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/RichGod93/bffgen/internal/scaffolding"
 	"github.com/RichGod93/bffgen/internal/templates"
@@ -208,6 +209,9 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 		FunctionName: nodeIdentifier(serviceName) + "Routes",
 		EnvKey:       nodeEnvKey(serviceName),
 		BaseURL:      baseURL,
+	}
+	if err := applyResilienceConfig(data, backend); err != nil {
+		return "", fmt.Errorf("backend %s: %w", serviceName, err)
 	}
 
 	for _, ep := range endpoints {
@@ -585,6 +589,71 @@ func nodeHandlerName(method, path string) string {
 	}
 
 	return b.String()
+}
+
+// Defaults for backends that don't configure timeout, retries or circuitBreaker
+const (
+	defaultBackendTimeoutMs      = 10000
+	defaultBackendRetries        = 2
+	defaultBreakerFailures       = 5
+	defaultBreakerResetTimeoutMs = 30000
+)
+
+// applyResilienceConfig fills the timeout, retry and circuit breaker settings of a route file
+// from a backend's config:
+//
+//	"timeout": 5000,          per-attempt timeout in ms (or a duration string such as "5s")
+//	"retries": 2,             extra attempts for GET/HEAD/OPTIONS
+//	"circuitBreaker": {"enabled": true, "failureThreshold": 5, "resetTimeout": 30000}
+func applyResilienceConfig(data *templates.RouteTemplateData, backend map[string]interface{}) error {
+	var err error
+	if data.Timeout, err = configMillis(backend["timeout"], defaultBackendTimeoutMs); err != nil {
+		return fmt.Errorf("timeout: %w", err)
+	}
+	if data.Retries, err = configInt(backend["retries"], defaultBackendRetries); err != nil {
+		return fmt.Errorf("retries: %w", err)
+	}
+
+	breaker, _ := backend["circuitBreaker"].(map[string]interface{})
+	data.BreakerEnabled = true
+	if enabled, ok := breaker["enabled"].(bool); ok {
+		data.BreakerEnabled = enabled
+	}
+	if data.FailureThreshold, err = configInt(breaker["failureThreshold"], defaultBreakerFailures); err != nil {
+		return fmt.Errorf("circuitBreaker.failureThreshold: %w", err)
+	}
+	if data.ResetTimeout, err = configMillis(breaker["resetTimeout"], defaultBreakerResetTimeoutMs); err != nil {
+		return fmt.Errorf("circuitBreaker.resetTimeout: %w", err)
+	}
+	if data.Timeout == 0 || data.FailureThreshold == 0 {
+		return fmt.Errorf("timeout and circuitBreaker.failureThreshold must be greater than 0")
+	}
+	return nil
+}
+
+// configInt reads a non-negative whole number from JSON config, or returns def if unset
+func configInt(v interface{}, def int) (int, error) {
+	if v == nil {
+		return def, nil
+	}
+	n, ok := v.(float64)
+	if !ok || n < 0 || n != float64(int(n)) {
+		return 0, fmt.Errorf("%v is not a non-negative whole number", v)
+	}
+	return int(n), nil
+}
+
+// configMillis reads a duration in ms from JSON config: a number of ms or a Go duration
+// string such as "5s". Returns def if unset.
+func configMillis(v interface{}, def int) (int, error) {
+	if s, ok := v.(string); ok {
+		d, err := time.ParseDuration(s)
+		if err != nil || d < 0 {
+			return 0, fmt.Errorf("%q is not a duration such as \"5s\" or a number of ms", s)
+		}
+		return int(d.Milliseconds()), nil
+	}
+	return configInt(v, def)
 }
 
 // nodeRouteMethods are the HTTP methods a generated route can proxy

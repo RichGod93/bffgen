@@ -5,7 +5,19 @@
  *
  * Generated routes call createUpstream(...).proxy(req, res, route) to forward a
  * request to a backend service. Works with Express (req, res) and Fastify (request, reply).
+ *
+ * Each backend gets one HttpClient (per-attempt timeout, retries for idempotent methods)
+ * and one CircuitBreaker, shared by all of its routes. Settings come from bffgen.config.json
+ * and can be overridden per backend with environment variables, e.g. for USERS:
+ *   USERS_URL                       base URL
+ *   USERS_TIMEOUT                   per-attempt timeout in ms
+ *   USERS_RETRIES                   extra attempts for GET/HEAD/OPTIONS
+ *   USERS_CIRCUIT_FAILURE_THRESHOLD consecutive failures that open the circuit
+ *   USERS_CIRCUIT_RESET_TIMEOUT     ms the circuit stays open before a trial request
  */
+
+const HttpClient = require('../services/httpClient');
+const CircuitBreaker = require('./circuit-breaker');
 
 // Request headers passed on to backends. Hop-by-hop and host headers are never forwarded.
 const FORWARDED_REQUEST_HEADERS = [
@@ -104,16 +116,50 @@ function sendResponse(res, { status, headers, body }, method) {
   return res.send(body);
 }
 
+/**
+ * Read a non-negative number from the environment, or return fallback
+ */
+function envNumber(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 class Upstream {
   /**
    * @param {string} name - Backend name from bffgen.config.json
    * @param {Object} options
    * @param {string} options.envKey - Prefix of the environment variables for this backend
-   * @param {string} options.baseURL - Default base URL; <envKey>_URL overrides it
+   * @param {string} options.baseURL - Default base URL
+   * @param {number} options.timeout - Per-attempt timeout in ms
+   * @param {number} options.retries - Extra attempts for idempotent methods
+   * @param {Object} options.circuitBreaker - { enabled, failureThreshold, resetTimeout }
    */
-  constructor(name, { envKey, baseURL }) {
+  constructor(name, { envKey, baseURL, timeout, retries, circuitBreaker = {} }) {
     this.name = name;
-    this.baseURL = (process.env[`${envKey}_URL`] || process.env[`${envKey}_SERVICE_URL`] || baseURL).replace(/\/+$/, '');
+    const url = process.env[`${envKey}_URL`] || process.env[`${envKey}_SERVICE_URL`] || baseURL;
+    this.client = new HttpClient(url, {
+      name,
+      timeout: envNumber(`${envKey}_TIMEOUT`, timeout),
+      retries: envNumber(`${envKey}_RETRIES`, retries)
+    });
+    this.breaker = circuitBreaker.enabled === false ? null : new CircuitBreaker({
+      name,
+      failureThreshold: envNumber(`${envKey}_CIRCUIT_FAILURE_THRESHOLD`, circuitBreaker.failureThreshold),
+      resetTimeout: envNumber(`${envKey}_CIRCUIT_RESET_TIMEOUT`, circuitBreaker.resetTimeout)
+    });
+  }
+
+  /**
+   * Send a request to the backend through the circuit breaker
+   * @returns {Promise<{status: number, headers: Headers, body: Buffer}>}
+   */
+  send(path, options) {
+    const call = () => this.client.send(path, options);
+    return this.breaker ? this.breaker.execute(call) : call();
   }
 
   /**
@@ -125,16 +171,11 @@ class Upstream {
   async proxy(req, res, route) {
     // Express and Fastify answer HEAD with the GET handler; keep it a HEAD upstream
     const method = req.method === 'HEAD' ? 'HEAD' : route.method;
-    const url = this.baseURL + buildPath(route.path, req.params) + queryStringOf(req.originalUrl || req.url);
+    const path = buildPath(route.path, req.params) + queryStringOf(req.originalUrl || req.url);
     const headers = requestHeaders(req);
     const body = method === 'GET' || method === 'HEAD' ? undefined : requestBody(req, headers);
 
-    const response = await fetch(url, { method, headers, body });
-    const result = {
-      status: response.status,
-      headers: response.headers,
-      body: Buffer.from(await response.arrayBuffer())
-    };
+    const result = await this.send(path, { method, headers, body });
     return sendResponse(res, result, method);
   }
 }

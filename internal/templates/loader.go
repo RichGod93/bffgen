@@ -62,6 +62,13 @@ type RouteTemplateData struct {
 	BaseURL      string
 	AnyAuth      bool // at least one endpoint requires authentication
 	Endpoints    []RouteEndpointData
+
+	// Resilience settings, from the backend's timeout, retries and circuitBreaker config
+	Timeout          int // per-attempt timeout in ms
+	Retries          int // extra attempts for idempotent methods
+	BreakerEnabled   bool
+	FailureThreshold int
+	ResetTimeout     int // ms the circuit stays open
 }
 
 // RouteEndpointData is one proxied route in a Node.js route file
