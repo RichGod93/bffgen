@@ -24,12 +24,12 @@
     {
       "name": "auth",
       "baseUrl": "http://localhost:5000/api",
-      "timeout": 30,
+      "timeout": 30000,
       "retries": 3,
       "circuitBreaker": {
         "enabled": true,
         "failureThreshold": 5,
-        "recoveryTimeout": 60
+        "resetTimeout": 60000
       },
       "endpoints": [
         {
@@ -77,7 +77,7 @@
     {
       "name": "users",
       "baseUrl": "http://localhost:5001/api",
-      "timeout": 30,
+      "timeout": 30000,
       "retries": 3,
       "cache": {
         "enabled": true,
@@ -129,7 +129,7 @@
     {
       "name": "products",
       "baseUrl": "http://localhost:5002/api",
-      "timeout": 30,
+      "timeout": 30000,
       "retries": 2,
       "cache": {
         "enabled": true,

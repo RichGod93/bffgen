@@ -76,7 +76,7 @@ uvicorn main:app --reload
 | Feature | Status | Description |
 |---------|--------|-------------|
 | FastAPI Framework | ✅ | Modern async web framework |
-| Async/Await | ✅ | Fully asynchronous by default |
+| Async/Await | ✅ | Generated routes and the HTTP client are async |
 | Type Hints | ✅ | Complete type annotations |
 | Pydantic Models | ✅ | Data validation and serialization |
 | OpenAPI Docs | ✅ | Auto-generated interactive docs |
@@ -89,10 +89,12 @@ uvicorn main:app --reload
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Circuit Breaker | ✅ | Prevent cascading failures |
+| Proxy Routes | ✅ | Path params, query strings, auth, 4xx passthrough |
+| Timeouts & Retries | ✅ | Per backend; retries only for idempotent methods |
+| Circuit Breaker | ✅ | One per backend, used by generated routes |
 | Caching | ✅ | Redis-based caching (optional) |
 | Request ID | ✅ | Request tracking |
-| Error Handling | ✅ | Standardized error responses |
+| Error Handling | ✅ | 502/503/504 with a consistent JSON body |
 | Health Checks | ✅ | Service health endpoints |
 
 ### Package Managers
@@ -153,100 +155,64 @@ my-bff/
 
 ### bffgen.config.py.json
 
-Python projects use a JSON configuration file:
+Each backend lists the routes the BFF exposes (`path`) and where they go on the backend
+(`upstreamPath`, default: the same path). Path parameters can be written `{id}` or `:id`.
 
 ```json
 {
-  "project": {
-    "name": "my-bff",
-    "framework": "fastapi",
-    "async": true
-  },
+  "project": { "name": "my-bff", "framework": "fastapi", "async": true },
   "backends": [
     {
       "name": "users",
       "baseUrl": "http://localhost:3001",
-      "timeout": 30,
+      "timeout": 5000,
+      "retries": 2,
+      "circuitBreaker": { "enabled": true, "failureThreshold": 5, "resetTimeout": 30000 },
       "endpoints": [
-        {
-          "name": "get_users",
-          "method": "GET",
-          "path": "/api/users",
-          "upstreamPath": "/users",
-          "description": "Get all users"
-        },
-        {
-          "name": "create_user",
-          "method": "POST",
-          "path": "/api/users",
-          "upstreamPath": "/users",
-          "description": "Create a new user"
-        }
+        { "name": "list_users", "method": "GET", "path": "/api/users", "upstreamPath": "/users" },
+        { "name": "get_user", "method": "GET", "path": "/api/users/{id}", "upstreamPath": "/users/{id}", "requiresAuth": true },
+        { "name": "create_user", "method": "POST", "path": "/api/users", "upstreamPath": "/users", "requiresAuth": true }
       ]
     }
   ]
 }
 ```
 
-### config.py (Pydantic Settings)
+| Field | Meaning | Default |
+|---|---|---|
+| `baseUrl` (or `url`) | Backend base URL | required |
+| `timeout` | Per-attempt timeout in **ms**, or a duration string such as `"5s"` | `10000` |
+| `retries` | Extra attempts for `GET`, `HEAD` and `OPTIONS` requests | `2` |
+| `circuitBreaker.enabled` | Use a circuit breaker for this backend | `true` |
+| `circuitBreaker.failureThreshold` | Consecutive failures that open the circuit | `5` |
+| `circuitBreaker.resetTimeout` | Time in **ms** the circuit stays open before a trial request (`recoveryTimeout` is accepted too) | `30000` |
+| `endpoints[].requiresAuth` | Require a valid JWT (`Authorization: Bearer …`); otherwise 401 | `false` |
 
-```python
-from pydantic_settings import BaseSettings
-from typing import List, Union
+Times are in milliseconds, as in Node.js projects. Earlier Python examples used seconds
+(`"timeout": 30`), so `bffgen generate` rejects times under 100 ms and suggests the intended value.
 
-class Settings(BaseSettings):
-    # Application
-    PROJECT_NAME: str = "my-bff"
-    PORT: int = 8000
-    DEBUG: bool = True
-    
-    # CORS
-    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000"]
-    
-    # JWT
-    JWT_SECRET: str = "your-secret-key"
-    JWT_ALGORITHM: str = "HS256"
-    
-    # Rate Limiting
-    RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 60
-    
-    # Caching (optional)
-    REDIS_URL: str = "redis://localhost:6379"
-    CACHE_ENABLED: bool = False
-    CACHE_TTL: int = 300
-    
-    # Circuit Breaker
-    CIRCUIT_BREAKER_ENABLED: bool = True
-    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5
-    CIRCUIT_BREAKER_TIMEOUT_SECONDS: int = 60
-    
-    class Config:
-        env_file = ".env"
+Node.js-style endpoints (`exposeAs` for the exposed path, `path` for the backend path) are
+accepted too.
 
-settings = Settings()
-```
+### config.py and .env
 
-### Environment Variables (.env)
+`config.py` defines the app settings (port, CORS, JWT, rate limiting, Redis) with Pydantic
+Settings, read from environment variables and `.env`. Unknown keys in `.env` are ignored, so
+`.env` can also hold the backend overrides below.
 
-```bash
-PROJECT_NAME=my-bff
-PORT=8000
-DEBUG=true
+### Backend overrides
 
-CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+Each backend's settings can be overridden with environment variables or `.env` entries. The
+prefix is the backend name in upper case with other characters replaced by `_`
+(`user-service` → `USER_SERVICE`).
 
-JWT_SECRET=your-secret-key-change-in-production
-JWT_ALGORITHM=HS256
-
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_PER_MINUTE=60
-
-REDIS_URL=redis://localhost:6379
-CACHE_ENABLED=false
-
-CIRCUIT_BREAKER_ENABLED=true
-```
+| Variable | Overrides |
+|---|---|
+| `USERS_URL` (or `USERS_SERVICE_URL`) | `baseUrl` |
+| `USERS_TIMEOUT` | `timeout` (ms) |
+| `USERS_RETRIES` | `retries` |
+| `USERS_CIRCUIT_FAILURE_THRESHOLD` | `circuitBreaker.failureThreshold` |
+| `USERS_CIRCUIT_RESET_TIMEOUT` | `circuitBreaker.resetTimeout` (ms) |
 
 ---
 
@@ -255,110 +221,89 @@ CIRCUIT_BREAKER_ENABLED=true
 ### Generate Routers and Services
 
 ```bash
-# Generate from config
 bffgen generate
-
-# What gets generated:
-# - routers/{backend}_router.py
-# - services/{backend}_service.py
-# - Updates to main.py (router registration)
 ```
+
+This writes, for each backend with endpoints:
+
+- `routers/<backend>_router.py`: one route per endpoint that proxies to the backend
+- `services/<backend>_service.py`: typed async methods for calling the backend from your own code
+- `routers/__init__.py`: the list of routers, which `main.py` registers with `include_routers(app)`
+
+These files are overwritten on every run; keep your own code in other files.
+
+`bffgen generate` also creates or upgrades the runtime files the routers use:
+`utils/upstream.py`, `services/http_client.py` and `utils/circuit_breaker.py`. A file is
+replaced only if its `bffgen:runtime` marker is older than the current one, and your previous
+copy is kept as `<file>.bak`. `--dry-run` and `--check` only report what would change.
 
 ### Generated Router Example
 
 ```python
-"""
-Users Router - Generated by bffgen
-"""
-from fastapi import APIRouter, HTTPException, Body
-from typing import Dict, Any
-import logging
-
-from services.users_service import UsersService
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/api/users", tags=["Users"])
-users_service = UsersService()
+router = APIRouter(tags=["users"])
+upstream = create_upstream(
+    "users",
+    env_key="USERS",
+    base_url="http://localhost:3001",
+    timeout=5000,
+    retries=2,
+    circuit_breaker={"enabled": True, "failureThreshold": 5, "resetTimeout": 30000},
+)
 
 
-@router.get("")
-async def get_users():
-    """Get all users"""
-    try:
-        result = await users_service.get_users()
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching users: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("")
-async def create_user(payload: Dict[str, Any] = Body(...)):
-    """Create a new user"""
-    try:
-        result = await users_service.create_user(payload=payload)
-        return result
-    except Exception as e:
-        logger.error(f"Error creating user: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# GET /api/users/{id} -> GET /users/{id}
+@router.api_route(
+    "/api/users/{id}",
+    methods=["GET", "HEAD"],
+    dependencies=[Depends(require_authentication)],
+)
+async def get_user(request: Request, id: str) -> Response:
+    return await upstream.proxy(request, "GET", "/users/{id}")
 ```
+
+### What generated routes do
+
+They behave the same as generated Express and Fastify routes
+(see [Generated Node.js Routes](NODEJS_ROUTES.md) for details):
+
+- **Forwarding:** path parameters are substituted and URL-encoded, and the query string is passed
+  on as received. `authorization`, `accept`, `accept-language`, conditional headers and
+  `x-request-id` are forwarded; cookies are not. Request bodies are forwarded for every method
+  except `GET` and `HEAD`.
+- **Backend responses below 500** are passed back unchanged, with their `content-type`,
+  `cache-control`, `etag`, `last-modified` and `location` headers.
+- **Timeouts and retries:** each attempt has its own timeout. Only `GET`, `HEAD` and `OPTIONS`
+  are retried (after timeouts, connection failures and 5xx responses), so a `POST` is never sent
+  twice.
+- **Circuit breaker:** one per backend, shared by its routes. After `failureThreshold`
+  consecutive failures, requests are rejected immediately until `resetTimeout` has passed; then
+  one trial request decides whether it closes again. 4xx responses don't count as failures.
+- **Errors:**
+
+  | Status | `code` | When |
+  |---|---|---|
+  | `504 Gateway Timeout` | `UPSTREAM_TIMEOUT` | No response within the timeout, on every attempt |
+  | `503 Service Unavailable` | `UPSTREAM_UNAVAILABLE` | The backend could not be reached |
+  | `503 Service Unavailable` | `CIRCUIT_OPEN` | The circuit is open; `Retry-After` gives the seconds left |
+  | `502 Bad Gateway` | `UPSTREAM_ERROR` | The backend answered with a 5xx status (its body is not passed on) |
+
+  The body is `{"error", "message", "code", "service"}`.
+
+One difference from Express and Fastify: Starlette decodes the URL path before routing, so a
+path parameter can't contain an encoded slash (`%2F`); such requests get 404.
 
 ### Generated Service Example
 
 ```python
-"""
-Users Service - Generated by bffgen
-HTTP client for Users API backend
-"""
-import httpx
-import logging
-from typing import Dict, Any
+from services.users_service import UsersService
 
-logger = logging.getLogger(__name__)
-
-
-class UsersService:
-    """Service class for Users API operations"""
-    
-    def __init__(self):
-        self.base_url = "http://localhost:3001"
-        self.timeout = 30.0
-        self.client = None
-    
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client"""
-        if self.client is None:
-            self.client = httpx.AsyncClient(timeout=self.timeout)
-        return self.client
-    
-    async def get_users(self) -> Dict[str, Any]:
-        """Get all users"""
-        client = await self._get_client()
-        url = f"{self.base_url}/users"
-        
-        logger.info(f"Fetching users from {url}")
-        response = await client.get(url)
-        response.raise_for_status()
-        
-        return response.json()
-    
-    async def create_user(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new user"""
-        client = await self._get_client()
-        url = f"{self.base_url}/users"
-        
-        logger.info(f"Creating user at {url}")
-        response = await client.post(url, json=payload)
-        response.raise_for_status()
-        
-        return response.json()
-    
-    async def close(self):
-        """Close HTTP client"""
-        if self.client:
-            await self.client.aclose()
+users = UsersService()
+user = await users.get_user(id="42", query={"fields": "name"})
 ```
+
+Service methods return the parsed body and raise `HttpError` for 4xx responses, or
+`UpstreamError` / `CircuitOpenError` for failures. Those errors carry a `status_code` of
+502, 503 or 504.
 
 ---
 
@@ -366,17 +311,17 @@ class UsersService:
 
 ### Circuit Breaker
 
-Prevents cascading failures when backend services are down:
+Generated routes already use one breaker per backend. For your own calls:
 
 ```python
-from utils.circuit_breaker import CircuitBreaker
+from utils.circuit_breaker import CircuitBreaker, CircuitOpenError
 
-# Create circuit breaker
-breaker = CircuitBreaker("my-service", failure_threshold=5, timeout=60)
+breaker = CircuitBreaker(failure_threshold=5, timeout=30, name="inventory")  # timeout in seconds
 
-# Use it
-async def call_backend():
-    return await breaker.call(some_async_function, *args, **kwargs)
+try:
+    result = await breaker.call(some_async_function, *args, **kwargs)
+except CircuitOpenError as error:
+    ...  # error.retry_after: seconds until the next trial request
 ```
 
 ### Caching (Redis)
@@ -468,7 +413,7 @@ uvicorn main:app --reload
 
 ### Example 2: Aggregation Pattern
 
-See the full example project: [Movie Dashboard BFF](../projects/python/movie-dashboard-bff/)
+See the full example project: [Movie Dashboard BFF](../examples/projects/python/movie-dashboard-bff/)
 
 This demonstrates:
 - Parallel requests to multiple backends
@@ -525,26 +470,21 @@ pytest -v
 
 ### Writing Tests
 
+`tests/conftest.py` provides a `client` fixture and an `auth_headers` fixture with a valid JWT
+signed with your `JWT_SECRET`:
+
 ```python
 # tests/test_users_router.py
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch
 
-from main import app
 
-client = TestClient(app)
-
-async def test_get_users():
-    """Test getting users"""
-    with patch('services.users_service.UsersService.get_users', new_callable=AsyncMock) as mock:
-        mock.return_value = {"users": [{"id": 1, "name": "Alice"}]}
-        
-        response = client.get("/api/users")
-        
-        assert response.status_code == 200
-        assert len(response.json()["users"]) == 1
+def test_get_user_requires_auth(client: TestClient, auth_headers: dict):
+    assert client.get("/api/users/42").status_code == 401
+    assert client.get("/api/users/42", headers=auth_headers).status_code != 401
 ```
+
+Generated routes call backends over HTTP. To test responses end to end, run the backends or
+point `<NAME>_URL` at a test server before the app is imported.
 
 ---
 
@@ -678,7 +618,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 - **Pydantic Documentation**: https://docs.pydantic.dev
 - **httpx Documentation**: https://www.python-httpx.org
 - **pytest-asyncio**: https://pytest-asyncio.readthedocs.io
-- **Example Project**: [Movie Dashboard BFF](../projects/python/movie-dashboard-bff/)
+- **Example Project**: [Movie Dashboard BFF](../examples/projects/python/movie-dashboard-bff/)
 
 ---
 
