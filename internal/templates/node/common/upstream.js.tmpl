@@ -1,0 +1,239 @@
+/**
+ * Upstream proxy runtime
+ * Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+ * bffgen ships a newer version and keeps your previous copy as upstream.js.bak.
+ *
+ * Generated routes call createUpstream(...).proxy(req, res, route) to forward a
+ * request to a backend service. Works with Express (req, res) and Fastify (request, reply).
+ *
+ * Each backend gets one HttpClient (per-attempt timeout, retries for idempotent methods)
+ * and one CircuitBreaker, shared by all of its routes. Settings come from bffgen.config.json
+ * and can be overridden per backend with environment variables, e.g. for USERS:
+ *   USERS_URL                       base URL
+ *   USERS_TIMEOUT                   per-attempt timeout in ms
+ *   USERS_RETRIES                   extra attempts for GET/HEAD/OPTIONS
+ *   USERS_CIRCUIT_FAILURE_THRESHOLD consecutive failures that open the circuit
+ *   USERS_CIRCUIT_RESET_TIMEOUT     ms the circuit stays open before a trial request
+ *
+ * Backend responses below 500 are passed through unchanged. Failures are answered as:
+ *   504 Gateway Timeout      UPSTREAM_TIMEOUT      no response within the timeout
+ *   503 Service Unavailable  UPSTREAM_UNAVAILABLE  backend unreachable
+ *   503 Service Unavailable  CIRCUIT_OPEN          circuit open; Retry-After gives the seconds left
+ *   502 Bad Gateway          UPSTREAM_ERROR        backend returned 5xx (its body is not passed on)
+ * with the body { error, message, code, service }.
+ */
+
+const HttpClient = require('../services/httpClient');
+const CircuitBreaker = require('./circuit-breaker');
+const logger = require('./logger');
+
+const { UpstreamError } = HttpClient;
+const { CircuitOpenError } = CircuitBreaker;
+
+// Request headers passed on to backends. Hop-by-hop and host headers are never forwarded.
+const FORWARDED_REQUEST_HEADERS = [
+  'accept',
+  'accept-language',
+  'authorization',
+  'if-modified-since',
+  'if-none-match'
+];
+
+// Backend response headers passed back to clients. content-length and content-encoding are
+// left to the framework because fetch has already decoded the body.
+const FORWARDED_RESPONSE_HEADERS = [
+  'cache-control',
+  'content-type',
+  'etag',
+  'last-modified',
+  'location'
+];
+
+const NO_BODY_STATUSES = new Set([204, 205, 304]);
+
+const upstreams = new Map();
+
+/**
+ * Substitute :params in a backend path template, URL-encoding each value.
+ * buildPath('/users/:id', { id: '42' }) -> '/users/42'
+ */
+function buildPath(template, params = {}) {
+  return template.replace(/:([A-Za-z_$][\w$]*)/g, (match, name) => {
+    const value = params[name];
+    if (value === undefined || value === null || value === '') {
+      throw new Error(`Missing path parameter "${name}" for backend path ${template}`);
+    }
+    return encodeURIComponent(value);
+  });
+}
+
+/**
+ * Raw query string (including the leading '?') of a request URL, or ''.
+ * Kept verbatim so repeated keys and their order reach the backend unchanged.
+ */
+function queryStringOf(url = '') {
+  const index = url.indexOf('?');
+  return index === -1 ? '' : url.slice(index);
+}
+
+function requestHeaders(req) {
+  const headers = {};
+  for (const name of FORWARDED_REQUEST_HEADERS) {
+    if (req.headers[name] !== undefined) {
+      headers[name] = req.headers[name];
+    }
+  }
+  // Propagate the caller's correlation id; fall back to the framework's request id
+  const requestId = req.headers['x-request-id'] || req.id;
+  if (requestId) {
+    headers['x-request-id'] = String(requestId);
+  }
+  return headers;
+}
+
+/**
+ * Serialize a parsed request body for forwarding. Returns undefined when there is none.
+ */
+function requestBody(req, headers) {
+  const body = req.body;
+  if (body === undefined || body === null) {
+    return undefined;
+  }
+  if (typeof body === 'string' || Buffer.isBuffer(body)) {
+    if (req.headers['content-type']) {
+      headers['content-type'] = req.headers['content-type'];
+    }
+    return body;
+  }
+  headers['content-type'] = 'application/json';
+  return JSON.stringify(body);
+}
+
+/**
+ * Send a backend response to the client. `res` is an Express response or a Fastify reply;
+ * both support status(), header() and send().
+ */
+function sendResponse(res, { status, headers, body }, method) {
+  res.status(status);
+  for (const name of FORWARDED_RESPONSE_HEADERS) {
+    const value = headers.get(name);
+    if (value !== null) {
+      res.header(name, value);
+    }
+  }
+  if (method === 'HEAD' || NO_BODY_STATUSES.has(status) || body.length === 0) {
+    return res.send();
+  }
+  return res.send(body);
+}
+
+const STATUS_TEXT = { 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout' };
+
+/**
+ * Answer a failed backend call. `error` is an UpstreamError or a CircuitOpenError,
+ * whose statusCode is 502, 503 or 504.
+ */
+function sendError(res, error) {
+  res.status(error.statusCode);
+  if (error instanceof CircuitOpenError) {
+    res.header('retry-after', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
+  }
+  return res.send({
+    error: STATUS_TEXT[error.statusCode],
+    message: error.message,
+    code: error.code,
+    service: error.service
+  });
+}
+
+/**
+ * Read a non-negative number from the environment, or return fallback
+ */
+function envNumber(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+class Upstream {
+  /**
+   * @param {string} name - Backend name from bffgen.config.json
+   * @param {Object} options
+   * @param {string} options.envKey - Prefix of the environment variables for this backend
+   * @param {string} options.baseURL - Default base URL
+   * @param {number} options.timeout - Per-attempt timeout in ms
+   * @param {number} options.retries - Extra attempts for idempotent methods
+   * @param {Object} options.circuitBreaker - { enabled, failureThreshold, resetTimeout }
+   */
+  constructor(name, { envKey, baseURL, timeout, retries, circuitBreaker = {} }) {
+    this.name = name;
+    const url = process.env[`${envKey}_URL`] || process.env[`${envKey}_SERVICE_URL`] || baseURL;
+    this.client = new HttpClient(url, {
+      name,
+      timeout: envNumber(`${envKey}_TIMEOUT`, timeout),
+      retries: envNumber(`${envKey}_RETRIES`, retries)
+    });
+    this.breaker = circuitBreaker.enabled === false ? null : new CircuitBreaker({
+      name,
+      failureThreshold: envNumber(`${envKey}_CIRCUIT_FAILURE_THRESHOLD`, circuitBreaker.failureThreshold),
+      resetTimeout: envNumber(`${envKey}_CIRCUIT_RESET_TIMEOUT`, circuitBreaker.resetTimeout)
+    });
+  }
+
+  /**
+   * Send a request to the backend through the circuit breaker
+   * @returns {Promise<{status: number, headers: Headers, body: Buffer}>}
+   */
+  send(path, options) {
+    const call = () => this.client.send(path, options);
+    return this.breaker ? this.breaker.execute(call) : call();
+  }
+
+  /**
+   * Forward the current request to the backend and send its response.
+   * @param {Object} req - Express request or Fastify request
+   * @param {Object} res - Express response or Fastify reply
+   * @param {Object} route - { method, path } of the backend endpoint; path may contain :params
+   */
+  async proxy(req, res, route) {
+    // Express and Fastify answer HEAD with the GET handler; keep it a HEAD upstream
+    const method = req.method === 'HEAD' ? 'HEAD' : route.method;
+    const path = buildPath(route.path, req.params) + queryStringOf(req.originalUrl || req.url);
+    const headers = requestHeaders(req);
+    const body = method === 'GET' || method === 'HEAD' ? undefined : requestBody(req, headers);
+
+    let result;
+    try {
+      result = await this.send(path, { method, headers, body });
+    } catch (error) {
+      if (!(error instanceof UpstreamError || error instanceof CircuitOpenError)) {
+        throw error;
+      }
+      // Rejections by an open circuit are expected and frequent; keep them out of warn logs
+      const log = error instanceof CircuitOpenError ? logger.debug : logger.warn;
+      log.call(logger, `${method} ${this.name}${path} failed: ${error.code} (${error.message})`);
+      return sendError(res, error);
+    }
+    return sendResponse(res, result, method);
+  }
+}
+
+/**
+ * Get the upstream for a backend, creating it on first use. Routes for the same backend
+ * share one instance.
+ */
+function createUpstream(name, options) {
+  if (!upstreams.has(name)) {
+    upstreams.set(name, new Upstream(name, options));
+  }
+  return upstreams.get(name);
+}
+
+module.exports = {
+  createUpstream,
+  buildPath,
+  queryStringOf
+};

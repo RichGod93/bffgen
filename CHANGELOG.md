@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Generated Express and Fastify routes are now real proxies: they forward path parameters and
+query strings, time out, retry safely, stop calling failing backends, and tell clients what
+went wrong. See [Generated Node.js Routes](docs/NODEJS_ROUTES.md).
+
+### Added
+- **Timeouts, retries and a circuit breaker per backend** in generated routes. Configure them
+  per backend with `timeout`, `retries` and `circuitBreaker` in `bffgen.config.json` (defaults
+  10 s, 2 retries, breaker opening after 5 consecutive failures for 30 s), or override them with
+  `<NAME>_TIMEOUT`, `<NAME>_RETRIES`, `<NAME>_CIRCUIT_FAILURE_THRESHOLD` and
+  `<NAME>_CIRCUIT_RESET_TIMEOUT`. Only `GET`, `HEAD` and `OPTIONS` requests are retried.
+- **Gateway status codes for backend failures**: `504` when a backend times out, `503` when it
+  is unreachable or its circuit is open (with `Retry-After`), `502` when it returns a 5xx. The
+  body is `{ error, message, code, service }`; a backend's 5xx body is no longer passed on.
+- `src/utils/upstream.js`, the runtime that generated routes use. `bffgen generate` adds it to
+  existing projects and upgrades outdated `httpClient.js` and `circuit-breaker.js` files,
+  keeping your previous copies as `.bak`.
+
+### Changed
+- In `httpClient.js`, `retries` now means extra attempts (it was total attempts), and the
+  default timeout is 10 s (was 30 s). Failures throw `UpstreamError`, and 4xx responses from
+  `request()` throw `HttpError` with the backend's status and body.
+- In `circuit-breaker.js`, the half-open state admits a single trial request (it admitted every
+  request), 4xx errors no longer count as failures, and the default `resetTimeout` is 30 s
+  (was 60 s). Open-circuit rejections throw `CircuitOpenError`.
+- Generated services report the backend's 4xx status, or 502/503/504, instead of 500.
+- Backend environment variable prefixes replace characters other than letters and digits with
+  `_` (`user-service` → `USER_SERVICE_URL`). `<NAME>_SERVICE_URL`, which `init` writes to
+  `.env.example`, is now honored too.
+
+### Fixed
+- **Path parameters were not substituted**: `/api/users/42` called the backend at
+  `/users/:id`. Parameters are now substituted and URL-encoded; `{id}` style is accepted too.
+- **Query strings were dropped.** They are forwarded unchanged.
+- **Backend 4xx responses** such as `404` reached clients with a bffgen error body; they are now
+  passed through as is, along with `content-type`, `cache-control`, `etag`, `last-modified` and
+  `location` headers.
+- Non-JSON and empty (`204`) backend responses made generated routes fail with 500.
+- `generate` now reports endpoints whose backend `path` uses a parameter missing from
+  `exposeAs`, or whose paths contain characters that would break the generated code.
+
 ## [3.3.0] - 2026-10-11
 
 Generated Express and Fastify projects now pass `npm run lint` and `npm test` out of the box.

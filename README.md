@@ -155,7 +155,7 @@ uvicorn main:app --reload
 - **Test Infrastructure** - Jest setup with sample tests and 70% coverage goals
 - **API Documentation** - Swagger UI at `/api-docs` with OpenAPI 3.0 spec
 - **Structured Logging** - Winston (Express) or Pino (Fastify) with file rotation
-- **HTTP Client** - Retry logic, timeouts, error handling built-in
+- **Resilient Routes** - Generated routes forward path params and query strings, with per-backend timeouts, retries for idempotent requests, a circuit breaker, and 502/503/504 on backend failure ([details](docs/NODEJS_ROUTES.md))
 - **CLI Flags** - Non-interactive mode with full customization
 
 ### 🚀 **Infrastructure Scaffolding (NEW)**
@@ -624,6 +624,7 @@ vim .env
 - `JWT_SECRET` - Secret for JWT tokens
 - `CORS_ORIGINS` - Allowed CORS origins
 - `*_URL` - Backend service URLs
+- `*_TIMEOUT`, `*_RETRIES`, `*_CIRCUIT_*` - Per-backend resilience overrides ([details](docs/NODEJS_ROUTES.md#environment-overrides))
 
 ---
 
@@ -683,7 +684,7 @@ bffgen init my-bff \
 
 **During `generate`:**
 
-- Routes (`src/routes/{service}.js`)
+- Routes (`src/routes/{service}.js`), see [Generated Node.js Routes](docs/NODEJS_ROUTES.md)
 - Controllers (`src/controllers/{service}.controller.js`)
 - Services (`src/services/{service}.service.js`)
 

@@ -6,14 +6,19 @@
  */
 
 const HttpClient = require('./httpClient');
+const { buildPath } = require('../utils/upstream');
 const logger = require('../utils/logger');
+
+// Unset variables fall back to the HttpClient defaults
+const envNumber = name => (process.env[name] ? Number(process.env[name]) : undefined);
 
 class {{.ServiceNamePascal}}Service {
   constructor() {
-    this.baseURL = process.env.{{.EnvKey}}_URL || '{{.BaseURL}}';
+    this.baseURL = process.env.{{.EnvKey}}_URL || process.env.{{.EnvKey}}_SERVICE_URL || '{{.BaseURL}}';
     this.client = new HttpClient(this.baseURL, {
-      timeout: parseInt(process.env.{{.EnvKey}}_TIMEOUT) || 30000,
-      retries: parseInt(process.env.{{.EnvKey}}_RETRIES) || 3
+      name: '{{.ServiceName}}',
+      timeout: envNumber('{{.EnvKey}}_TIMEOUT'),
+      retries: envNumber('{{.EnvKey}}_RETRIES')
     });
   }
 
@@ -24,11 +29,8 @@ class {{.ServiceNamePascal}}Service {
    */
   async {{.HandlerName}}(params = {}, query = {}, body = null, headers = {}) {
     try {
-      // Build path with params
-      let path = '{{.BackendPath}}';
-      Object.keys(params).forEach(key => {
-        path = path.replace(`:${key}`, params[key]);
-      });
+      // Build path with params (URL-encoded)
+      let path = buildPath('{{.BackendPath}}', params);
 
       // Add query string
       const queryString = new URLSearchParams(query).toString();
@@ -74,9 +76,12 @@ class {{.ServiceNamePascal}}Service {
         query
       });
       
-      // Transform backend errors to standardized format
+      // Transform backend errors to standardized format. statusCode keeps the backend's 4xx,
+      // or 502/503/504 for backend failures, so the error handler answers with the right status.
       const serviceError = new Error(error.message || 'Backend service error');
-      serviceError.status = error.status || 500;
+      serviceError.statusCode = error.statusCode || error.status || 500;
+      serviceError.status = serviceError.statusCode;
+      serviceError.code = error.code;
       serviceError.service = '{{$.ServiceName}}';
       serviceError.operation = '{{.HandlerName}}';
       serviceError.originalError = error;

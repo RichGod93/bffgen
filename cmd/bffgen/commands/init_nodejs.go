@@ -574,7 +574,13 @@ func createServiceFiles(projectName string, langType scaffolding.LanguageType, f
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(servicesDir, "httpClient.js"), []byte(httpClientContent), utils.ProjectFilePerm)
+	if err := os.WriteFile(filepath.Join(servicesDir, "httpClient.js"), []byte(httpClientContent), utils.ProjectFilePerm); err != nil {
+		return err
+	}
+
+	// Runtime that generated routes use to call backends
+	_, err = ensureNodeRuntimeFiles(projectName, framework, true)
+	return err
 }
 
 // createTestFiles creates Jest configuration and sample test files

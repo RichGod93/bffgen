@@ -285,16 +285,22 @@ Prevent cascade failures by automatically stopping requests to failing services.
 ### States
 
 - **CLOSED**: Normal operation, requests pass through
-- **OPEN**: Service is failing, requests blocked (use fallback)
-- **HALF_OPEN**: Testing if service recovered
+- **OPEN**: Service is failing, requests blocked (use fallback, or `CircuitOpenError` is thrown)
+- **HALF_OPEN**: One trial request tests whether the service recovered; success closes the
+  circuit, failure reopens it
+
+Generated routes already use one breaker per backend; see
+[Generated Node.js Routes](NODEJS_ROUTES.md#circuit-breaker). Use your own instances for
+hand-written aggregation code.
 
 ### Configuration
 
 ```javascript
 const breaker = new CircuitBreaker({
-  failureThreshold: 5, // Open after 5 consecutive failures
-  resetTimeout: 60000, // Try again after 60 seconds
-  monitoringPeriod: 10000, // 10 second monitoring window
+  name: "inventory", // Used in logs and errors
+  failureThreshold: 5, // Open after 5 consecutive failures (default 5)
+  resetTimeout: 60000, // Try again after 60 seconds (default 30000)
+  isFailure: (error) => !(error.status >= 400 && error.status < 500), // Which errors count (this is the default)
 });
 ```
 
