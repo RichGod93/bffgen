@@ -399,7 +399,7 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 
 		endpointData = append(endpointData, map[string]interface{}{
 			"Method":      method,
-			"BackendPath": backendPath,
+			"BackendPath": normalizeRouteParams(backendPath),
 			"HandlerName": handlerName,
 		})
 	}

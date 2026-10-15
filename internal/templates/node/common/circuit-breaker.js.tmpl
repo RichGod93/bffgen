@@ -16,6 +16,7 @@ class CircuitOpenError extends Error {
     super(`Circuit breaker for ${name} is open`);
     this.name = 'CircuitOpenError';
     this.code = 'CIRCUIT_OPEN';
+    this.statusCode = 503;
     this.service = name;
     this.retryAfterMs = retryAfterMs;
   }

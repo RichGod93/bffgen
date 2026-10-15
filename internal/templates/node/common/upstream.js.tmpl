@@ -14,10 +14,21 @@
  *   USERS_RETRIES                   extra attempts for GET/HEAD/OPTIONS
  *   USERS_CIRCUIT_FAILURE_THRESHOLD consecutive failures that open the circuit
  *   USERS_CIRCUIT_RESET_TIMEOUT     ms the circuit stays open before a trial request
+ *
+ * Backend responses below 500 are passed through unchanged. Failures are answered as:
+ *   504 Gateway Timeout      UPSTREAM_TIMEOUT      no response within the timeout
+ *   503 Service Unavailable  UPSTREAM_UNAVAILABLE  backend unreachable
+ *   503 Service Unavailable  CIRCUIT_OPEN          circuit open; Retry-After gives the seconds left
+ *   502 Bad Gateway          UPSTREAM_ERROR        backend returned 5xx (its body is not passed on)
+ * with the body { error, message, code, service }.
  */
 
 const HttpClient = require('../services/httpClient');
 const CircuitBreaker = require('./circuit-breaker');
+const logger = require('./logger');
+
+const { UpstreamError } = HttpClient;
+const { CircuitOpenError } = CircuitBreaker;
 
 // Request headers passed on to backends. Hop-by-hop and host headers are never forwarded.
 const FORWARDED_REQUEST_HEADERS = [
@@ -116,6 +127,25 @@ function sendResponse(res, { status, headers, body }, method) {
   return res.send(body);
 }
 
+const STATUS_TEXT = { 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout' };
+
+/**
+ * Answer a failed backend call. `error` is an UpstreamError or a CircuitOpenError,
+ * whose statusCode is 502, 503 or 504.
+ */
+function sendError(res, error) {
+  res.status(error.statusCode);
+  if (error instanceof CircuitOpenError) {
+    res.header('retry-after', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
+  }
+  return res.send({
+    error: STATUS_TEXT[error.statusCode],
+    message: error.message,
+    code: error.code,
+    service: error.service
+  });
+}
+
 /**
  * Read a non-negative number from the environment, or return fallback
  */
@@ -175,7 +205,18 @@ class Upstream {
     const headers = requestHeaders(req);
     const body = method === 'GET' || method === 'HEAD' ? undefined : requestBody(req, headers);
 
-    const result = await this.send(path, { method, headers, body });
+    let result;
+    try {
+      result = await this.send(path, { method, headers, body });
+    } catch (error) {
+      if (!(error instanceof UpstreamError || error instanceof CircuitOpenError)) {
+        throw error;
+      }
+      // Rejections by an open circuit are expected and frequent; keep them out of warn logs
+      const log = error instanceof CircuitOpenError ? logger.debug : logger.warn;
+      log.call(logger, `${method} ${this.name}${path} failed: ${error.code} (${error.message})`);
+      return sendError(res, error);
+    }
     return sendResponse(res, result, method);
   }
 }

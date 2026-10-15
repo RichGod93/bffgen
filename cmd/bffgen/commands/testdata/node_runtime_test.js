@@ -208,11 +208,58 @@ test('each backend has its own breaker, shared by its routes', async () => {
   const up = upstreamFor('http://127.0.0.1:9', { timeout: 500, retries: 0, circuitBreaker: { failureThreshold: 1, resetTimeout: 60000 } });
   const healthy = await backend((req, res) => json(res, 200, {}));
   try {
-    await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/a' }), { code: 'UPSTREAM_UNAVAILABLE' });
-    await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/b' }), { code: 'CIRCUIT_OPEN' });
+    const first = fakeReply();
+    await up.proxy(fakeRequest(), first, { method: 'GET', path: '/a' });
+    assert.strictEqual(first.body.code, 'UPSTREAM_UNAVAILABLE');
+    const second = fakeReply();
+    await up.proxy(fakeRequest(), second, { method: 'GET', path: '/b' });
+    assert.strictEqual(second.body.code, 'CIRCUIT_OPEN');
 
     const reply = fakeReply();
     await upstreamFor(healthy.url).proxy(fakeRequest(), reply, { method: 'GET', path: '/x' });
     assert.strictEqual(reply.statusCode, 200);
   } finally { healthy.close(); }
+});
+
+test('failures are answered with 504, 503 or 502 and a consistent body', async () => {
+  const slow = await backend(() => { /* never answers */ });
+  const failing = await backend((req, res) => json(res, 500, { stack: 'at db.js:42' }));
+  try {
+    const cases = [
+      [upstreamFor(slow.url, { timeout: 50, retries: 0 }), 504, 'Gateway Timeout', 'UPSTREAM_TIMEOUT'],
+      [upstreamFor('http://127.0.0.1:9', { retries: 0 }), 503, 'Service Unavailable', 'UPSTREAM_UNAVAILABLE'],
+      [upstreamFor(failing.url, { retries: 0 }), 502, 'Bad Gateway', 'UPSTREAM_ERROR']
+    ];
+    for (const [up, status, error, code] of cases) {
+      const reply = fakeReply();
+      await up.proxy(fakeRequest(), reply, { method: 'GET', path: '/x' });
+      assert.strictEqual(reply.statusCode, status, code);
+      assert.strictEqual(reply.body.error, error);
+      assert.strictEqual(reply.body.code, code);
+      assert.strictEqual(reply.body.service, up.name);
+      assert.ok(!JSON.stringify(reply.body).includes('db.js'), 'backend 5xx body leaked');
+    }
+  } finally { slow.close(); failing.close(); }
+});
+
+test('an open circuit is answered with 503 and Retry-After', async () => {
+  const up = upstreamFor('http://127.0.0.1:9', { retries: 0, circuitBreaker: { failureThreshold: 1, resetTimeout: 4500 } });
+  await up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/x' });
+  const reply = fakeReply();
+  await up.proxy(fakeRequest(), reply, { method: 'GET', path: '/x' });
+  assert.strictEqual(reply.statusCode, 503);
+  assert.strictEqual(reply.body.code, 'CIRCUIT_OPEN');
+  assert.strictEqual(reply.headers['retry-after'], '5');
+});
+
+test('errors carry statusCode for the framework error handlers', () => {
+  assert.strictEqual(new HttpClient.UpstreamError('UPSTREAM_TIMEOUT', 'x').statusCode, 504);
+  assert.strictEqual(new HttpClient.UpstreamError('UPSTREAM_UNAVAILABLE', 'x').statusCode, 503);
+  assert.strictEqual(new HttpClient.UpstreamError('UPSTREAM_ERROR', 'x').statusCode, 502);
+  assert.strictEqual(new CircuitBreaker.CircuitOpenError('x', 1000).statusCode, 503);
+});
+
+test('unexpected errors are not swallowed', async () => {
+  const up = upstreamFor('http://127.0.0.1:9');
+  await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/users/:id' }), /Missing path parameter/);
 });

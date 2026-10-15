@@ -16,6 +16,14 @@ const logger = require('../utils/logger');
 
 const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// HTTP status the BFF answers with for each failure; also set as error.statusCode so the
+// Express and Fastify error handlers respond correctly when a controller passes the error on
+const STATUS_BY_CODE = {
+  UPSTREAM_TIMEOUT: 504,
+  UPSTREAM_UNAVAILABLE: 503,
+  UPSTREAM_ERROR: 502
+};
+
 class UpstreamError extends Error {
   /**
    * @param {string} code - UPSTREAM_TIMEOUT | UPSTREAM_UNAVAILABLE | UPSTREAM_ERROR
@@ -28,6 +36,7 @@ class UpstreamError extends Error {
     this.code = code;
     this.service = service;
     this.upstreamStatus = upstreamStatus;
+    this.statusCode = STATUS_BY_CODE[code];
   }
 }
 
