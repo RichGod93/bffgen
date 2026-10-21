@@ -143,6 +143,9 @@ func createFastAPIMainFile(projectName string, opts ProjectOptions) error {
 	if err := os.WriteFile(filepath.Join(projectName, "routers", "__init__.py"), []byte(registry), utils.ProjectFilePerm); err != nil {
 		return err
 	}
+	if err := recordGeneratedFiles(projectName, map[string]string{"routers/__init__.py": registry}); err != nil {
+		return err
+	}
 
 	// Runtime that generated routers use to call backends; main.py closes it on shutdown
 	_, err = ensurePythonRuntimeFiles(projectName, true)

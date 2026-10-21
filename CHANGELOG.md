@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-10-21
+
+Regenerating is now safe: files you edit are kept, `--dry-run` writes nothing, and the same
+config always produces the same output. See [Regenerating](docs/NODEJS_ROUTES.md#regenerating).
+
+### Changed
+- **`bffgen generate` no longer overwrites files you edited** (Node.js and Python). Generated
+  route, controller and service files (Python: routers, services, `routers/__init__.py`) are
+  regenerated only if they still have the content bffgen last wrote; edited files are kept and
+  reported; emptying a file counts as an edit. `--force` regenerates them too and saves your
+  version as `<file>.bak` (`<file>.bak.1`, `.bak.2`, … if earlier backups exist, so none is
+  overwritten; runtime-file upgrades do the same). Line endings don't count as edits, so Windows
+  checkouts with `core.autocrlf=true` regenerate normally. What bffgen wrote is recorded in
+  `.bffgen/generated.json`; commit it. The generated `.gitignore` now ignores `.bffgen/*` except
+  that file, and `bffgen generate` fixes the `.bffgen/` line in Python projects made before 3.7.
+- **An invalid config writes nothing.** Node.js used to skip the backend with a warning and write
+  the rest; it now stops with an error, as Python already did. Every write is planned first, so
+  other errors (such as a corrupt `.bffgen/generated.json`) write nothing either. Backend names
+  must contain only letters, digits, `-` and `_` (they become file names and `require()` paths)
+  and must be unique, also when they differ only in case or in `-` vs `_` (`users`/`Users`,
+  `user-service`/`user_service`).
+- `bffgen generate --check` exits with status 1 when generated code is out of date, so CI can
+  catch a config that wasn't regenerated. That includes an edited file the config now generates
+  differently, and (Python) a `main.py` that doesn't register the routers yet.
+- Files for a backend removed from the config are reported, not deleted.
+
+### Fixed
+- **`--dry-run` and `--check` wrote route, controller and service files** in Node.js projects
+  (overwriting custom code). They now write nothing.
+- `--force` was ignored in Node.js projects.
+- Two backends with the same name registered the same routes twice in `src/index.js`, so Fastify
+  projects failed to start.
+- "Auto-registered routes in src/index.js" was printed even when `src/index.js` has no
+  `bffgen:begin:routes` markers and nothing was registered.
+
 ## [3.6.0] - 2026-10-21
 
 Security update. Newly generated projects no longer install dependencies with known
