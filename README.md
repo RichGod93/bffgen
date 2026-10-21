@@ -2,11 +2,13 @@
 
 **Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express/Fastify)**, or **Python (FastAPI)** with JWT auth, rate limiting, CORS, and comprehensive logging.
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
-[![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
-[![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg)](https://python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml/badge.svg)](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bffgen.svg)](https://www.npmjs.com/package/bffgen)
+[![Release](https://img.shields.io/github/v/release/RichGod93/bffgen)](https://github.com/RichGod93/bffgen/releases/latest)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/RichGod93/bffgen)](https://go.dev/)
+[![Node Version](https://img.shields.io/badge/Node-18+-green.svg)](https://nodejs.org/)
+[![Python Version](https://img.shields.io/badge/Python-3.10+-orange.svg)](https://python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python Support](https://img.shields.io/badge/Python-FastAPI-blue.svg)](https://github.com/RichGod93/bffgen)
 
 ---
@@ -133,7 +135,7 @@ uvicorn main:app --reload
 - **Interactive CLI** - Guided project setup with prompts
 - **Template System** - Pre-built templates (auth, ecommerce, content)
 - **Code Generation** - Auto-generate routes, controllers, and services
-- **Hot Reload** - Development mode with auto-restart (nodemon for Node.js)
+- **Hot Reload** - Development mode with auto-restart (`node --watch` for Node.js)
 - **Professional Structure** - `src/` directory, tests, middleware
 - **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
 - **Idempotent Generation** - Safely run `generate` multiple times with `--force` flag
@@ -187,10 +189,12 @@ npx bffgen init my-python-bff --lang python-fastapi
 
 ### Go Install
 
-> **Note:** `go install` currently installs an old v1.x release. Go requires a `/v3` suffix in
-> the module path for v3 releases, and the module path doesn't have it yet. Until it does, install
-> with npm, download a binary from [GitHub Releases](https://github.com/RichGod93/bffgen/releases),
-> or build from source.
+```bash
+go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest
+```
+
+Requires Go 1.24+. Prebuilt binaries (with `checksums.txt`) are on
+[GitHub Releases](https://github.com/RichGod93/bffgen/releases/latest).
 
 ### From Source
 
@@ -572,7 +576,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 | Script               | Description                        |
 | -------------------- | ---------------------------------- |
 | `npm start`          | Start production server            |
-| `npm run dev`        | Start development server (nodemon) |
+| `npm run dev`        | Start development server (`node --watch`) |
 | `npm run dev:watch`  | Watch mode with file watching      |
 | `npm test`           | Run tests with coverage            |
 | `npm run test:watch` | Watch mode for TDD                 |

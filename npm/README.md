@@ -339,7 +339,7 @@ If installation fails:
 
 If your platform isn't supported, you can:
 
-- Install via Go: `go install github.com/RichGod93/bffgen/cmd/bffgen@latest`
+- Install via Go: `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest`
 - Build from source: Clone the repo and run `make build`
 
 ---

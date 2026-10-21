@@ -258,7 +258,7 @@ REDIS_URL=redis://localhost:6379
 
 ```bash
 npm start              # Production server
-npm run dev            # Development (nodemon)
+npm run dev            # Development (node --watch)
 npm run dev:watch      # Watch mode
 npm test               # Run tests
 npm run test:watch     # Test watch mode

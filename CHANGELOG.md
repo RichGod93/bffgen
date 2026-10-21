@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-10-21
+
+Security update. Newly generated projects no longer install dependencies with known
+vulnerabilities, and `go install` now gets the current release.
+
+### Security
+- **Fastify projects shipped `@fastify/jwt` 9, whose `fast-jwt` dependency has critical
+  advisories** (including authentication bypasses). Generated projects now use `@fastify/jwt`
+  ^10.2.5 and `@fastify/swagger-ui` ^6.1.2. `npm audit --omit=dev` is clean for fresh Express and
+  Fastify projects. Existing projects: `npm install @fastify/jwt@^10.2.5 @fastify/swagger-ui@^6.1.2`.
+- **FastAPI projects used `python-jose`**, which is unmaintained and has unfixed advisories (as
+  does its `ecdsa` dependency). Generated projects now verify JWTs with **PyJWT**; `passlib`
+  (unused) is gone. FastAPI is now `>=0.150` with Starlette `>=1.3.1`, which fixes the Starlette
+  advisories. `pip-audit` is clean for fresh projects, dev tools included. Existing projects:
+  replace `python-jose[cryptography]` with `pyjwt` in `requirements.txt`, and in
+  `middleware/auth.py` and `tests/conftest.py` change `from jose import jwt, JWTError` to
+  `import jwt` and `except JWTError` to `except jwt.InvalidTokenError`.
+- Generated Go projects pin chi v5.5.0 (chi < 5.3.0 has IP-spoofing advisories in
+  `middleware.RealIP`), echo v4.16.0, fiber v2.52.15 and golang-jwt v5.3.1, with `go 1.25.0`.
+  bffgen itself now builds with chi v5.3.0.
+- Release binaries are built with the newest stable Go instead of Go 1.24, which no longer
+  receives security fixes.
+
+### Changed
+- **Generated FastAPI projects need Python 3.10+** (3.9 is end-of-life, and patched Starlette needs
+  3.10). Dependency ranges were refreshed (pytest 9, pytest-asyncio 1, ruff, black). `pyproject.toml`
+  (Poetry) now uses the same versions as `requirements.txt`; it had its own, older ones.
+- Generated FastAPI projects get a `ruff.toml` with a fixed rule set, so `ruff check` gives the same
+  result on every Ruff release.
+- Generated Express and Fastify projects use Jest 30 and Node's built-in `node --watch` for
+  `npm run dev` instead of nodemon (one dependency fewer, no advisories). Test-filter scripts use
+  Jest 30's `--testPathPatterns`.
+- The Go module path is now `github.com/RichGod93/bffgen/v3`, so
+  `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest` installs the current release (it
+  used to install v1.3.0). `bffgen --version` reports the module version for `go install` builds
+  instead of `dev`.
+
+### Fixed
+- The generated FastAPI `setup.sh` checked for Python 3.9 while saying 3.10 was required.
+- `init` no longer writes a throwaway `package.json` with outdated versions before rendering the real one.
+
+### Removed
+- Unused Python GraphQL templates (never generated, pinned outdated packages).
+
+### Project
+- Releases are now cut by merging a `release/vX.Y.Z` branch: CI checks the branch name and
+  version, and the merge tags the release, publishes the binaries and the npm package, and
+  smoke-tests them. See [Releasing](docs/RELEASING.md).
+- CI generates Express, Fastify and FastAPI projects on every pull request and runs their lint,
+  tests, a dependency audit and the end-to-end checks in `test/e2e/`. It also runs govulncheck.
+
 ## [3.5.0] - 2026-10-15
 
 Python (FastAPI) projects now work, and their generated routes match the Express and Fastify
