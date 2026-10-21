@@ -4,9 +4,13 @@
 const crypto = require('crypto');
 const [base = 'http://localhost:8181'] = process.argv.slice(2);
 const b64 = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
-const unsigned = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ userId: 'u1', sub: 'u1', exp: Math.floor(Date.now() / 1000) + 600 })}`;
-const token = `${unsigned}.${crypto.createHmac('sha256', 'testsecret').update(unsigned).digest('base64url')}`;
+const sign = claims => {
+  const unsigned = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ userId: 'u1', sub: 'u1', exp: Math.floor(Date.now() / 1000) + 600, ...claims })}`;
+  return `${unsigned}.${crypto.createHmac('sha256', 'testsecret').update(unsigned).digest('base64url')}`;
+};
+const token = sign({ role: 'user' });
 const auth = { authorization: `Bearer ${token}` };
+const bearer = t => ({ headers: { authorization: `Bearer ${t}` } });
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -56,6 +60,22 @@ const show = r => JSON.stringify({ status: r.status, body: r.body });
 
   r = await call('/api/users/42', { headers: { authorization: '' } });
   check('missing token -> 401', r.status === 401, show(r));
+
+  // tampered: payload changed after signing, so the signature no longer matches
+  const [head, , sig] = token.split('.');
+  r = await call('/api/users/42', bearer(`${head}.${b64({ userId: 'u1', sub: 'u1', role: 'admin', exp: Math.floor(Date.now() / 1000) + 600 })}.${sig}`));
+  check('tampered token -> 401', r.status === 401, show(r));
+  r = await call('/api/users/42', bearer(sign({ exp: Math.floor(Date.now() / 1000) - 60 })));
+  check('expired token -> 401', r.status === 401, show(r));
+
+  // RBAC: /api/admin/users needs "admin" or "support"
+  r = await call('/api/admin/users');
+  check('RBAC: valid token without the role -> 403', r.status === 403 && JSON.stringify(r.body).includes('Insufficient role'), show(r));
+  check('RBAC: 403 body does not reveal the required roles', !JSON.stringify(r.body).includes('support'), show(r));
+  r = await call('/api/admin/users', bearer(sign({ roles: ['support'] })));
+  check('RBAC: token with one of the roles -> 200', r.status === 200, show(r));
+  r = await call('/api/admin/users', { headers: { authorization: '' } });
+  check('RBAC: missing token -> 401', r.status === 401, show(r));
 
   r = await call('/api/users/fail');
   check('backend 5xx -> 502 UPSTREAM_ERROR', r.status === 502 && r.body.code === 'UPSTREAM_ERROR', show(r));

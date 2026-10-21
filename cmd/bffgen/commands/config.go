@@ -440,6 +440,10 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 			if !validMethods[strings.ToUpper(method)] {
 				errors = append(errors, fmt.Sprintf("Backend '%s', endpoint %d: invalid HTTP method: %s", name, j, method))
 			}
+
+			if _, err := endpointRoles(endpoint); err != nil {
+				errors = append(errors, fmt.Sprintf("Backend '%s', endpoint %d: %v", name, j, err))
+			}
 		}
 	}
 

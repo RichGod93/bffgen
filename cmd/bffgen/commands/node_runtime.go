@@ -36,6 +36,7 @@ var nodeRuntimeFiles = []runtimeFile{
 	{"upstream.js.tmpl", filepath.Join("src", "utils", "upstream.js")},
 	{"service-base.js.tmpl", filepath.Join("src", "services", "httpClient.js")},
 	{"circuit-breaker.js.tmpl", filepath.Join("src", "utils", "circuit-breaker.js")},
+	{"authorize.js.tmpl", filepath.Join("src", "middleware", "authorize.js")},
 }
 
 // pythonRuntimeFiles are written by init and kept current by generate (templates under python/common)
@@ -43,6 +44,7 @@ var pythonRuntimeFiles = []runtimeFile{
 	{"upstream.py.tmpl", filepath.Join("utils", "upstream.py")},
 	{"http_client.py.tmpl", filepath.Join("services", "http_client.py")},
 	{"circuit_breaker.py.tmpl", filepath.Join("utils", "circuit_breaker.py")},
+	{"authorize.py.tmpl", filepath.Join("utils", "authorize.py")},
 }
 
 // runtimeAction describes what ensureRuntimeFiles did (or would do) to one file

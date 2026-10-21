@@ -428,3 +428,34 @@ func TestGeneratePython_MigratesLegacyGitignore(t *testing.T) {
 		t.Errorf(".gitignore = %q, want %q", content, want)
 	}
 }
+
+func TestPythonRouter_Roles(t *testing.T) {
+	data, err := buildPythonBackend(pyBackend(
+		map[string]interface{}{"method": "GET", "path": "/api/users", "requiresAuth": true},
+		map[string]interface{}{"method": "DELETE", "path": "/api/users/{id}", "roles": []interface{}{"admin", "support"}},
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := renderPythonTemplate("python/fastapi/router_template.py.tmpl", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"from fastapi import APIRouter, Depends, Request, Response",
+		"from middleware.auth import require_authentication\nfrom utils.authorize import require_roles\n",
+		`dependencies=[Depends(require_roles("admin", "support"))],`,
+		"dependencies=[Depends(require_authentication)],",
+	} {
+		if !strings.Contains(router, want) {
+			t.Errorf("router missing %q\n%s", want, router)
+		}
+	}
+
+	// Only roles: require_authentication isn't imported (ruff flags unused imports)
+	data, _ = buildPythonBackend(pyBackend(map[string]interface{}{"method": "GET", "path": "/api/x", "roles": []interface{}{"admin"}}))
+	router, _ = renderPythonTemplate("python/fastapi/router_template.py.tmpl", data)
+	if strings.Contains(router, "require_authentication") || !strings.Contains(router, "from utils.authorize import require_roles") {
+		t.Errorf("roles-only router imports\n%s", router)
+	}
+}

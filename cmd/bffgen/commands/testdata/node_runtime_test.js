@@ -263,3 +263,66 @@ test('unexpected errors are not swallowed', async () => {
   const up = upstreamFor('http://127.0.0.1:9');
   await assert.rejects(up.proxy(fakeRequest(), fakeReply(), { method: 'GET', path: '/users/:id' }), /Missing path parameter/);
 });
+
+// --- authorize.js (RBAC) ---
+const { authorize, userRoles, hasAnyRole } = require(path.join(projectDir, 'src/middleware/authorize'));
+
+function withRolesClaim(claim, fn) {
+  const old = process.env.JWT_ROLES_CLAIM;
+  if (claim === undefined) delete process.env.JWT_ROLES_CLAIM; else process.env.JWT_ROLES_CLAIM = claim;
+  try { return fn(); } finally {
+    if (old === undefined) delete process.env.JWT_ROLES_CLAIM; else process.env.JWT_ROLES_CLAIM = old;
+  }
+}
+
+test('userRoles reads roles, then role, by default', () => {
+  withRolesClaim(undefined, () => {
+    assert.deepStrictEqual(userRoles({ roles: ['admin', 'editor'] }), ['admin', 'editor']);
+    assert.deepStrictEqual(userRoles({ role: 'user' }), ['user']);
+    assert.deepStrictEqual(userRoles({ roles: 'admin editor,viewer' }), ['admin', 'editor', 'viewer']);
+    assert.deepStrictEqual(userRoles({ roles: ['admin', 7, '', null] }), ['admin']);
+    assert.deepStrictEqual(userRoles({ sub: 'u1' }), []);
+    assert.deepStrictEqual(userRoles(null), []);
+  });
+});
+
+test('userRoles reads JWT_ROLES_CLAIM: full name, then dotted path', () => {
+  const user = {
+    'cognito:groups': ['ops'],
+    realm_access: { roles: ['kc-admin'] },
+    'https://example.com/roles': ['auth0-admin'],
+    roles: ['ignored']
+  };
+  assert.deepStrictEqual(withRolesClaim('cognito:groups', () => userRoles(user)), ['ops']);
+  assert.deepStrictEqual(withRolesClaim('realm_access.roles', () => userRoles(user)), ['kc-admin']);
+  assert.deepStrictEqual(withRolesClaim('https://example.com/roles', () => userRoles(user)), ['auth0-admin']);
+  assert.deepStrictEqual(withRolesClaim('missing.claim', () => userRoles(user)), []);
+});
+
+test('hasAnyRole needs one of the roles', () => {
+  assert.strictEqual(hasAnyRole({ roles: ['editor'] }, ['admin', 'editor']), true);
+  assert.strictEqual(hasAnyRole({ roles: ['viewer'] }, ['admin', 'editor']), false);
+});
+
+test('authorize: next() with a role, 403 without, 401 without a user', () => {
+  const check = authorize(['admin']);
+  let called = 0;
+  const next = () => { called++; };
+
+  let reply = fakeReply();
+  check(fakeRequest({ user: { roles: ['admin'] } }), reply, next);
+  assert.strictEqual(called, 1);
+  assert.strictEqual(reply.body, undefined);
+
+  reply = fakeReply();
+  check(fakeRequest({ user: { role: 'user' } }), reply, next);
+  assert.strictEqual(called, 1);
+  assert.strictEqual(reply.statusCode, 403);
+  assert.deepStrictEqual(reply.body, { error: 'Forbidden', message: 'Insufficient role', code: 'INSUFFICIENT_ROLE' });
+
+  reply = fakeReply();
+  check(fakeRequest(), reply, next);
+  assert.strictEqual(called, 1);
+  assert.strictEqual(reply.statusCode, 401);
+  assert.strictEqual(reply.body.code, 'UNAUTHENTICATED');
+});

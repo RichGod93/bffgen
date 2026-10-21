@@ -81,7 +81,26 @@ func ConvertJSONToYAML(outputPath string) error {
 	}
 
 	fmt.Printf("📄 Converted bffgen.config.json → %s\n", outputPath)
+	if n := countEndpointsWithRoles(nodeConfig); n > 0 {
+		fmt.Printf("⚠️  %d endpoint(s) have \"roles\" (RBAC); Go projects don't support roles, so they were dropped\n", n)
+	}
 	return nil
+}
+
+// countEndpointsWithRoles counts endpoints in a Node.js config that set "roles"
+func countEndpointsWithRoles(nodeConfig map[string]interface{}) int {
+	n := 0
+	backends, _ := nodeConfig["backends"].([]interface{})
+	for _, b := range backends {
+		backend, _ := b.(map[string]interface{})
+		endpoints, _ := backend["endpoints"].([]interface{})
+		for _, e := range endpoints {
+			if endpoint, ok := e.(map[string]interface{}); ok && endpoint["roles"] != nil {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // convertGoConfigToNodeJS converts Go config structure to Node.js format

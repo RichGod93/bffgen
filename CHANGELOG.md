@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2026-10-21
+
+Role-based access control for generated routes (Express, Fastify and FastAPI). See
+[Authentication and roles](docs/NODEJS_ROUTES.md#authentication-and-roles-rbac).
+
+### Added
+- **`"roles"` on endpoints**: `"roles": ["admin", "support"]` requires a valid JWT with at least one
+  of the roles; other users get `403 Forbidden` (`INSUFFICIENT_ROLE`; the required roles aren't
+  revealed). `roles` implies `requiresAuth`. Roles are read from the `roles` claim (or `role`),
+  or from the claim named by `JWT_ROLES_CLAIM`, which also accepts dotted paths such as
+  `realm_access.roles`. Generated routes use the new runtime file `src/middleware/authorize.js`
+  (Python: `utils/authorize.py`, `require_roles(...)`), which `bffgen generate` adds to existing projects.
+- `bffgen config validate` checks `roles`; `generate-docs` adds a 403 response to endpoints with
+  roles; `convert` to Go warns that roles are dropped (Go projects don't support them).
+
+### Changed
+- **Invalid or expired tokens get `401` instead of `403`** in Fastify routes (and in Express's
+  `/api/auth/profile`), as RFC 9110 defines them: 401 = not authenticated, 403 = authenticated but
+  not allowed. New projects are generated that way; in existing projects `bffgen generate` changes
+  that one line of `src/index.js` and reports it (`--check` lists it as pending).
+
 ## [3.7.0] - 2026-10-21
 
 Regenerating is now safe: files you edit are kept, `--dry-run` writes nothing, and the same

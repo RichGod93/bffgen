@@ -475,3 +475,42 @@ func TestNodeGenerate_CorruptManifestWritesNothing(t *testing.T) {
 		t.Errorf("failed generate still wrote: %v", d)
 	}
 }
+
+func TestNodeGenerate_FixesLegacyInvalidTokenStatus(t *testing.T) {
+	for _, framework := range []string{"express", "fastify"} {
+		t.Run(framework, func(t *testing.T) {
+			dir := nodeTestProject(t, framework)
+			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+				t.Fatal(err)
+			}
+			// What bffgen < 3.8 wrote in src/index.js
+			index := filepath.Join(dir, "src", "index.js")
+			current := readFile(t, index)
+			legacy := strings.NewReplacer(
+				".status(401).send({ error: 'Invalid or expired token' })", ".status(403).send({ error: 'Invalid or expired token' })",
+				".status(401).json({ error: 'Invalid or expired token' })", ".status(403).json({ error: 'Invalid or expired token' })",
+			).Replace(current)
+			if legacy == current || !legacyInvalidTokenStatus.MatchString(legacy) {
+				t.Fatal("test setup: invalid-token line not found in src/index.js")
+			}
+			legacy += "\n// my custom code\n"
+			writeFile(t, index, legacy)
+
+			if err := inDir(t, dir, false, true, false, generateNodeJS); err == nil {
+				t.Error("--check passed although src/index.js would change")
+			}
+			if readFile(t, index) != legacy {
+				t.Fatal("--check wrote src/index.js")
+			}
+			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := readFile(t, index), current+"\n// my custom code\n"; got != want {
+				t.Errorf("src/index.js not fixed (or more than the one line changed):\n%s", got)
+			}
+			if err := inDir(t, dir, false, true, false, generateNodeJS); err != nil {
+				t.Errorf("--check failed after the fix: %v", err)
+			}
+		})
+	}
+}

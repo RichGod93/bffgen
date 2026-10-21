@@ -7,6 +7,9 @@ const express = require('express');
 {{- if .AnyAuth}}
 const { authenticate } = require('../middleware/auth');
 {{- end}}
+{{- if .AnyRoles}}
+const { authorize } = require('../middleware/authorize');
+{{- end}}
 const { createUpstream } = require('../utils/upstream');
 
 const router = express.Router();
@@ -19,7 +22,7 @@ const upstream = createUpstream('{{js .ServiceName}}', {
 });
 {{range .Endpoints}}
 // {{.Method}} {{.Path}} -> {{.Method}} {{.BackendPath}}
-router.{{.MethodLower}}('{{js .Path}}', {{if .RequiresAuth}}authenticate, {{end}}(req, res, next) =>
+router.{{.MethodLower}}('{{js .Path}}', {{if .RequiresAuth}}authenticate, {{end}}{{if .Roles}}authorize([{{range $i, $r := .Roles}}{{if $i}}, {{end}}'{{js $r}}'{{end}}]), {{end}}(req, res, next) =>
   upstream.proxy(req, res, { method: '{{.Method}}', path: '{{js .BackendPath}}' }).catch(next));
 {{end}}
 module.exports = router;

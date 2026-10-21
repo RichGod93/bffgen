@@ -210,6 +210,8 @@ func generatePaths(backends []interface{}) map[string]interface{} {
 			path, _ := endpoint["exposeAs"].(string)
 			method, _ := endpoint["method"].(string)
 			requiresAuth, _ := endpoint["requiresAuth"].(bool)
+			roles, _ := endpointRoles(endpoint) // invalid roles are reported by generate and config validate
+			requiresAuth = requiresAuth || len(roles) > 0
 
 			if path == "" || method == "" {
 				continue
@@ -253,6 +255,12 @@ func generatePaths(backends []interface{}) map[string]interface{} {
 				}
 				operation["responses"].(map[string]interface{})["401"] = map[string]interface{}{
 					"$ref": "#/components/responses/Unauthorized",
+				}
+			}
+			if len(roles) > 0 {
+				operation["description"] = fmt.Sprintf("Proxies to %s service. Requires one of the roles: %s", serviceName, strings.Join(roles, ", "))
+				operation["responses"].(map[string]interface{})["403"] = map[string]interface{}{
+					"$ref": "#/components/responses/Forbidden",
 				}
 			}
 
@@ -329,6 +337,16 @@ func generateComponents() map[string]interface{} {
 			},
 			"Unauthorized": map[string]interface{}{
 				"description": "Unauthorized - authentication required",
+				"content": map[string]interface{}{
+					"application/json": map[string]interface{}{
+						"schema": map[string]interface{}{
+							"$ref": "#/components/schemas/Error",
+						},
+					},
+				},
+			},
+			"Forbidden": map[string]interface{}{
+				"description": "Forbidden - authenticated, but without a required role",
 				"content": map[string]interface{}{
 					"application/json": map[string]interface{}{
 						"schema": map[string]interface{}{

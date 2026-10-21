@@ -1,0 +1,80 @@
+/**
+ * Role-based access control for generated routes
+ * Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+ * bffgen ships a newer version and keeps your previous copy as authorize.js.bak.
+ *
+ * Endpoints with "roles": ["admin", ...] in bffgen.config.json get authorize([...]) after
+ * authentication. Works as Express middleware (req, res, next) and as a Fastify preHandler
+ * hook (request, reply, done). The user needs at least one of the listed roles:
+ *   401 Unauthorized  UNAUTHENTICATED    no authenticated user on the request
+ *   403 Forbidden     INSUFFICIENT_ROLE  authenticated, but none of the required roles
+ * with the body { error, message, code }. The required roles are not revealed.
+ *
+ * Roles are read from the verified JWT payload (req.user / request.user):
+ *   - JWT_ROLES_CLAIM unset: the "roles" claim, else the "role" claim
+ *   - JWT_ROLES_CLAIM set: that claim, e.g. "cognito:groups", or a dotted path into nested
+ *     claims, e.g. "realm_access.roles" (Keycloak). A claim whose name contains dots, such
+ *     as "https://example.com/roles", is matched by its full name first.
+ * A claim may be an array of strings or one string of space- or comma-separated roles.
+ */
+
+function claimValue(user, claim) {
+  if (Object.prototype.hasOwnProperty.call(user, claim)) {
+    return user[claim];
+  }
+  return claim.split('.').reduce(
+    (value, key) => (value !== null && typeof value === 'object' ? value[key] : undefined),
+    user
+  );
+}
+
+/**
+ * The roles in a verified JWT payload, as an array of strings
+ * @param {Object} user - decoded JWT payload
+ * @returns {string[]}
+ */
+function userRoles(user) {
+  if (user === null || typeof user !== 'object') {
+    return [];
+  }
+  const claim = process.env.JWT_ROLES_CLAIM;
+  const value = claim ? claimValue(user, claim) : (user.roles !== undefined ? user.roles : user.role);
+  if (Array.isArray(value)) {
+    return value.filter((role) => typeof role === 'string' && role !== '');
+  }
+  if (typeof value === 'string') {
+    return value.split(/[\s,]+/).filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * Whether user has at least one of roles
+ * @param {Object} user - decoded JWT payload
+ * @param {string[]} roles - accepted roles
+ * @returns {boolean}
+ */
+function hasAnyRole(user, roles) {
+  const granted = userRoles(user);
+  return roles.some((role) => granted.includes(role));
+}
+
+/**
+ * Middleware / preHandler that requires one of roles
+ * @param {string[]} roles - accepted roles
+ */
+function authorize(roles) {
+  return function authorizeRoles(req, res, next) {
+    if (!req.user) {
+      res.status(401).send({ error: 'Unauthorized', message: 'Authentication required', code: 'UNAUTHENTICATED' });
+      return;
+    }
+    if (!hasAnyRole(req.user, roles)) {
+      res.status(403).send({ error: 'Forbidden', message: 'Insufficient role', code: 'INSUFFICIENT_ROLE' });
+      return;
+    }
+    next();
+  };
+}
+
+module.exports = { authorize, hasAnyRole, userRoles };

@@ -53,6 +53,9 @@ Generated Express, Fastify and FastAPI routes:
 
 - forward path parameters, query strings and safe headers to the backend
 - use a per-backend timeout, retries for `GET`/`HEAD`/`OPTIONS`, and a circuit breaker
+- require a valid JWT (`"requiresAuth": true`, else **401**) and, with `"roles": ["admin"]`, one of
+  the listed roles (else **403**); roles come from the token's `roles` claim or one you name in
+  `JWT_ROLES_CLAIM`
 - answer **504** when a backend times out, **503** when it is unreachable or its circuit is open
   (with `Retry-After` while the circuit is open), and **502** when it returns a 5xx; backend 4xx
   responses are passed through

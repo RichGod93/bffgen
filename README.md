@@ -125,6 +125,7 @@ uvicorn main:app --reload
 ### 🔒 Security Features
 
 - **JWT Authentication** - Token validation with user context injection
+- **Role-Based Access Control** - `"roles": ["admin"]` per endpoint: 403 without one of the roles (Express, Fastify, FastAPI; [details](docs/NODEJS_ROUTES.md#authentication-and-roles-rbac))
 - **Rate Limiting** - Built-in for all runtimes (Redis optional)
 - **Security Headers** - Helmet, CSP, HSTS, XSS protection
 - **CORS Configuration** - Restrictive origins, credentials support

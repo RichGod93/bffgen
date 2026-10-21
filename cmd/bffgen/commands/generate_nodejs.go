@@ -116,6 +116,10 @@ func generateNodeJS() error {
 	if err != nil {
 		return err
 	}
+	indexFixed, err := fixInvalidTokenStatus(filepath.Join("src", "index.js"), false)
+	if err != nil {
+		return err
+	}
 
 	// Generated routes require the runtime files; create or upgrade them first
 	if write {
@@ -134,6 +138,15 @@ func generateNodeJS() error {
 	plan.print(write)
 	actions := plan.Actions
 
+	if indexFixed {
+		if write {
+			if _, err := fixInvalidTokenStatus(filepath.Join("src", "index.js"), true); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("%s src/index.js: invalid or expired tokens get 401 instead of 403 (403 now means a missing role)\n", pick(write, "♻️  Updated", "🔍 Would update"))
+	}
+
 	indexChanged, err := autoRegisterRoutes(framework, services, write)
 	switch {
 	case err != nil:
@@ -146,7 +159,7 @@ func generateNodeJS() error {
 	}
 
 	if !write {
-		if checkMode && (len(runtimeActions) > 0 || generatedChangesPending(actions) || indexChanged) {
+		if checkMode && (len(runtimeActions) > 0 || generatedChangesPending(actions) || indexChanged || indexFixed) {
 			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
 		fmt.Println()
@@ -172,6 +185,57 @@ func generateNodeJS() error {
 	LogVerboseCommand("Code generation completed successfully")
 
 	return nil
+}
+
+// legacyInvalidTokenStatus matches the line projects made before bffgen 3.8 used to answer an
+// invalid or expired token with 403 (in src/index.js; generated Fastify routes use that check).
+// RFC 9110: 401 means not authenticated, 403 authenticated but not allowed (a missing role).
+var legacyInvalidTokenStatus = regexp.MustCompile(`(return (?:reply|res)\.status\()403(\)\.(?:send|json)\(\{ error: 'Invalid or expired token' \}\);)`)
+
+// fixInvalidTokenStatus replaces that exact line with its 401 version; the rest of src/index.js
+// is the user's. It reports whether the file needs (or, with write, got) the change.
+func fixInvalidTokenStatus(path string, write bool) (bool, error) {
+	content, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !legacyInvalidTokenStatus.Match(content) {
+		return false, nil
+	}
+	if !write {
+		return true, nil
+	}
+	return true, os.WriteFile(path, legacyInvalidTokenStatus.ReplaceAll(content, []byte("${1}401${2}")), utils.ProjectFilePerm)
+}
+
+// endpointRoles returns an endpoint's "roles": a non-empty list of role names, any one of which
+// is required. Duplicates are dropped; order is kept so output is deterministic. Role names can't
+// contain whitespace or commas, because a roles claim may be one space/comma-separated string.
+func endpointRoles(endpoint map[string]interface{}) ([]string, error) {
+	raw, ok := endpoint["roles"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	list, ok := raw.([]interface{})
+	if !ok || len(list) == 0 {
+		return nil, fmt.Errorf(`"roles" must be a non-empty list of role names, e.g. ["admin"]`)
+	}
+	var roles []string
+	seen := map[string]bool{}
+	for _, r := range list {
+		role, ok := r.(string)
+		if !ok || role == "" || strings.ContainsAny(role, " \t\r\n,") {
+			return nil, fmt.Errorf(`"roles" must contain non-empty role names without spaces or commas, got %v`, r)
+		}
+		if !seen[role] {
+			seen[role] = true
+			roles = append(roles, role)
+		}
+	}
+	return roles, nil
 }
 
 // backendNames rejects backends whose names collide: same name ignoring case (one file on
@@ -249,6 +313,11 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 		if path == "" || method == "" {
 			continue
 		}
+		roles, err := endpointRoles(endpoint)
+		if err != nil {
+			return "", fmt.Errorf("endpoint %s %s: %w", method, path, err)
+		}
+		requiresAuth = requiresAuth || len(roles) > 0
 
 		method = strings.ToUpper(method)
 		if !nodeRouteMethods[method] {
@@ -260,12 +329,14 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 		}
 
 		data.AnyAuth = data.AnyAuth || requiresAuth
+		data.AnyRoles = data.AnyRoles || len(roles) > 0
 		data.Endpoints = append(data.Endpoints, templates.RouteEndpointData{
 			Method:       method,
 			MethodLower:  strings.ToLower(method),
 			Path:         path,
 			BackendPath:  backendPath,
 			RequiresAuth: requiresAuth,
+			Roles:        roles,
 		})
 	}
 

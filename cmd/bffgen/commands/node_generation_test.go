@@ -287,7 +287,7 @@ func TestPythonRuntime(t *testing.T) {
 	if python == "" {
 		python = "python3"
 	}
-	if err := exec.Command(python, "-c", "import fastapi, httpx, dotenv").Run(); err != nil {
+	if err := exec.Command(python, "-c", "import fastapi, fastapi.testclient, httpx, dotenv").Run(); err != nil {
 		t.Skipf("%s with fastapi, httpx and python-dotenv not available", python)
 	}
 
@@ -300,6 +300,16 @@ func TestPythonRuntime(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// utils/authorize.py builds on middleware/auth.py, which init writes; stub it
+	stub := "async def require_authentication():\n    return {}\n"
+	if err := os.MkdirAll(filepath.Join(dir, "middleware"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"__init__.py": "", "auth.py": stub} {
+		if err := os.WriteFile(filepath.Join(dir, "middleware", name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	script, err := filepath.Abs(filepath.Join("testdata", "python_runtime_test.py"))
 	if err != nil {
@@ -309,5 +319,99 @@ func TestPythonRuntime(t *testing.T) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("python runtime tests failed: %v\n%s", err, out)
+	}
+}
+
+func TestRenderNodeJSRouteFile_Roles(t *testing.T) {
+	backend := testBackend(
+		map[string]interface{}{"path": "/users", "method": "GET", "exposeAs": "/api/users", "requiresAuth": true},
+		// roles imply requiresAuth; duplicates are dropped, order kept
+		map[string]interface{}{"path": "/users/:id", "method": "DELETE", "exposeAs": "/api/users/:id", "roles": []interface{}{"admin", "support", "admin"}},
+		map[string]interface{}{"path": "/public", "method": "GET", "exposeAs": "/api/public"},
+	)
+	want := map[string][]string{
+		"express": {
+			"const { authorize } = require('../middleware/authorize');",
+			"router.delete('/api/users/:id', authenticate, authorize(['admin', 'support']), (req, res, next) =>",
+			"router.get('/api/users', authenticate, (req, res, next) =>",
+			"router.get('/api/public', (req, res, next) =>",
+		},
+		"fastify": {
+			"const { authorize } = require('../middleware/authorize');\nconst { createUpstream }",
+			"    onRequest: [fastify.authenticate],\n    preHandler: [authorize(['admin', 'support'])],",
+		},
+	}
+	for framework, snippets := range want {
+		t.Run(framework, func(t *testing.T) {
+			content, err := renderNodeJSRouteFile("users", backend, framework)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range snippets {
+				if !strings.Contains(content, s) {
+					t.Errorf("route file missing %q\n%s", s, content)
+				}
+			}
+			if strings.Count(content, "authorize(") != 1 {
+				t.Errorf("expected authorize on exactly one route\n%s", content)
+			}
+		})
+	}
+
+	// Without roles, authorize is not imported (an unused import fails ESLint)
+	for _, framework := range []string{"express", "fastify"} {
+		content, _ := renderNodeJSRouteFile("users", testBackend(backend["endpoints"].([]interface{})[0].(map[string]interface{})), framework)
+		if strings.Contains(content, "authorize") {
+			t.Errorf("%s: authorize imported although no route has roles\n%s", framework, content)
+		}
+	}
+}
+
+func TestEndpointRoles_RejectsInvalid(t *testing.T) {
+	for name, roles := range map[string]interface{}{
+		"not a list":   "admin",
+		"empty list":   []interface{}{},
+		"empty name":   []interface{}{"admin", ""},
+		"not a string": []interface{}{1},
+		"space":        []interface{}{"super admin"},
+		"comma":        []interface{}{"a,b"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			endpoint := map[string]interface{}{"path": "/users", "method": "GET", "exposeAs": "/api/users", "roles": roles}
+			if _, err := renderNodeJSRouteFile("users", testBackend(endpoint), "express"); err == nil {
+				t.Error("Node: expected an error")
+			}
+			py := map[string]interface{}{"method": "GET", "path": "/api/users", "roles": roles}
+			if _, err := buildPythonBackend(pyBackend(py)); err == nil {
+				t.Error("Python: expected an error")
+			}
+		})
+	}
+}
+
+func TestRolesInValidateAndDocs(t *testing.T) {
+	config := map[string]interface{}{
+		"project": map[string]interface{}{"name": "app"},
+		"backends": []interface{}{testBackend(
+			map[string]interface{}{"path": "/users", "method": "GET", "exposeAs": "/api/users", "roles": []interface{}{"admin"}},
+			map[string]interface{}{"path": "/users", "method": "POST", "exposeAs": "/api/users", "roles": []interface{}{"super admin"}},
+		)},
+	}
+	errs := validateNodeJSConfigStructure(config)
+	if len(errs) != 1 || !strings.Contains(errs[0], "endpoint 1") || !strings.Contains(errs[0], "roles") {
+		t.Errorf("config validate: got %v, want one roles error for endpoint 1", errs)
+	}
+
+	paths := generatePaths(config["backends"].([]interface{}))
+	get := paths["/api/users"].(map[string]interface{})["get"].(map[string]interface{})
+	responses := get["responses"].(map[string]interface{})
+	if responses["403"] == nil || responses["401"] == nil || get["security"] == nil {
+		t.Errorf("OpenAPI operation with roles lacks 401/403/security: %v", get)
+	}
+	if !strings.Contains(get["description"].(string), "admin") {
+		t.Errorf("OpenAPI description doesn't name the roles: %v", get["description"])
+	}
+	if generateComponents()["responses"].(map[string]interface{})["Forbidden"] == nil {
+		t.Error("OpenAPI components lack the Forbidden response")
 	}
 }
