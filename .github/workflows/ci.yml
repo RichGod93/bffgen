@@ -75,7 +75,8 @@ jobs:
       - name: Security scan (gosec)
         if: matrix.go-version == '1.24'
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+          # gosec v2.29 needs Go 1.25 to build; setup-go sets GOTOOLCHAIN=local
+          GOTOOLCHAIN=auto go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
           # G703/G704 are the taint-analysis variants of G304/G107: bffgen writes to user-chosen
           # project paths and proxies to user-configured backend URLs by design
           gosec -quiet -exclude=G104,G304,G306,G301,G114,G107,G703,G704 -exclude-dir=test-project -exclude-dir=templates ./...
