@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.7.0] - 2026-10-21
 
 Regenerating is now safe: files you edit are kept, `--dry-run` writes nothing, and the same
 config always produces the same output. See [Regenerating](docs/NODEJS_ROUTES.md#regenerating).
