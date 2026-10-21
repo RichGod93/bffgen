@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Regenerating is now safe: files you edit are kept, `--dry-run` writes nothing, and the same
+config always produces the same output. See [Regenerating](docs/NODEJS_ROUTES.md#regenerating).
+
+### Changed
+- **`bffgen generate` no longer overwrites files you edited** (Node.js and Python). Generated
+  route, controller and service files (Python: routers, services, `routers/__init__.py`) are
+  regenerated only if they still have the content bffgen last wrote; edited files are kept and
+  reported. `--force` regenerates them too and saves your version as `<file>.bak`. What bffgen
+  wrote is recorded in `.bffgen/generated.json`; commit it. The generated `.gitignore` now ignores
+  `.bffgen/*` except that file (Python projects used to ignore all of `.bffgen/`).
+- **An invalid config writes nothing.** Node.js used to skip the backend with a warning and write
+  the rest; it now stops with an error, as Python already did. Backend names must contain only
+  letters, digits, `-` and `_` (they become file names and `require()` paths).
+- `bffgen generate --check` exits with status 1 when generated code is out of date, so CI can
+  catch a config that wasn't regenerated.
+- Files for a backend removed from the config are reported, not deleted.
+
+### Fixed
+- **`--dry-run` and `--check` wrote route, controller and service files** in Node.js projects
+  (overwriting custom code). They now write nothing.
+- `--force` was ignored in Node.js projects.
+- "Auto-registered routes in src/index.js" was printed even when `src/index.js` has no
+  `bffgen:begin:routes` markers and nothing was registered.
+
 ## [3.6.0] - 2026-10-21
 
 Security update. Newly generated projects no longer install dependencies with known

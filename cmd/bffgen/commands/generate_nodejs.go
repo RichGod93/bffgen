@@ -72,27 +72,9 @@ func generateNodeJS() error {
 		}
 	}
 
-	progress.Success("Configuration loaded")
-
-	// Generated routes require the runtime files; create or upgrade them first
-	write := !checkMode && !dryRun
-	actions, err := ensureNodeRuntimeFiles(".", framework, write)
-	if err != nil {
-		return fmt.Errorf("failed to update runtime files: %w", err)
-	}
-	printRuntimeActions(actions, write)
-
-	fmt.Printf("📝 Generating routes for %s\n", framework)
-	progress.Start(fmt.Sprintf("Generating files for %d backends", len(backends)))
-
-	// Generate route files, controllers, and services for each backend
-	routesGenerated := 0
-	controllersGenerated := 0
-	servicesGenerated := 0
-
-	// Default controller type
-	controllerType := "both" // Can be made configurable via flag
-
+	// Render every file first, so an invalid config writes nothing
+	files := map[string]string{}
+	var services []string
 	for _, backend := range backends {
 		backendMap, ok := backend.(map[string]interface{})
 		if !ok {
@@ -112,82 +94,93 @@ func generateNodeJS() error {
 			continue
 		}
 
-		// Generate route file
-		if err := generateNodeJSRouteFile(serviceName, backendMap, framework); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to generate routes for %s: %v\n", serviceName, err)
-			continue
+		if err := renderNodeJSBackendFiles(files, serviceName, backendMap, framework); err != nil {
+			return fmt.Errorf("backend %s: %w", serviceName, err)
 		}
-		routesGenerated++
-		fmt.Printf("✅ Generated routes for service: %s\n", serviceName)
-
-		// Generate controller file
-		if err := generateNodeJSControllerFile(serviceName, backendMap, framework, controllerType); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to generate controller for %s: %v\n", serviceName, err)
-		} else {
-			controllersGenerated++
-			fmt.Printf("✅ Generated controller for service: %s\n", serviceName)
-		}
-
-		// Generate service file
-		if err := generateNodeJSServiceFile(serviceName, backendMap, framework); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to generate service for %s: %v\n", serviceName, err)
-		} else {
-			servicesGenerated++
-			fmt.Printf("✅ Generated service for service: %s\n", serviceName)
-		}
+		services = append(services, serviceName)
 	}
 
-	// Auto-register routes in index.js
-	if !checkMode && !dryRun {
-		if err := autoRegisterRoutes(framework, backends); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to auto-register routes: %v\n", err)
-			fmt.Println("💡 You can manually import routes in src/index.js")
-		} else {
-			fmt.Println("✅ Auto-registered routes in src/index.js")
+	progress.Success("Configuration loaded")
+
+	// Generated routes require the runtime files; create or upgrade them first
+	write := !checkMode && !dryRun
+	runtimeActions, err := ensureNodeRuntimeFiles(".", framework, write)
+	if err != nil {
+		return fmt.Errorf("failed to update runtime files: %w", err)
+	}
+	printRuntimeActions(runtimeActions, write)
+
+	fmt.Printf("📝 Generating %s routes, controllers and services for %d backends\n", framework, len(services))
+	actions, err := writeGeneratedFiles(".", files, write, forceMode)
+	if err != nil {
+		return err
+	}
+
+	indexChanged, err := autoRegisterRoutes(framework, services, write)
+	switch {
+	case err != nil:
+		fmt.Printf("⚠️  Warning: Failed to auto-register routes: %v\n", err)
+		fmt.Println("💡 You can manually import routes in src/index.js")
+	case indexChanged && write:
+		fmt.Println("✅ Registered routes in src/index.js")
+	case indexChanged:
+		fmt.Println("🔍 Would update the route registrations in src/index.js")
+	}
+
+	if !write {
+		if checkMode && (len(runtimeActions) > 0 || generatedChangesPending(actions) || indexChanged) {
+			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
+		fmt.Println()
+		fmt.Println("🔍 Nothing was written.")
+		return nil
 	}
 
-	if !checkMode && !dryRun {
-		progress.Success("All files generated")
-
-		fmt.Println()
-		fmt.Printf("✅ Code generation completed!\n")
-		fmt.Printf("   📁 Generated %d route files in src/routes/\n", routesGenerated)
-		fmt.Printf("   🎮 Generated %d controller files in src/controllers/\n", controllersGenerated)
-		fmt.Printf("   🔧 Generated %d service files in src/services/\n", servicesGenerated)
-		fmt.Println()
-		fmt.Println("🚀 Routes, controllers, and services are ready to use")
-		fmt.Println()
-		fmt.Println("💡 Next steps:")
-		fmt.Println("   1. Review generated files:")
-		fmt.Println("      - src/routes/     (route handlers)")
-		fmt.Println("      - src/controllers/ (business logic)")
-		fmt.Println("      - src/services/    (HTTP communication)")
-		fmt.Println("   2. Start your backend services")
-		fmt.Println("   3. Run: npm run dev")
-		fmt.Println("   4. Test your endpoints")
-	}
+	progress.Success("All files generated")
+	fmt.Println()
+	fmt.Println("✅ Code generation completed!")
+	fmt.Println()
+	fmt.Println("💡 Next steps:")
+	fmt.Println("   1. Review generated files:")
+	fmt.Println("      - src/routes/      (route handlers)")
+	fmt.Println("      - src/controllers/ (business logic)")
+	fmt.Println("      - src/services/    (HTTP communication)")
+	fmt.Println("   2. Start your backend services")
+	fmt.Println("   3. Run: npm run dev")
+	fmt.Println("   4. Test your endpoints")
+	fmt.Println()
+	fmt.Println("   Files you edit are kept on the next 'bffgen generate' (see .bffgen/generated.json).")
 
 	LogVerboseCommand("Code generation completed successfully")
 
 	return nil
 }
 
-// generateNodeJSRouteFile generates a route file for a Node.js service
-func generateNodeJSRouteFile(serviceName string, backend map[string]interface{}, framework string) error {
-	// Create routes directory if it doesn't exist
-	routesDir := filepath.Join("src", "routes")
-	if err := os.MkdirAll(routesDir, utils.ProjectDirPerm); err != nil {
-		return err
+// nodeServiceName matches backend names that are safe as file names and in require() paths
+var nodeServiceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// renderNodeJSBackendFiles renders the route, controller and service files for one backend into files
+func renderNodeJSBackendFiles(files map[string]string, serviceName string, backend map[string]interface{}, framework string) error {
+	if !nodeServiceName.MatchString(serviceName) {
+		return fmt.Errorf("name %q must contain only letters, digits, '-' and '_'", serviceName)
 	}
 
-	content, err := renderNodeJSRouteFile(serviceName, backend, framework)
+	route, err := renderNodeJSRouteFile(serviceName, backend, framework)
 	if err != nil {
 		return err
 	}
+	files["src/routes/"+serviceName+".js"] = route
 
-	filename := filepath.Join(routesDir, fmt.Sprintf("%s.js", serviceName))
-	return os.WriteFile(filename, []byte(content), utils.ProjectFilePerm)
+	if err := renderNodeJSControllerFiles(files, serviceName, backend, framework); err != nil {
+		return err
+	}
+
+	service, err := renderNodeJSServiceFile(serviceName, backend, framework)
+	if err != nil {
+		return err
+	}
+	files["src/services/"+serviceName+".service.js"] = service
+	return nil
 }
 
 // renderNodeJSRouteFile renders the route file for one backend from routes-template.js.tmpl
@@ -262,14 +255,9 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 	return buf.String(), nil
 }
 
-// generateNodeJSControllerFile generates controller files for a Node.js service
-func generateNodeJSControllerFile(serviceName string, backend map[string]interface{}, framework, controllerType string) error {
-	// Create controllers directory if it doesn't exist
-	controllersDir := filepath.Join("src", "controllers")
-	if err := os.MkdirAll(controllersDir, utils.ProjectDirPerm); err != nil {
-		return err
-	}
-
+// renderNodeJSControllerFiles renders a backend's controllers: <name>.controller.js (aggregator
+// pattern) and <name>.controller.basic.js
+func renderNodeJSControllerFiles(files map[string]string, serviceName string, backend map[string]interface{}, framework string) error {
 	endpoints, ok := backend["endpoints"].([]interface{})
 	if !ok {
 		return nil // No endpoints, skip controller generation
@@ -304,12 +292,6 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 		})
 	}
 
-	// Determine template to use
-	templateType := "basic"
-	if controllerType == "aggregator" || controllerType == "both" {
-		templateType = "aggregator"
-	}
-
 	// Load template loader
 	var langType scaffolding.LanguageType
 	if framework == "fastify" {
@@ -327,48 +309,25 @@ func generateNodeJSControllerFile(serviceName string, backend map[string]interfa
 		Endpoints:         convertToEndpointData(endpointData),
 	}
 
-	// Render controller template
-	templateName := fmt.Sprintf("controller-%s.js.tmpl", templateType)
-	content, err := renderControllerTemplate(loader, framework, templateName, data)
+	content, err := renderControllerTemplate(loader, framework, "controller-aggregator.js.tmpl", data)
 	if err != nil {
 		return fmt.Errorf("failed to render controller: %w", err)
 	}
+	files["src/controllers/"+serviceName+".controller.js"] = content
 
-	// Write controller file
-	filename := filepath.Join(controllersDir, fmt.Sprintf("%s.controller.js", serviceName))
-	if err := os.WriteFile(filename, []byte(content), utils.ProjectFilePerm); err != nil {
-		return err
+	basicContent, err := renderControllerTemplate(loader, framework, "controller-basic.js.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("failed to render basic controller: %w", err)
 	}
-
-	// If "both", also generate basic controller
-	if controllerType == "both" {
-		basicContent, err := renderControllerTemplate(loader, framework, "controller-basic.js.tmpl", data)
-		if err != nil {
-			return fmt.Errorf("failed to render basic controller: %w", err)
-		}
-
-		basicFilename := filepath.Join(controllersDir, fmt.Sprintf("%s.controller.basic.js", serviceName))
-		if err := os.WriteFile(basicFilename, []byte(basicContent), utils.ProjectFilePerm); err != nil {
-			return err
-		}
-	}
+	files["src/controllers/"+serviceName+".controller.basic.js"] = basicContent
 
 	return nil
 }
 
-// generateNodeJSServiceFile generates service files for a Node.js service
-func generateNodeJSServiceFile(serviceName string, backend map[string]interface{}, framework string) error {
-	// Create services directory if it doesn't exist
-	servicesDir := filepath.Join("src", "services")
-	if err := os.MkdirAll(servicesDir, utils.ProjectDirPerm); err != nil {
-		return err
-	}
-
+// renderNodeJSServiceFile renders the service file for a backend
+func renderNodeJSServiceFile(serviceName string, backend map[string]interface{}, framework string) (string, error) {
 	baseURL, _ := backend["baseUrl"].(string)
-	endpoints, ok := backend["endpoints"].([]interface{})
-	if !ok {
-		return nil // No endpoints, skip service generation
-	}
+	endpoints, _ := backend["endpoints"].([]interface{})
 
 	// Build endpoint data
 	var endpointData []map[string]interface{}
@@ -414,19 +373,11 @@ func generateNodeJSServiceFile(serviceName string, backend map[string]interface{
 		Endpoints:         convertToEndpointData(endpointData),
 	}
 
-	// Render service template
 	content, err := renderServiceTemplate(loader, framework, "service-template.js.tmpl", data)
 	if err != nil {
-		return fmt.Errorf("failed to render service: %w", err)
+		return "", fmt.Errorf("failed to render service: %w", err)
 	}
-
-	// Write service file
-	filename := filepath.Join(servicesDir, fmt.Sprintf("%s.service.js", serviceName))
-	if err := os.WriteFile(filename, []byte(content), utils.ProjectFilePerm); err != nil {
-		return err
-	}
-
-	return nil
+	return content, nil
 }
 
 // Helper function to convert endpoint data
@@ -497,38 +448,20 @@ func renderServiceTemplate(loader *templates.TemplateLoader, framework, template
 	return buf.String(), nil
 }
 
-// autoRegisterRoutes automatically imports and registers routes in the main index.js file
-func autoRegisterRoutes(framework string, backends []interface{}) error {
+// autoRegisterRoutes rewrites the route registrations between the bffgen:begin:routes and
+// bffgen:end:routes markers in src/index.js. It reports whether the block changes (or would
+// change, when write is false). Projects without the markers are left alone.
+func autoRegisterRoutes(framework string, services []string, write bool) (bool, error) {
 	indexPath := filepath.Join("src", "index.js")
 
-	// Read existing index.js
 	content, err := os.ReadFile(indexPath)
 	if err != nil {
-		return fmt.Errorf("failed to read index.js: %w", err)
+		return false, fmt.Errorf("failed to read index.js: %w", err)
 	}
-
 	contentStr := string(content)
 
-	// Generate route imports and registrations
 	var routeContent strings.Builder
-
-	for _, b := range backends {
-		backend, ok := b.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		serviceName, _ := backend["name"].(string)
-		if serviceName == "" {
-			continue
-		}
-
-		endpoints, ok := backend["endpoints"].([]interface{})
-		if !ok || len(endpoints) == 0 {
-			continue
-		}
-
-		// Add import and registration
+	for _, serviceName := range services {
 		if framework == "fastify" {
 			routeContent.WriteString(fmt.Sprintf("    // %s routes\n", serviceName))
 			routeContent.WriteString(fmt.Sprintf("    await fastify.register(require('./routes/%s'));\n", serviceName))
@@ -538,26 +471,27 @@ func autoRegisterRoutes(framework string, backends []interface{}) error {
 		}
 	}
 
-	// Find and replace the route registration section using markers
 	marker := scaffolding.CustomMarkers("routes")
 	sections, err := scaffolding.FindSections(contentStr, marker)
 	if err != nil || len(sections) == 0 {
-		// Markers not found, skip auto-registration
-		return nil
+		LogVerboseCommand("No bffgen:begin:routes markers in src/index.js; register routes manually")
+		return false, nil
 	}
 
-	// Replace the section with new content
 	updatedContent, err := scaffolding.ReplaceSection(contentStr, sections[0], routeContent.String())
 	if err != nil {
-		return fmt.Errorf("failed to replace section: %w", err)
+		return false, fmt.Errorf("failed to replace section: %w", err)
 	}
-
-	// Write updated index.js
+	if updatedContent == contentStr {
+		return false, nil
+	}
+	if !write {
+		return true, nil
+	}
 	if err := os.WriteFile(indexPath, []byte(updatedContent), utils.ProjectFilePerm); err != nil {
-		return fmt.Errorf("failed to write index.js: %w", err)
+		return false, fmt.Errorf("failed to write index.js: %w", err)
 	}
-
-	return nil
+	return true, nil
 }
 
 // nodeHandlerName builds a valid camelCase JavaScript identifier from an HTTP method and route path,

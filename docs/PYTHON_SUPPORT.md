@@ -230,7 +230,9 @@ This writes, for each backend with endpoints:
 - `services/<backend>_service.py`: typed async methods for calling the backend from your own code
 - `routers/__init__.py`: the list of routers, which `main.py` registers with `include_routers(app)`
 
-These files are overwritten on every run; keep your own code in other files.
+You can edit these files: an edited file is kept on the next run (`--force` regenerates it and
+saves your version as `<file>.bak`), and `--dry-run` / `--check` write nothing. See
+[Regenerating](NODEJS_ROUTES.md#regenerating); Python projects behave the same way.
 
 `bffgen generate` also creates or upgrades the runtime files the routers use:
 `utils/upstream.py`, `services/http_client.py` and `utils/circuit_breaker.py`. A file is
