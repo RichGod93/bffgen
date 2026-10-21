@@ -4,9 +4,9 @@
 # Update with: bffgen update-deps
 
 metadata:
-  version: "3.5.1"
+  version: "3.6.0"
   last_updated: "2026-10-21T00:00:00Z"
-  bffgen_version: "3.5.1"
+  bffgen_version: "3.6.0"
 
 # Node.js Express Runtime
 nodejs-express:
