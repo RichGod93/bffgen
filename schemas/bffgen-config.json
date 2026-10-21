@@ -23,6 +23,11 @@
     "backends": {
       "type": "array",
       "items": { "$ref": "#/definitions/backend" }
+    },
+    "aggregates": {
+      "type": "array",
+      "description": "GET routes that call several backends in parallel and answer {data, sources}. A failed optional source leaves its data null (partial response); a failed required source, or every source failing, fails the route (502/503/504, or the source's 4xx).",
+      "items": { "$ref": "#/definitions/aggregate" }
     }
   },
   "required": ["backends"],
@@ -58,10 +63,11 @@
         "healthCheck": { "type": "object" },
         "endpoints": {
           "type": "array",
+          "description": "Routes proxied to this backend. May be omitted for a backend used only by aggregates.",
           "items": { "$ref": "#/definitions/endpoint" }
         }
       },
-      "required": ["name", "endpoints"]
+      "required": ["name"]
     },
     "endpoint": {
       "type": "object",
@@ -89,6 +95,51 @@
         "timeout": { "$ref": "#/definitions/milliseconds" }
       },
       "required": ["method", "path"]
+    },
+    "aggregate": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$", "description": "Used in comments and handler names" },
+        "exposeAs": { "type": "string", "pattern": "^/[^?]*$", "description": "The GET path the BFF exposes. Parameters as :id or {id}." },
+        "path": { "type": "string", "pattern": "^/[^?]*$", "description": "Python: accepted instead of exposeAs" },
+        "method": { "type": "string", "enum": ["GET", "get"], "description": "Aggregates are always GET (and HEAD)" },
+        "requiresAuth": { "type": "boolean", "default": false, "description": "Require a valid JWT; otherwise 401" },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[^\\s,]+$" },
+          "description": "Also require one of these roles; otherwise 403. Implies requiresAuth."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/aggregateSource" }
+        }
+      },
+      "required": ["sources"],
+      "anyOf": [{ "required": ["exposeAs"] }, { "required": ["path"] }]
+    },
+    "aggregateSource": {
+      "type": "object",
+      "properties": {
+        "backend": { "type": "string", "description": "Name of a backend in backends; its timeout, retries and circuit breaker apply" },
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "GET path on the backend; may carry a query string. Parameters (:id or {id}) come from exposeAs."
+        },
+        "as": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+          "description": "Key of this source in data and sources (default: the backend name)"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "If this source fails, the whole route fails instead of answering with its data null"
+        }
+      },
+      "required": ["backend", "path"]
     }
   }
 }

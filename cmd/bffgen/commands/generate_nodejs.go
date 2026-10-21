@@ -111,6 +111,25 @@ func generateNodeJS() error {
 		}
 	}
 
+	aggregates, err := parseAggregates(config, false)
+	if err != nil {
+		return err
+	}
+	if len(aggregates) > 0 {
+		if other, ok := names["file:"+aggregatesFile]; ok {
+			return fmt.Errorf("backend %q: the name is reserved for src/routes/%s.js when \"aggregates\" are configured; rename the backend", other, aggregatesFile)
+		}
+		content, err := renderNodeAggregates(config, aggregates, framework)
+		if err != nil {
+			return err
+		}
+		files["src/routes/"+aggregatesFile+".js"] = content
+		services = append(services, aggregatesFile)
+		for _, a := range aggregates {
+			usesRoles = usesRoles || len(a.Roles) > 0
+		}
+	}
+
 	progress.Success("Configuration loaded")
 
 	// Plan every write before making any, so an error (e.g. a corrupt manifest) writes nothing
@@ -120,7 +139,7 @@ func generateNodeJS() error {
 		return fmt.Errorf("failed to check runtime files: %w", err)
 	}
 	if conflict := runtimeConflict(runtimeActions, filepath.Join("src", "middleware", "authorize.js")); conflict != "" && usesRoles {
-		return fmt.Errorf("endpoints use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
+		return fmt.Errorf("routes use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
 	}
 	plan, err := planGeneratedWrites(".", files, forceMode)
 	if err != nil {
@@ -142,7 +161,10 @@ func generateNodeJS() error {
 	}
 	printRuntimeActions(runtimeActions, write)
 
-	fmt.Printf("📝 Generating %s routes, controllers and services for %d backends\n", framework, len(services))
+	fmt.Printf("📝 Generating %s routes, controllers and services for %d backends\n", framework, len(services)-min(len(aggregates), 1))
+	if len(aggregates) > 0 {
+		fmt.Printf("📝 Generating %d aggregate routes in src/routes/%s.js\n", len(aggregates), aggregatesFile)
+	}
 	if write {
 		if err := plan.apply("."); err != nil {
 			return err

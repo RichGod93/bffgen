@@ -85,6 +85,10 @@ func ConvertJSONToYAML(outputPath string) error {
 		fmt.Printf("⚠️  %d converted endpoint(s) have \"requiresAuth\" or \"roles\". Go configs have no per-endpoint\n", n)
 		fmt.Println("   authentication or roles, so these endpoints are not protected in the Go project.")
 	}
+	if aggregates, _ := nodeConfig["aggregates"].([]interface{}); len(aggregates) > 0 {
+		fmt.Printf("⚠️  %d aggregate(s) were not converted; Go projects define aggregators differently\n", len(aggregates))
+		fmt.Println("   (see 'bffgen add-aggregator').")
+	}
 	return nil
 }
 

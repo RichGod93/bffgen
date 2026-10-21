@@ -71,6 +71,12 @@ func generateDocs() error {
 
 	// Generate OpenAPI spec
 	openAPISpec := generateOpenAPISpec(projectName, backends)
+	aggregates, err := parseAggregates(config, false)
+	if err != nil {
+		// generate rejects this config; leave the aggregates out rather than document them wrongly
+		fmt.Printf("⚠️  Aggregates not documented: %v\n", err)
+	}
+	addAggregateDocs(openAPISpec, aggregates)
 
 	// Create docs directory if it doesn't exist
 	docsDir := filepath.Dir(outputPath)
@@ -273,6 +279,67 @@ func generatePaths(backends []interface{}) map[string]interface{} {
 	}
 
 	return paths
+}
+
+// addAggregateDocs adds an operation per aggregate (see aggregates.go) to an OpenAPI spec
+func addAggregateDocs(spec map[string]interface{}, aggregates []aggregateSpec) {
+	if len(aggregates) == 0 {
+		return
+	}
+	spec["tags"] = append(spec["tags"].([]map[string]interface{}), map[string]interface{}{
+		"name":        "aggregates",
+		"description": "Routes that combine several backend responses",
+	})
+	paths := spec["paths"].(map[string]interface{})
+	for _, a := range aggregates {
+		var sources []string
+		dataProps := map[string]interface{}{}
+		statusProps := map[string]interface{}{}
+		for _, src := range a.Sources {
+			note := ""
+			if src.Required {
+				note = ", required"
+			}
+			sources = append(sources, fmt.Sprintf("%s (%s %s%s)", src.As, src.Backend, src.Path, note))
+			dataProps[src.As] = map[string]interface{}{"description": fmt.Sprintf("Response of %s %s, or null if it failed", src.Backend, src.Path), "nullable": true}
+			statusProps[src.As] = map[string]interface{}{"type": "string", "description": `"ok" or the failure code, e.g. UPSTREAM_TIMEOUT`}
+		}
+		description := "Calls its sources in parallel: " + strings.Join(sources, "; ") +
+			". A failed optional source leaves its data null (partial response, Cache-Control: no-store); a failed required source, or every source failing, fails the request."
+		responses := map[string]interface{}{
+			"200": map[string]interface{}{
+				"description": "Combined responses",
+				"content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"data":    map[string]interface{}{"type": "object", "properties": dataProps},
+						"sources": map[string]interface{}{"type": "object", "properties": statusProps},
+					},
+				}}},
+			},
+			"502": map[string]interface{}{"description": "A required source returned 5xx (UPSTREAM_ERROR)"},
+			"503": map[string]interface{}{"description": "A required source is unreachable or its circuit is open (UPSTREAM_UNAVAILABLE, CIRCUIT_OPEN)"},
+			"504": map[string]interface{}{"description": "A required source timed out (UPSTREAM_TIMEOUT)"},
+		}
+		operation := map[string]interface{}{
+			"tags":        []string{"aggregates"},
+			"summary":     "GET " + a.Path,
+			"description": description,
+			"responses":   responses,
+		}
+		if a.RequiresAuth {
+			operation["security"] = []map[string]interface{}{{"bearerAuth": []string{}}}
+			responses["401"] = map[string]interface{}{"$ref": "#/components/responses/Unauthorized"}
+		}
+		if len(a.Roles) > 0 {
+			operation["description"] = description + " Requires one of the roles: " + strings.Join(a.Roles, ", ")
+			responses["403"] = map[string]interface{}{"$ref": "#/components/responses/Forbidden"}
+		}
+		if paths[a.Path] == nil {
+			paths[a.Path] = map[string]interface{}{}
+		}
+		paths[a.Path].(map[string]interface{})["get"] = operation
+	}
 }
 
 func generateComponents() map[string]interface{} {

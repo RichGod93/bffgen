@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-10-21
+
+Config-driven aggregation routes for Express, Fastify and FastAPI. See
+[Aggregates](docs/NODEJS_ROUTES.md#aggregates).
+
+### Added
+- **`"aggregates"`**: each entry is a `GET` route that calls several backends in parallel and
+  answers `{ "data": { <as>: … }, "sources": { <as>: "ok" | <error code> } }`. Sources use their
+  backend's timeout, retries, circuit breaker and environment overrides, and may carry a query
+  string (`/orders?userId=:id`). An optional source that fails leaves its data `null` (partial
+  response, `Cache-Control: no-store`); a failed `"required": true` source, or every source
+  failing, fails the request like a proxied route (502/503/504, or the source's 4xx passed
+  through). `requiresAuth` and `roles` work as on endpoints. Routes are generated into
+  `src/routes/aggregates.js` (Python: `routers/aggregates_router.py`), which falls under the same
+  regeneration rules as other generated files.
+- `config validate`, `generate-docs` (OpenAPI) and the JSON Schema cover aggregates. A backend used
+  only by aggregates no longer needs `endpoints`. `convert` to Go warns that aggregates are not
+  converted.
+
+### Changed
+- The runtime file `src/utils/upstream.js` (Python: `utils/upstream.py`) gains `aggregate()`
+  (`bffgen:runtime 2`). `bffgen generate` upgrades it in existing projects and keeps the previous
+  copy as `upstream.js.bak`. Runtime files are now versioned one by one, so the other runtime
+  files are left alone.
+
+### Fixed
+- `ParallelAggregator` (`src/utils/aggregator.js`, new projects): `failFast: true` now rejects with
+  the first error (it used to resolve like `failFast: false`), and per-call timeout timers are
+  cleared when a call finishes (they used to keep running, holding the process open and
+  accumulating under load).
+
 ## [3.8.0] - 2026-10-21
 
 Role-based access control for generated routes (Express, Fastify and FastAPI). See

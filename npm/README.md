@@ -60,6 +60,22 @@ Generated Express, Fastify and FastAPI routes:
   (with `Retry-After` while the circuit is open), and **502** when it returns a 5xx; backend 4xx
   responses are passed through
 
+`"aggregates"` combine several backends in one `GET` endpoint. The sources are called in
+parallel, and the response has each one's data and status; an optional source that fails leaves
+its data `null` instead of failing the request:
+
+```json
+"aggregates": [
+  {
+    "exposeAs": "/api/dashboard/:id",
+    "sources": [
+      { "backend": "users", "path": "/users/:id", "as": "user", "required": true },
+      { "backend": "orders", "path": "/orders?userId=:id", "as": "orders" }
+    ]
+  }
+]
+```
+
 Re-running `bffgen generate` is safe: files you edited are kept (`--force` regenerates them and
 saves your version as `<file>.bak`), the same config always gives the same output, `--dry-run`
 writes nothing, and `--check` exits 1 in CI when generated code is out of date.
@@ -73,8 +89,11 @@ See [Generated routes](https://github.com/RichGod93/bffgen/blob/master/docs/NODE
 - Swagger UI at `/api-docs`
 - ESLint 9 and Jest set up: a fresh project passes `npm run lint` and `npm test`
 - Dependencies with no known production vulnerabilities at release time (`npm audit --omit=dev`)
+- Aggregation routes from config: `"aggregates"` combine several backends in one `GET` endpoint,
+  called in parallel, with partial responses when an optional backend fails
+  ([Aggregates](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_ROUTES.md#aggregates))
 - A parallel aggregation helper (`src/utils/aggregator.js`) and an example aggregator controller
-  for combining several backends in one endpoint
+  for aggregation with your own logic
 
 ## Commands
 

@@ -103,6 +103,28 @@ func generatePython() error {
 		files["services/"+data.Module+"_service.py"] = service
 		modules = append(modules, data.Module)
 	}
+	aggregates, err := parseAggregates(config, true)
+	if err != nil {
+		return err
+	}
+	anyRoles := false
+	for _, data := range generated {
+		anyRoles = anyRoles || data.AnyRoles
+	}
+	if len(aggregates) > 0 {
+		if other, ok := names["module:"+aggregatesFile]; ok {
+			return fmt.Errorf("backend %q: the name is reserved for routers/%s_router.py when \"aggregates\" are configured; rename the backend", other, aggregatesFile)
+		}
+		router, err := renderPythonAggregates(config, aggregates)
+		if err != nil {
+			return err
+		}
+		files["routers/"+aggregatesFile+"_router.py"] = router
+		modules = append(modules, aggregatesFile)
+		for _, a := range aggregates {
+			anyRoles = anyRoles || len(a.Roles) > 0
+		}
+	}
 	registry, err := renderPythonTemplate("python/fastapi/routers_init.py.tmpl", map[string]interface{}{"Modules": modules})
 	if err != nil {
 		return err
@@ -114,12 +136,8 @@ func generatePython() error {
 	if err != nil {
 		return fmt.Errorf("failed to check runtime files: %w", err)
 	}
-	if conflict := runtimeConflict(actions, filepath.Join("utils", "authorize.py")); conflict != "" {
-		for _, data := range generated {
-			if data.AnyRoles {
-				return fmt.Errorf("endpoints use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
-			}
-		}
+	if conflict := runtimeConflict(actions, filepath.Join("utils", "authorize.py")); conflict != "" && anyRoles {
+		return fmt.Errorf("routes use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
 	}
 	plan, err := planGeneratedWrites(".", files, forceMode)
 	if err != nil {
@@ -179,6 +197,9 @@ func generatePython() error {
 	fmt.Println("📁 Generated files:")
 	fmt.Printf("   - %d router files in routers/ (registered in routers/__init__.py)\n", len(generated))
 	fmt.Printf("   - %d service files in services/\n", len(generated))
+	if len(aggregates) > 0 {
+		fmt.Printf("   - %d aggregate routes in routers/%s_router.py\n", len(aggregates), aggregatesFile)
+	}
 	fmt.Println()
 	fmt.Println("🚀 Next steps:")
 	fmt.Println("   1. Review generated files")

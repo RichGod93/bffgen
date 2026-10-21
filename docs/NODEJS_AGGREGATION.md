@@ -2,6 +2,12 @@
 
 ## Overview
 
+> **Combining backend responses without custom logic?** Declare `aggregates` in
+> `bffgen.config.json` and `bffgen generate` writes the routes, with per-backend timeouts,
+> retries, circuit breakers and partial responses when an optional backend fails. See
+> [Aggregates](NODEJS_ROUTES.md#aggregates). The utilities below are for aggregation that needs
+> your own code.
+
 This guide covers the advanced aggregation utilities available in bffgen-generated Node.js BFF projects. These utilities enable you to create production-ready Backend-for-Frontend services that aggregate data from multiple microservices efficiently and reliably.
 
 ## Table of Contents
@@ -100,7 +106,7 @@ Execute multiple service calls simultaneously to reduce total response time.
 ```javascript
 const aggregator = new ParallelAggregator({
   timeout: 30000, // Maximum time for each service call (ms)
-  failFast: false, // If true, fail immediately on first error
+  failFast: false, // If true, reject with the first error instead of returning every result
 });
 ```
 

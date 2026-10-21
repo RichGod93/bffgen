@@ -4,9 +4,10 @@
 > [Python/FastAPI Support](PYTHON_SUPPORT.md#what-generated-routes-do).
 
 `bffgen generate` turns each backend in `bffgen.config.json` into a route file,
-`src/routes/<backend>.js`, for Express or Fastify. This page describes what those routes do:
-how requests are forwarded, how timeouts, retries and the circuit breaker work, and which
-status codes clients see when a backend fails.
+`src/routes/<backend>.js`, for Express or Fastify, and the `aggregates` into
+`src/routes/aggregates.js`. This page describes what those routes do: how requests are
+forwarded, how timeouts, retries and the circuit breaker work, how aggregates combine several
+backends, and which status codes clients see when a backend fails.
 
 ## Configuration
 
@@ -135,6 +136,78 @@ generates endpoints with `roles`.
 401 responses carry `WWW-Authenticate: Bearer` (RFC 9110), with `error="invalid_token"` for an
 invalid, expired or not-yet-valid token.
 
+## Aggregates
+
+An aggregate is a `GET` route that calls several backends in parallel and answers with their
+combined responses, so a frontend makes one request instead of several. Aggregates are listed at
+the top level of the config and refer to backends by name:
+
+```json
+{
+  "backends": [
+    { "name": "users", "baseUrl": "http://localhost:4001/api", "endpoints": [] },
+    { "name": "orders", "baseUrl": "http://localhost:4002/api", "timeout": 2000 },
+    { "name": "products", "baseUrl": "http://localhost:4003/api" }
+  ],
+  "aggregates": [
+    {
+      "name": "dashboard",
+      "exposeAs": "/api/dashboard/:id",
+      "requiresAuth": true,
+      "sources": [
+        { "backend": "users", "path": "/users/:id", "as": "user", "required": true },
+        { "backend": "orders", "path": "/orders?userId=:id", "as": "orders" },
+        { "backend": "products", "path": "/products/recommended", "as": "recommendations" }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `exposeAs` | The path the BFF exposes (`GET`, and `HEAD`). Parameters as `:id` or `{id}`. |
+| `name` | Optional; used in comments and (Python) handler names |
+| `requiresAuth`, `roles` | As for endpoints (401 / 403, see above) |
+| `sources[].backend` | A backend from `backends`. Its `timeout`, `retries`, circuit breaker and environment overrides apply. A backend used only by aggregates needs no `endpoints`. |
+| `sources[].path` | `GET` path on that backend. It may carry a query string; its parameters come from `exposeAs`. |
+| `sources[].as` | Key of this source in the response (default: the backend name) |
+| `sources[].required` | If `true`, a failure of this source fails the whole request (default `false`) |
+
+A successful request answers `200` with each source's parsed body (JSON, or text for other
+content types; `null` for an empty body) and its status:
+
+```json
+{
+  "data": { "user": { "id": "42" }, "orders": [], "recommendations": null },
+  "sources": { "user": "ok", "orders": "ok", "recommendations": "UPSTREAM_TIMEOUT" }
+}
+```
+
+| Situation | Response |
+|---|---|
+| Every source succeeds | `200`, every source `"ok"` |
+| An optional source fails | `200` with that source's data `null` and its status set to the error code: `UPSTREAM_TIMEOUT`, `UPSTREAM_UNAVAILABLE`, `CIRCUIT_OPEN`, `UPSTREAM_ERROR` (5xx or invalid JSON) or `UPSTREAM_CLIENT_ERROR` (4xx). Sent with `Cache-Control: no-store`, so a partial response isn't cached as a complete one. |
+| A required source fails | The aggregate fails as a proxied route would: `502`/`503`/`504` with the error body below, or the source's 4xx response passed through (a missing user gives `404`) |
+| Every source fails | As if the sources were required: there is nothing to return |
+
+When several sources decide the response, the first in config order wins, so the result is
+deterministic. A request takes as long as its slowest source, which is bounded by that backend's
+timeout and retries. Sources get the same request headers as proxied routes (`Authorization`,
+`Accept-Language`, `X-Request-Id`, …), except the conditional headers (`If-None-Match`,
+`If-Modified-Since`), which apply to a single resource, and with `Accept: application/json`. The
+client's query string is not forwarded, because it isn't clear which source it is meant for; put
+parameters in `exposeAs` and use them in the source paths instead.
+
+`generate` rejects aggregates that refer to an unknown backend, use a parameter `exposeAs` doesn't
+define, use the same `as` twice, or have the same path as another aggregate or a `GET` endpoint.
+With aggregates configured, no backend may be named `aggregates`. `bffgen generate-docs`
+documents aggregates in the OpenAPI spec. Python projects generate the same routes in
+`routers/aggregates_router.py`.
+
+For aggregation that needs your own logic (transforming or joining the data, calls that depend on
+each other), write a controller; see the [Node.js Aggregation Guide](NODEJS_AGGREGATION.md).
+
 ## Error responses
 
 When a backend fails, the route answers with one of these statuses and a JSON body:
@@ -159,7 +232,7 @@ Generated routes use these files in your project:
 
 | File | Purpose |
 |---|---|
-| `src/utils/upstream.js` | Forwards requests and maps failures to responses |
+| `src/utils/upstream.js` | Forwards requests, runs aggregates and maps failures to responses |
 | `src/services/httpClient.js` | HTTP client with timeouts and retries |
 | `src/utils/circuit-breaker.js` | Circuit breaker |
 | `src/middleware/authorize.js` | Role checks for endpoints with `roles` |
@@ -179,8 +252,9 @@ marker are never touched, so local edits survive until bffgen ships a new runtim
 
 `bffgen generate` owns the files it generates for each backend: `src/routes/<backend>.js`,
 `src/controllers/<backend>.controller.js`, `src/controllers/<backend>.controller.basic.js` and
-`src/services/<backend>.service.js` (Python: `routers/<backend>_router.py`,
-`services/<backend>_service.py` and `routers/__init__.py`). You can edit any of them:
+`src/services/<backend>.service.js`, plus `src/routes/aggregates.js` (Python:
+`routers/<backend>_router.py`, `services/<backend>_service.py`, `routers/aggregates_router.py`
+and `routers/__init__.py`). You can edit any of them:
 
 - A file that still has the content bffgen last wrote is regenerated with your config changes.
 - A file you edited is **kept** and reported (`✋ Kept …`). It no longer receives config changes.

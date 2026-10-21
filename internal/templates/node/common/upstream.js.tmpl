@@ -1,10 +1,11 @@
 /**
  * Upstream proxy runtime
- * Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+ * Managed by bffgen (bffgen:runtime 2). `bffgen generate` replaces this file when
  * bffgen ships a newer version and keeps your previous copy as upstream.js.bak.
  *
  * Generated routes call createUpstream(...).proxy(req, res, route) to forward a
- * request to a backend service. Works with Express (req, res) and Fastify (request, reply).
+ * request to a backend service, and aggregate(req, res, sources) to combine several backend
+ * responses into one. Works with Express (req, res) and Fastify (request, reply).
  *
  * Each backend gets one HttpClient (per-attempt timeout, retries for idempotent methods)
  * and one CircuitBreaker, shared by all of its routes. Settings come from bffgen.config.json
@@ -21,6 +22,13 @@
  *   503 Service Unavailable  CIRCUIT_OPEN          circuit open; Retry-After gives the seconds left
  *   502 Bad Gateway          UPSTREAM_ERROR        backend returned 5xx (its body is not passed on)
  * with the body { error, message, code, service }.
+ *
+ * Aggregates call their sources in parallel and answer 200 with
+ *   { data: { <as>: <parsed body or null> }, sources: { <as>: "ok" | <error code> } }
+ * A failed source that is not required leaves its data null (partial response, sent with
+ * Cache-Control: no-store). A failed required source, or every source failing, fails the whole
+ * aggregate the same way as a proxied route: 502/503/504 as above, or the backend's 4xx passed
+ * through. When several sources decide the response, the first one in config order wins.
  */
 
 const HttpClient = require('../services/httpClient');
@@ -50,6 +58,9 @@ const FORWARDED_RESPONSE_HEADERS = [
 ];
 
 const NO_BODY_STATUSES = new Set([204, 205, 304]);
+
+// Conditional request headers apply to one resource; an aggregate combines several
+const CONDITIONAL_REQUEST_HEADERS = ['if-modified-since', 'if-none-match'];
 
 const upstreams = new Map();
 
@@ -222,6 +233,84 @@ class Upstream {
 }
 
 /**
+ * Parse a backend's successful response body: JSON for JSON content types, otherwise text.
+ * Empty bodies are null.
+ */
+function parseBody({ status, headers, body }, service) {
+  if (NO_BODY_STATUSES.has(status) || body.length === 0) {
+    return null;
+  }
+  const text = body.toString('utf8');
+  if (!/[/+]json\b/.test(headers.get('content-type') || '')) {
+    return text;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (cause) {
+    throw new UpstreamError('UPSTREAM_ERROR', `${service} returned invalid JSON`, { service, upstreamStatus: status, cause });
+  }
+}
+
+/**
+ * Call one aggregate source. Resolves to { data } on success, { response } for a 4xx answer,
+ * or { error } (UpstreamError or CircuitOpenError) for a failure.
+ */
+async function callSource({ upstream, path: template }, params, headers) {
+  const path = buildPath(template, params);
+  try {
+    const response = await upstream.send(path, { method: 'GET', headers });
+    if (response.status >= 400) {
+      logger.warn(`GET ${upstream.name}${path} answered ${response.status}`);
+      return { response };
+    }
+    return { data: parseBody(response, upstream.name) };
+  } catch (error) {
+    if (!(error instanceof UpstreamError || error instanceof CircuitOpenError)) {
+      throw error;
+    }
+    const log = error instanceof CircuitOpenError ? logger.debug : logger.warn;
+    log.call(logger, `GET ${upstream.name}${path} failed: ${error.code} (${error.message})`);
+    return { error };
+  }
+}
+
+/**
+ * Call several backends in parallel and answer with their combined responses (see the top of
+ * this file for the response format).
+ * @param {Object} req - Express request or Fastify request
+ * @param {Object} res - Express response or Fastify reply
+ * @param {Array<{as: string, upstream: Upstream, path: string, required: boolean}>} sources -
+ *   GET requests to make; path may contain :params, filled from the request's path params
+ */
+async function aggregate(req, res, sources) {
+  const headers = requestHeaders(req);
+  for (const name of CONDITIONAL_REQUEST_HEADERS) {
+    delete headers[name];
+  }
+  headers.accept = 'application/json';
+
+  const results = await Promise.all(sources.map(source => callSource(source, req.params, headers)));
+
+  const allFailed = results.every(result => !('data' in result));
+  const decisive = results.find((result, i) => !('data' in result) && (sources[i].required || allFailed));
+  if (decisive) {
+    return decisive.error ? sendError(res, decisive.error) : sendResponse(res, decisive.response, req.method);
+  }
+
+  const body = { data: {}, sources: {} };
+  results.forEach((result, i) => {
+    const { as } = sources[i];
+    body.data[as] = 'data' in result ? result.data : null;
+    body.sources[as] = 'data' in result ? 'ok' : result.error ? result.error.code : 'UPSTREAM_CLIENT_ERROR';
+  });
+  if (results.some(result => !('data' in result))) {
+    // A partial response must not be cached as if it were complete
+    res.header('cache-control', 'no-store');
+  }
+  return res.status(200).send(body);
+}
+
+/**
  * Get the upstream for a backend, creating it on first use. Routes for the same backend
  * share one instance.
  */
@@ -234,6 +323,7 @@ function createUpstream(name, options) {
 
 module.exports = {
   createUpstream,
+  aggregate,
   buildPath,
   queryStringOf
 };

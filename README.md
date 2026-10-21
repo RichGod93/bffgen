@@ -159,6 +159,7 @@ uvicorn main:app --reload
 - **API Documentation** - Swagger UI at `/api-docs` with OpenAPI 3.0 spec
 - **Structured Logging** - Winston (Express) or Pino (Fastify) with file rotation
 - **Resilient Routes** - Generated routes (Express, Fastify and FastAPI) forward path params and query strings, with per-backend timeouts, retries for idempotent requests, a circuit breaker, and 502/503/504 on backend failure ([Node.js](docs/NODEJS_ROUTES.md), [Python](docs/PYTHON_SUPPORT.md#what-generated-routes-do))
+- **Aggregation Routes** - `"aggregates"` in the config combine several backends in one `GET` endpoint, called in parallel; an optional backend that fails leaves its data `null` (partial response) instead of failing the request (Express, Fastify and FastAPI; [details](docs/NODEJS_ROUTES.md#aggregates))
 - **CLI Flags** - Non-interactive mode with full customization
 
 ### 🚀 **Infrastructure Scaffolding (NEW)**

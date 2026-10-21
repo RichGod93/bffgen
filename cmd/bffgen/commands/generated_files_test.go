@@ -172,6 +172,10 @@ func nodeTestProject(t *testing.T, framework string) string {
 				endpoint("GET", "/orders", "/api/orders"),
 			}},
 		},
+		"aggregates": []interface{}{map[string]interface{}{"name": "dashboard", "exposeAs": "/api/dashboard/:id", "sources": []interface{}{
+			map[string]interface{}{"backend": "users", "path": "/users/:id", "as": "user", "required": true},
+			map[string]interface{}{"backend": "orders", "path": "/orders?userId=:id", "as": "orders"},
+		}}},
 	}
 	data, _ := json.MarshalIndent(config, "", "  ")
 	writeFile(t, filepath.Join(dir, "bffgen.config.json"), string(data))
