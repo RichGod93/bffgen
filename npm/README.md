@@ -5,6 +5,8 @@
 listing your backend services.
 
 [![npm version](https://img.shields.io/npm/v/bffgen.svg)](https://www.npmjs.com/package/bffgen)
+[![Monthly downloads](https://img.shields.io/npm/dm/bffgen.svg)](https://npm-stat.com/charts.html?package=bffgen)
+[![Total downloads](https://img.shields.io/npm/dt/bffgen.svg?label=total%20downloads)](https://npm-stat.com/charts.html?package=bffgen)
 [![CI](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml/badge.svg)](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/RichGod93/bffgen/blob/master/LICENSE)
 
