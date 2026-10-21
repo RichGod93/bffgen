@@ -114,6 +114,13 @@ func generatePython() error {
 	if err != nil {
 		return fmt.Errorf("failed to check runtime files: %w", err)
 	}
+	if conflict := runtimeConflict(actions, filepath.Join("utils", "authorize.py")); conflict != "" {
+		for _, data := range generated {
+			if data.AnyRoles {
+				return fmt.Errorf("endpoints use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
+			}
+		}
+	}
 	plan, err := planGeneratedWrites(".", files, forceMode)
 	if err != nil {
 		return err
@@ -149,7 +156,7 @@ func generatePython() error {
 		if gitignoreChanged {
 			fmt.Println("🔍 Would update .gitignore so .bffgen/generated.json is committed")
 		}
-		if checkMode && (len(actions) > 0 || generatedChangesPending(plan.Actions) || mainChanged || gitignoreChanged) {
+		if checkMode && (runtimeChangesPending(actions) || generatedChangesPending(plan.Actions) || mainChanged || gitignoreChanged) {
 			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
 		fmt.Println()
@@ -210,6 +217,7 @@ type pythonEndpointData struct {
 	HandlerName  string
 	RequiresAuth bool
 	Roles        []string // any one of these is required (implies RequiresAuth)
+	RolesArgs    string   // Roles as Python string arguments, e.g. "admin", "support"
 	HasBody      bool
 }
 
@@ -327,6 +335,7 @@ func buildPythonBackend(backend map[string]interface{}) (*pythonBackendData, err
 			HandlerName:  handler,
 			RequiresAuth: requiresAuth,
 			Roles:        roles,
+			RolesArgs:    pythonStringArgs(roles),
 			HasBody:      method != "GET" && method != "HEAD",
 		})
 	}

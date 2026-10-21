@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -76,6 +77,7 @@ func generateNodeJS() error {
 	files := map[string]string{}
 	var services []string
 	names := backendNames{}
+	usesRoles := false
 	for _, backend := range backends {
 		backendMap, ok := backend.(map[string]interface{})
 		if !ok {
@@ -102,6 +104,11 @@ func generateNodeJS() error {
 			return fmt.Errorf("backend %s: %w", serviceName, err)
 		}
 		services = append(services, serviceName)
+		for _, e := range endpoints {
+			if endpoint, ok := e.(map[string]interface{}); ok && endpoint["roles"] != nil {
+				usesRoles = true // validated by renderNodeJSBackendFiles
+			}
+		}
 	}
 
 	progress.Success("Configuration loaded")
@@ -112,13 +119,19 @@ func generateNodeJS() error {
 	if err != nil {
 		return fmt.Errorf("failed to check runtime files: %w", err)
 	}
+	if conflict := runtimeConflict(runtimeActions, filepath.Join("src", "middleware", "authorize.js")); conflict != "" && usesRoles {
+		return fmt.Errorf("endpoints use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
+	}
 	plan, err := planGeneratedWrites(".", files, forceMode)
 	if err != nil {
 		return err
 	}
-	indexFixed, err := fixInvalidTokenStatus(filepath.Join("src", "index.js"), false)
-	if err != nil {
-		return err
+	indexPath := filepath.Join("src", "index.js")
+	var indexFix *legacyFix
+	if usesRoles {
+		if indexFix, err = planInvalidTokenStatusFix(indexPath); err != nil {
+			return err
+		}
 	}
 
 	// Generated routes require the runtime files; create or upgrade them first
@@ -138,13 +151,14 @@ func generateNodeJS() error {
 	plan.print(write)
 	actions := plan.Actions
 
-	if indexFixed {
+	if indexFix != nil {
 		if write {
-			if _, err := fixInvalidTokenStatus(filepath.Join("src", "index.js"), true); err != nil {
+			if err := indexFix.apply(); err != nil {
 				return err
 			}
 		}
-		fmt.Printf("%s src/index.js: invalid or expired tokens get 401 instead of 403 (403 now means a missing role)\n", pick(write, "♻️  Updated", "🔍 Would update"))
+		fmt.Printf("%s %s: invalid or expired tokens get 401 instead of 403, since 403 now means a missing role", pick(write, "♻️  Updated", "🔍 Would update"), indexPath)
+		fmt.Printf(" (previous copy: %s)\n", indexFix.backup)
 	}
 
 	indexChanged, err := autoRegisterRoutes(framework, services, write)
@@ -159,7 +173,7 @@ func generateNodeJS() error {
 	}
 
 	if !write {
-		if checkMode && (len(runtimeActions) > 0 || generatedChangesPending(actions) || indexChanged || indexFixed) {
+		if checkMode && (runtimeChangesPending(runtimeActions) || generatedChangesPending(actions) || indexChanged || indexFix != nil) {
 			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
 		fmt.Println()
@@ -187,28 +201,62 @@ func generateNodeJS() error {
 	return nil
 }
 
+// jsStringArray renders values as a JS array literal, e.g. ['admin', 'support']
+func jsStringArray(values []string) string {
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = "'" + template.JSEscapeString(v) + "'"
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// pythonStringArgs renders values as Python string arguments, e.g. "admin", "support"
+func pythonStringArgs(values []string) string {
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = strconv.Quote(v)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // legacyInvalidTokenStatus matches the line projects made before bffgen 3.8 used to answer an
 // invalid or expired token with 403 (in src/index.js; generated Fastify routes use that check).
 // RFC 9110: 401 means not authenticated, 403 authenticated but not allowed (a missing role).
 var legacyInvalidTokenStatus = regexp.MustCompile(`(return (?:reply|res)\.status\()403(\)\.(?:send|json)\(\{ error: 'Invalid or expired token' \}\);)`)
 
-// fixInvalidTokenStatus replaces that exact line with its 401 version; the rest of src/index.js
-// is the user's. It reports whether the file needs (or, with write, got) the change.
-func fixInvalidTokenStatus(path string, write bool) (bool, error) {
+// legacyFix is a planned one-line change to a file the user owns; apply saves the old copy first
+type legacyFix struct {
+	path, backup string
+	old, updated []byte
+}
+
+func (f *legacyFix) apply() error {
+	if err := os.WriteFile(f.backup, f.old, utils.ProjectFilePerm); err != nil {
+		return err
+	}
+	return os.WriteFile(f.path, f.updated, utils.ProjectFilePerm)
+}
+
+// planInvalidTokenStatusFix plans replacing that exact line with its 401 version; the rest of
+// src/index.js is the user's. Only projects that use roles get it: there, a 403 for a bad token
+// would be indistinguishable from a missing role. It returns nil if nothing needs to change.
+func planInvalidTokenStatusFix(path string) (*legacyFix, error) {
 	content, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if !legacyInvalidTokenStatus.Match(content) {
-		return false, nil
+		return nil, nil
 	}
-	if !write {
-		return true, nil
-	}
-	return true, os.WriteFile(path, legacyInvalidTokenStatus.ReplaceAll(content, []byte("${1}401${2}")), utils.ProjectFilePerm)
+	return &legacyFix{
+		path:    path,
+		backup:  backupPath("", path),
+		old:     content,
+		updated: legacyInvalidTokenStatus.ReplaceAll(content, []byte("${1}401${2}")),
+	}, nil
 }
 
 // endpointRoles returns an endpoint's "roles": a non-empty list of role names, any one of which
@@ -337,6 +385,7 @@ func renderNodeJSRouteFile(serviceName string, backend map[string]interface{}, f
 			BackendPath:  backendPath,
 			RequiresAuth: requiresAuth,
 			Roles:        roles,
+			RolesJS:      jsStringArray(roles),
 		})
 	}
 

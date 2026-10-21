@@ -10,6 +10,11 @@ status codes clients see when a backend fails.
 
 ## Configuration
 
+The config format is described by the JSON Schema
+[`schemas/bffgen-config.json`](../schemas/bffgen-config.json), which new configs reference in
+`$schema` so editors can validate and autocomplete them. `bffgen config validate` checks a config
+with the same rules as `bffgen generate`.
+
 ```json
 {
   "backends": [
@@ -121,8 +126,14 @@ The demo `/api/auth/login` issues tokens with `role: "user"`. Replace it with yo
 provider, or issue tokens with the roles your endpoints need.
 
 Projects created before v3.8.0 answered an invalid or expired token with 403 in Fastify routes
-(the check in `src/index.js`). `bffgen generate` changes that line to 401, so 403 always means a
-missing role; nothing else in `src/index.js` is changed.
+(the check in `src/index.js`). Once an endpoint has `roles`, `bffgen generate` changes that line
+to 401, so 403 always means a missing role; nothing else in `src/index.js` is changed, and the
+previous copy is saved as `src/index.js.bak`. If `src/middleware/authorize.js` is a file of your
+own (no `bffgen:runtime` marker), it is kept, and `generate` asks you to rename it before it
+generates endpoints with `roles`.
+
+401 responses carry `WWW-Authenticate: Bearer` (RFC 9110), with `error="invalid_token"` for an
+invalid, expired or not-yet-valid token.
 
 ## Error responses
 

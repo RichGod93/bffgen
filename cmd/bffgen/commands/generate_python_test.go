@@ -459,3 +459,77 @@ func TestPythonRouter_Roles(t *testing.T) {
 		t.Errorf("roles-only router imports\n%s", router)
 	}
 }
+
+func TestValidatePythonConfig(t *testing.T) {
+	valid := `{"backends": [
+		{"name": "users", "baseUrl": "http://localhost:4001", "endpoints": [
+			{"method": "GET", "path": "/api/users/{id}", "requiresAuth": true},
+			{"method": "DELETE", "path": "/api/users/{id}", "roles": ["admin"]}]},
+		{"name": "orders", "baseUrl": "http://localhost:4002", "endpoints": [{"method": "GET", "path": "/api/orders"}]}]}`
+	dir := pythonTestProject(t, valid, "include_routers(app)\n")
+	if got := detectProjectType(); got != "python" {
+		t.Fatalf("detectProjectType = %q, want python", got)
+	}
+	if err := validateProjectConfig(); err != nil {
+		t.Errorf("valid Python config rejected: %v", err)
+	}
+
+	for name, tc := range map[string]struct{ config, want string }{
+		"no baseUrl":      {`{"backends": [{"name": "a", "endpoints": [{"method": "GET", "path": "/x"}]}]}`, "baseUrl is required"},
+		"invalid roles":   {`{"backends": [{"name": "a", "baseUrl": "http://h", "endpoints": [{"method": "GET", "path": "/x", "roles": "admin"}]}]}`, "roles"},
+		"bad method":      {`{"backends": [{"name": "a", "baseUrl": "http://h", "endpoints": [{"method": "TRACE", "path": "/x"}]}]}`, "unsupported method"},
+		"colliding names": {`{"backends": [{"name": "a-b", "baseUrl": "http://h", "endpoints": [{"method": "GET", "path": "/x"}]}, {"name": "a_b", "baseUrl": "http://h", "endpoints": [{"method": "GET", "path": "/y"}]}]}`, "a_b"},
+		"no endpoints":    {`{"backends": [{"name": "a", "baseUrl": "http://h", "endpoints": []}]}`, "no endpoints"},
+		"no backends":     {`{"project": {}}`, "backends"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var config map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.config), &config); err != nil {
+				t.Fatal(err)
+			}
+			errs, _, _ := validatePythonConfigStructure(config)
+			if len(errs) == 0 || !strings.Contains(strings.Join(errs, "\n"), tc.want) {
+				t.Errorf("got %v, want an error containing %q", errs, tc.want)
+			}
+		})
+	}
+
+	// A config generate rejects is rejected by validate too
+	if err := os.WriteFile(filepath.Join(dir, pythonConfigFile), []byte(`{"backends": [{"name": "a", "endpoints": [{"method": "GET", "path": "/x"}]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProjectConfig(); err == nil {
+		t.Error("validate accepted a config without baseUrl")
+	}
+	if err := generatePython(); err == nil {
+		t.Error("generate accepted a config without baseUrl")
+	}
+}
+
+func TestGeneratePython_KeepsUserAuthorizeFile(t *testing.T) {
+	dir := pythonTestProject(t, pythonTestConfig, "include_routers(app)\n")
+	own := "def require_admin():\n    pass\n"
+	if err := os.MkdirAll("utils", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("utils", "authorize.py"), []byte(own), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := generatePython(); err != nil {
+		t.Fatal(err)
+	}
+	if content, _ := os.ReadFile(filepath.Join("utils", "authorize.py")); string(content) != own {
+		t.Fatal("user's utils/authorize.py was replaced")
+	}
+
+	roles := strings.Replace(pythonTestConfig, `"path": "/api/x"`, `"path": "/api/x", "roles": ["admin"]`, 1)
+	if err := os.WriteFile(pythonConfigFile, []byte(roles), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := generatePython(); err == nil || !strings.Contains(err.Error(), "authorize.py") {
+		t.Errorf("roles with the user's authorize.py in the way: err = %v", err)
+	}
+	if content, _ := os.ReadFile(filepath.Join(dir, "routers", "api_router.py")); strings.Contains(string(content), "require_roles") {
+		t.Error("router with roles written although generate failed")
+	}
+}

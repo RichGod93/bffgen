@@ -6,7 +6,7 @@
  * Endpoints with "roles": ["admin", ...] in bffgen.config.json get authorize([...]) after
  * authentication. Works as Express middleware (req, res, next) and as a Fastify preHandler
  * hook (request, reply, done). The user needs at least one of the listed roles:
- *   401 Unauthorized  UNAUTHENTICATED    no authenticated user on the request
+ *   401 Unauthorized  UNAUTHENTICATED    no authenticated user on the request (WWW-Authenticate: Bearer)
  *   403 Forbidden     INSUFFICIENT_ROLE  authenticated, but none of the required roles
  * with the body { error, message, code }. The required roles are not revealed.
  *
@@ -66,6 +66,7 @@ function hasAnyRole(user, roles) {
 function authorize(roles) {
   return function authorizeRoles(req, res, next) {
     if (!req.user) {
+      res.header('WWW-Authenticate', 'Bearer');
       res.status(401).send({ error: 'Unauthorized', message: 'Authentication required', code: 'UNAUTHENTICATED' });
       return;
     }

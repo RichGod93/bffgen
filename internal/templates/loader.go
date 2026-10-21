@@ -80,6 +80,7 @@ type RouteEndpointData struct {
 	BackendPath  string // path on the backend service; :params are filled from Path at runtime
 	RequiresAuth bool
 	Roles        []string // any one of these is required (implies RequiresAuth)
+	RolesJS      string   // Roles as a JS array literal, e.g. ['admin', 'support']
 }
 
 // EndpointData represents an API endpoint

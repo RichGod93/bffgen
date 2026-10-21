@@ -60,6 +60,9 @@ const show = r => JSON.stringify({ status: r.status, body: r.body });
 
   r = await call('/api/users/42', { headers: { authorization: '' } });
   check('missing token -> 401', r.status === 401, show(r));
+  check('401 has a WWW-Authenticate: Bearer challenge (RFC 9110)', /^Bearer\b/.test(r.headers.get('www-authenticate') || ''), r.headers.get('www-authenticate'));
+  r = await call('/api/users/42', bearer(sign({ nbf: Math.floor(Date.now() / 1000) + 600 })));
+  check('not-yet-valid token (nbf in the future) -> 401', r.status === 401, show(r));
 
   // tampered: payload changed after signing, so the signature no longer matches
   const [head, , sig] = token.split('.');

@@ -210,8 +210,12 @@ func generatePaths(backends []interface{}) map[string]interface{} {
 			path, _ := endpoint["exposeAs"].(string)
 			method, _ := endpoint["method"].(string)
 			requiresAuth, _ := endpoint["requiresAuth"].(bool)
-			roles, _ := endpointRoles(endpoint) // invalid roles are reported by generate and config validate
-			requiresAuth = requiresAuth || len(roles) > 0
+			roles, err := endpointRoles(endpoint)
+			if err != nil {
+				// generate rejects this config; document the endpoint as protected, never as public
+				fmt.Printf("⚠️  %s %s: %v\n", method, path, err)
+			}
+			requiresAuth = requiresAuth || endpoint["roles"] != nil
 
 			if path == "" || method == "" {
 				continue

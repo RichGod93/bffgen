@@ -28,7 +28,7 @@ upstream = create_upstream(
     {{printf "%q" .Path}},
     methods={{if eq .Method "GET"}}["GET", "HEAD"]{{else}}[{{printf "%q" .Method}}]{{end}},
 {{- if .Roles}}
-    dependencies=[Depends(require_roles({{range $i, $r := .Roles}}{{if $i}}, {{end}}{{printf "%q" $r}}{{end}}))],
+    dependencies=[Depends(require_roles({{.RolesArgs}}))],
 {{- else if .RequiresAuth}}
     dependencies=[Depends(require_authentication)],
 {{- end}}

@@ -24,7 +24,7 @@ async function {{.FunctionName}}(fastify) {
     onRequest: [fastify.authenticate],
 {{- end}}
 {{- if .Roles}}
-    preHandler: [authorize([{{range $i, $r := .Roles}}{{if $i}}, {{end}}'{{js $r}}'{{end}}])],
+    preHandler: [authorize({{.RolesJS}})],
 {{- end}}
     schema: {
       description: '{{.Method}} {{js .Path}}',

@@ -398,11 +398,26 @@ func TestRolesInValidateAndDocs(t *testing.T) {
 		)},
 	}
 	errs := validateNodeJSConfigStructure(config)
-	if len(errs) != 1 || !strings.Contains(errs[0], "endpoint 1") || !strings.Contains(errs[0], "roles") {
-		t.Errorf("config validate: got %v, want one roles error for endpoint 1", errs)
+	if len(errs) != 1 || !strings.Contains(errs[0], "POST /api/users") || !strings.Contains(errs[0], "roles") {
+		t.Errorf("config validate: got %v, want one roles error for POST /api/users", errs)
 	}
 
+	// validate applies generate's checks too, e.g. colliding backend names
+	withRoles := config["backends"]
+	config["backends"] = []interface{}{
+		map[string]interface{}{"name": "user-service", "baseUrl": "http://h", "endpoints": []interface{}{map[string]interface{}{"path": "/a", "method": "GET", "exposeAs": "/api/a"}}},
+		map[string]interface{}{"name": "user_service", "baseUrl": "http://h", "endpoints": []interface{}{map[string]interface{}{"path": "/b", "method": "GET", "exposeAs": "/api/b"}}},
+	}
+	if errs := validateNodeJSConfigStructure(config); len(errs) != 1 || !strings.Contains(errs[0], "user_service") {
+		t.Errorf("config validate with colliding names: got %v", errs)
+	}
+	config["backends"] = withRoles
+
 	paths := generatePaths(config["backends"].([]interface{}))
+	post := paths["/api/users"].(map[string]interface{})["post"].(map[string]interface{})
+	if post["security"] == nil {
+		t.Error("OpenAPI documents an endpoint with invalid roles as public")
+	}
 	get := paths["/api/users"].(map[string]interface{})["get"].(map[string]interface{})
 	responses := get["responses"].(map[string]interface{})
 	if responses["403"] == nil || responses["401"] == nil || get["security"] == nil {
