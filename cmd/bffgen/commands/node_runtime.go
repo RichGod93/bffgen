@@ -15,20 +15,16 @@ import (
 	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
-// Runtime versions that generated routes expect. Each runtime template carries a
-// "bffgen:runtime <n>" marker. Bump the number here and in the templates whenever newly
-// generated routes need a changed runtime.
-const (
-	nodeRuntimeVersion   = 1
-	pythonRuntimeVersion = 1
-)
-
+// Each runtime template carries a "bffgen:runtime <n>" marker. Bump a file's version here and
+// in its template whenever newly generated routes need a changed copy of that file; only files
+// whose version changed are replaced in existing projects.
 var runtimeMarker = regexp.MustCompile(`bffgen:runtime (\d+)`)
 
 // runtimeFile maps a template to the project file it is written to
 type runtimeFile struct {
 	template string
 	path     string
+	version  int // runtime version generated routes expect
 	// userIfUnmarked: bffgen never wrote this file without a marker (it was added in 3.8), so an
 	// existing file without one is the user's own and is never replaced
 	userIfUnmarked bool
@@ -36,18 +32,18 @@ type runtimeFile struct {
 
 // nodeRuntimeFiles are written by init and kept current by generate
 var nodeRuntimeFiles = []runtimeFile{
-	{template: "upstream.js.tmpl", path: filepath.Join("src", "utils", "upstream.js")},
-	{template: "service-base.js.tmpl", path: filepath.Join("src", "services", "httpClient.js")},
-	{template: "circuit-breaker.js.tmpl", path: filepath.Join("src", "utils", "circuit-breaker.js")},
-	{template: "authorize.js.tmpl", path: filepath.Join("src", "middleware", "authorize.js"), userIfUnmarked: true},
+	{template: "upstream.js.tmpl", version: 2, path: filepath.Join("src", "utils", "upstream.js")},
+	{template: "service-base.js.tmpl", version: 1, path: filepath.Join("src", "services", "httpClient.js")},
+	{template: "circuit-breaker.js.tmpl", version: 1, path: filepath.Join("src", "utils", "circuit-breaker.js")},
+	{template: "authorize.js.tmpl", version: 1, path: filepath.Join("src", "middleware", "authorize.js"), userIfUnmarked: true},
 }
 
 // pythonRuntimeFiles are written by init and kept current by generate (templates under python/common)
 var pythonRuntimeFiles = []runtimeFile{
-	{template: "upstream.py.tmpl", path: filepath.Join("utils", "upstream.py")},
-	{template: "http_client.py.tmpl", path: filepath.Join("services", "http_client.py")},
-	{template: "circuit_breaker.py.tmpl", path: filepath.Join("utils", "circuit_breaker.py")},
-	{template: "authorize.py.tmpl", path: filepath.Join("utils", "authorize.py"), userIfUnmarked: true},
+	{template: "upstream.py.tmpl", version: 2, path: filepath.Join("utils", "upstream.py")},
+	{template: "http_client.py.tmpl", version: 1, path: filepath.Join("services", "http_client.py")},
+	{template: "circuit_breaker.py.tmpl", version: 1, path: filepath.Join("utils", "circuit_breaker.py")},
+	{template: "authorize.py.tmpl", version: 1, path: filepath.Join("utils", "authorize.py"), userIfUnmarked: true},
 }
 
 // runtimeAction describes what ensureRuntimeFiles did (or would do) to one file
@@ -87,7 +83,7 @@ func ensureNodeRuntimeFiles(projectDir, framework string, write bool) ([]runtime
 	render := func(name string) (string, error) {
 		return loader.RenderTemplate(framework, name, &templates.TemplateData{Framework: framework})
 	}
-	return ensureRuntimeFiles(projectDir, nodeRuntimeFiles, nodeRuntimeVersion, render, write)
+	return ensureRuntimeFiles(projectDir, nodeRuntimeFiles, render, write)
 }
 
 // ensurePythonRuntimeFiles keeps the Python runtime files in projectDir current (see ensureRuntimeFiles)
@@ -96,15 +92,15 @@ func ensurePythonRuntimeFiles(projectDir string, write bool) ([]runtimeAction, e
 		content, err := templates.TemplateFS.ReadFile("python/common/" + name)
 		return string(content), err
 	}
-	return ensureRuntimeFiles(projectDir, pythonRuntimeFiles, pythonRuntimeVersion, render, write)
+	return ensureRuntimeFiles(projectDir, pythonRuntimeFiles, render, write)
 }
 
-// ensureRuntimeFiles makes sure the runtime files in projectDir exist and match version.
+// ensureRuntimeFiles makes sure the runtime files in projectDir exist and match their version.
 // Missing files are created. A file with an older (or no) runtime marker is replaced, and the
 // previous copy is kept as <file>.bak. Files that already carry the current marker are left
 // alone, including any local edits. With write=false nothing is written and the returned
 // actions describe what would happen; earlier backups are never overwritten (see backupPath).
-func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, render func(string) (string, error), write bool) ([]runtimeAction, error) {
+func ensureRuntimeFiles(projectDir string, files []runtimeFile, render func(string) (string, error), write bool) ([]runtimeAction, error) {
 	var actions []runtimeAction
 	for _, file := range files {
 		path := filepath.Join(projectDir, file.path)
@@ -116,7 +112,7 @@ func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, ren
 			action = runtimeAction{Path: file.path, Action: "created"}
 		case err != nil:
 			return actions, err
-		case runtimeVersionOf(existing) == version:
+		case runtimeVersionOf(existing) == file.version:
 			continue
 		case runtimeVersionOf(existing) == 0 && file.userIfUnmarked:
 			actions = append(actions, runtimeAction{Path: file.path, Action: "conflict"})

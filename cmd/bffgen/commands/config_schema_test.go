@@ -61,6 +61,10 @@ func TestConfigSchema_AcceptsShippedConfigs(t *testing.T) {
 		"circuitBreaker": {"recoveryTimeout": 30000},
 		"endpoints": [{"method": "DELETE", "path": "/api/users/{id}", "upstreamPath": "/users/{id}", "roles": ["admin", "support"]}]}]}`
 
+	docs["python with aggregates"] = `{"backends": [{"name": "users", "baseUrl": "http://localhost:4001"}],
+		"aggregates": [{"name": "me", "path": "/api/me/{id}", "roles": ["user"], "sources": [
+			{"backend": "users", "path": "/users/{id}?expand=profile", "as": "user", "required": true}]}]}`
+
 	for name, doc := range docs {
 		if errs := validateAgainstConfigSchema(t, doc); len(errs) > 0 {
 			t.Errorf("%s doesn't match the schema:\n%s", name, strings.Join(errs, "\n"))
@@ -73,14 +77,18 @@ func TestConfigSchema_RejectsInvalidConfigs(t *testing.T) {
 		return `{"backends": [{"name": "a", "baseUrl": "http://h", "endpoints": [{"method": "GET", "path": "/x"` + extra + `}]}]}`
 	}
 	for name, doc := range map[string]string{
-		"roles not a list":   endpoint(`, "roles": "admin"`),
-		"empty roles":        endpoint(`, "roles": []`),
-		"role with a space":  endpoint(`, "roles": ["super admin"]`),
-		"unsupported method": `{"backends": [{"name": "a", "endpoints": [{"method": "TRACE", "path": "/x"}]}]}`,
-		"no leading slash":   `{"backends": [{"name": "a", "endpoints": [{"method": "GET", "path": "x"}]}]}`,
-		"negative retries":   `{"backends": [{"name": "a", "retries": -1, "endpoints": []}]}`,
-		"bad duration":       `{"backends": [{"name": "a", "timeout": "soon", "endpoints": []}]}`,
-		"no backend name":    `{"backends": [{"endpoints": []}]}`,
+		"roles not a list":       endpoint(`, "roles": "admin"`),
+		"empty roles":            endpoint(`, "roles": []`),
+		"role with a space":      endpoint(`, "roles": ["super admin"]`),
+		"unsupported method":     `{"backends": [{"name": "a", "endpoints": [{"method": "TRACE", "path": "/x"}]}]}`,
+		"no leading slash":       `{"backends": [{"name": "a", "endpoints": [{"method": "GET", "path": "x"}]}]}`,
+		"negative retries":       `{"backends": [{"name": "a", "retries": -1, "endpoints": []}]}`,
+		"bad duration":           `{"backends": [{"name": "a", "timeout": "soon", "endpoints": []}]}`,
+		"no backend name":        `{"backends": [{"endpoints": []}]}`,
+		"aggregate w/o path":     `{"backends": [], "aggregates": [{"sources": [{"backend": "a", "path": "/x"}]}]}`,
+		"aggregate no source":    `{"backends": [], "aggregates": [{"exposeAs": "/x", "sources": []}]}`,
+		"aggregate POST":         `{"backends": [], "aggregates": [{"exposeAs": "/x", "method": "POST", "sources": [{"backend": "a", "path": "/x"}]}]}`,
+		"source without backend": `{"backends": [], "aggregates": [{"exposeAs": "/x", "sources": [{"path": "/x"}]}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if errs := validateAgainstConfigSchema(t, doc); len(errs) == 0 {

@@ -101,6 +101,39 @@ const show = r => JSON.stringify({ status: r.status, body: r.body });
   r = await call('/api/users/42');
   check('other backends unaffected by an open breaker', r.status === 200, show(r));
 
+  // Aggregates (after the breaker checks: they add failures to the users/orders/products breakers)
+  r = await call('/api/dashboard/42');
+  check('aggregate: 3 sources combined -> 200', r.status === 200 && r.body.data.user.url === '/api/users/42' &&
+    r.body.data.orders.url === '/api/orders?userId=42' && r.body.data.products.service === 'products', show(r));
+  check('aggregate: every source ok', JSON.stringify(r.body.sources) === '{"user":"ok","orders":"ok","products":"ok"}', show(r));
+  check('aggregate: authorization forwarded to sources', r.body.data.user.auth === true, show(r));
+  check('aggregate: complete response may be cached', r.headers.get('cache-control') !== 'no-store', r.headers.get('cache-control'));
+  r = await call('/api/dashboard/42', { method: 'HEAD' });
+  check('aggregate: HEAD answered without body', r.status === 200 && r.body === '', show(r));
+  r = await call('/api/dashboard/42', { headers: { authorization: '' } });
+  check('aggregate: missing token -> 401', r.status === 401, show(r));
+
+  r = await call('/api/degraded/42');
+  check('aggregate: optional sources failing -> 200 partial', r.status === 200 && r.body.data.user.url === '/api/users/42' &&
+    r.body.data.slow === null && r.body.data.inventory === null, show(r));
+  check('aggregate: failures reported per source', r.body.sources && r.body.sources.user === 'ok' && r.body.sources.slow === 'UPSTREAM_TIMEOUT' &&
+    ['UPSTREAM_UNAVAILABLE', 'CIRCUIT_OPEN'].includes(r.body.sources.inventory), show(r));
+  check('aggregate: partial response not cacheable', r.headers.get('cache-control') === 'no-store', r.headers.get('cache-control'));
+  check('aggregate: bounded by the slowest source timeout (2 x 2000 ms)', r.ms < 5000, `${r.ms} ms`);
+
+  r = await call('/api/dashboard/missing');
+  check('aggregate: required source 404 passed through', r.status === 404 && r.body.error === 'not found', show(r));
+  r = await call('/api/dashboard/fail');
+  check('aggregate: required source 5xx -> 502 UPSTREAM_ERROR', r.status === 502 && r.body.code === 'UPSTREAM_ERROR' && r.body.service === 'users', show(r));
+  check('aggregate: backend 5xx body not leaked', !JSON.stringify(r.body).includes('db.js'), show(r));
+  r = await call('/api/broken');
+  check('aggregate: every source failing -> 503 (first source decides)', r.status === 503 && ['UPSTREAM_UNAVAILABLE', 'CIRCUIT_OPEN'].includes(r.body.code), show(r));
+
+  r = await call('/api/admin/dashboard');
+  check('aggregate RBAC: token without the role -> 403', r.status === 403, show(r));
+  r = await call('/api/admin/dashboard', bearer(sign({ roles: ['admin'] })));
+  check('aggregate RBAC: token with the role -> 200', r.status === 200 && r.body.sources.users === 'ok', show(r));
+
   console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
   process.exit(failed ? 1 : 0);
 })();

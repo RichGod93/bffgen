@@ -221,6 +221,9 @@ func validatePythonConfig() error {
 	fmt.Println("✅ Configuration structure is valid")
 	fmt.Printf("   - %d backends configured\n", backends)
 	fmt.Printf("   - %d total endpoints\n", endpoints)
+	if aggregates, _ := config["aggregates"].([]interface{}); len(aggregates) > 0 {
+		fmt.Printf("   - %d aggregates\n", len(aggregates))
+	}
 	return nil
 }
 
@@ -233,6 +236,12 @@ func validatePythonConfigStructure(config map[string]interface{}) (errors []stri
 	}
 	if len(backends) == 0 {
 		errors = append(errors, "No backends configured")
+	}
+
+	aggregates, aggErr := parseAggregates(config, true)
+	usedByAggregates := map[string]bool{}
+	for _, name := range aggregateBackends(aggregates) {
+		usedByAggregates[name] = true
 	}
 
 	names := backendNames{}
@@ -253,7 +262,9 @@ func validatePythonConfigStructure(config map[string]interface{}) (errors []stri
 			continue
 		}
 		if data == nil {
-			errors = append(errors, fmt.Sprintf("Backend '%s': no endpoints configured", name))
+			if !usedByAggregates[name] {
+				errors = append(errors, fmt.Sprintf("Backend '%s': no endpoints configured", name))
+			}
 			continue
 		}
 		if err := names.add(data.ServiceName, "module:"+data.Module, "env:"+data.EnvKey); err != nil {
@@ -262,6 +273,16 @@ func validatePythonConfigStructure(config map[string]interface{}) (errors []stri
 		}
 		backendCount++
 		endpointCount += len(data.Endpoints)
+	}
+	if aggErr != nil {
+		errors = append(errors, aggErr.Error())
+	} else if len(aggregates) > 0 {
+		if other, ok := names["module:"+aggregatesFile]; ok {
+			errors = append(errors, fmt.Sprintf("Backend '%s': the name is reserved for the aggregates router; rename the backend", other))
+		}
+		if _, err := renderPythonAggregates(config, aggregates); err != nil {
+			errors = append(errors, err.Error())
+		}
 	}
 	return errors, backendCount, endpointCount
 }
@@ -364,6 +385,9 @@ func validateNodeJSConfig() error {
 		totalEndpoints += len(endpoints)
 	}
 	fmt.Printf("   - %d total endpoints\n", totalEndpoints)
+	if aggregates, _ := config["aggregates"].([]interface{}); len(aggregates) > 0 {
+		fmt.Printf("   - %d aggregates\n", len(aggregates))
+	}
 
 	return nil
 }
@@ -458,6 +482,12 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 		framework = "fastify"
 	}
 
+	aggregates, aggErr := parseAggregates(config, false)
+	usedByAggregates := map[string]bool{}
+	for _, name := range aggregateBackends(aggregates) {
+		usedByAggregates[name] = true
+	}
+
 	// Validate each backend
 	seenEndpoints := make(map[string]bool)
 	names := backendNames{}
@@ -484,7 +514,11 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 		// Validate endpoints
 		endpoints, ok := backend["endpoints"].([]interface{})
 		if !ok || len(endpoints) == 0 {
-			errors = append(errors, fmt.Sprintf("Backend '%s': no endpoints configured", name))
+			if !usedByAggregates[name] {
+				errors = append(errors, fmt.Sprintf("Backend '%s': no endpoints configured", name))
+			} else if err := names.add(name, "file:"+strings.ToLower(name), "env:"+nodeEnvKey(name), "id:"+nodeIdentifier(name)); err != nil {
+				errors = append(errors, err.Error())
+			}
 			continue
 		}
 
@@ -530,6 +564,17 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 		}
 		if err := renderNodeJSBackendFiles(map[string]string{}, name, backend, framework); err != nil {
 			errors = append(errors, fmt.Sprintf("Backend '%s': %v", name, err))
+		}
+	}
+
+	if aggErr != nil {
+		errors = append(errors, aggErr.Error())
+	} else if len(aggregates) > 0 {
+		if other, ok := names["file:"+aggregatesFile]; ok {
+			errors = append(errors, fmt.Sprintf("Backend '%s': the name is reserved for src/routes/%s.js; rename the backend", other, aggregatesFile))
+		}
+		if _, err := renderNodeAggregates(config, aggregates, framework); err != nil {
+			errors = append(errors, err.Error())
 		}
 	}
 

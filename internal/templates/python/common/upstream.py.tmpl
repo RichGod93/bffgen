@@ -1,10 +1,11 @@
 """
 Upstream proxy runtime
-Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+Managed by bffgen (bffgen:runtime 2). `bffgen generate` replaces this file when
 bffgen ships a newer version and keeps your previous copy as upstream.py.bak.
 
 Generated routers call create_upstream(...).proxy(request, method, path) to forward a
-request to a backend service.
+request to a backend service, and aggregate(request, sources) to combine several backend
+responses into one.
 
 Each backend gets one HttpClient (per-attempt timeout, retries for idempotent methods)
 and one CircuitBreaker, shared by all of its routes. Settings come from
@@ -22,13 +23,22 @@ Backend responses below 500 are passed through unchanged. Failures are answered 
   503 Service Unavailable  CIRCUIT_OPEN          circuit open; Retry-After gives the seconds left
   502 Bad Gateway          UPSTREAM_ERROR        backend returned 5xx (its body is not passed on)
 with the body {"error", "message", "code", "service"}.
+
+Aggregates call their sources in parallel and answer 200 with
+  {"data": {<as>: <parsed body or null>}, "sources": {<as>: "ok" | <error code>}}
+A failed source that is not required leaves its data null (partial response, sent with
+Cache-Control: no-store). A failed required source, or every source failing, fails the whole
+aggregate the same way as a proxied route: 502/503/504 as above, or the backend's 4xx passed
+through. When several sources decide the response, the first one in config order wins.
 """
 
+import asyncio
+import json
 import logging
 import math
 import os
 import re
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, NamedTuple, Optional, Sequence
 from urllib.parse import quote
 
 from dotenv import load_dotenv
@@ -63,6 +73,11 @@ FORWARDED_RESPONSE_HEADERS = (
 )
 
 NO_BODY_STATUSES = {204, 205, 304}
+
+# Conditional request headers apply to one resource; an aggregate combines several
+CONDITIONAL_REQUEST_HEADERS = ("if-modified-since", "if-none-match")
+
+_JSON_CONTENT_TYPE = re.compile(r"[/+]json\b")
 
 STATUS_TEXT = {502: "Bad Gateway", 503: "Service Unavailable", 504: "Gateway Timeout"}
 
@@ -218,11 +233,95 @@ class Upstream:
             log(f"{method} {self.name}{backend_path} failed: {error.code} ({error.message})")
             return error_response(error)
 
-        response_headers = {
-            name: response.headers[name] for name in FORWARDED_RESPONSE_HEADERS if name in response.headers
-        }
-        body = b"" if method == "HEAD" or response.status_code in NO_BODY_STATUSES else response.content
-        return Response(content=body, status_code=response.status_code, headers=response_headers)
+        return _pass_through(response, method)
+
+
+def _pass_through(response: Any, method: str) -> Response:
+    """The client's response for a backend response below 500"""
+    response_headers = {
+        name: response.headers[name] for name in FORWARDED_RESPONSE_HEADERS if name in response.headers
+    }
+    body = b"" if method == "HEAD" or response.status_code in NO_BODY_STATUSES else response.content
+    return Response(content=body, status_code=response.status_code, headers=response_headers)
+
+
+class Source(NamedTuple):
+    """One backend call of an aggregate"""
+
+    key: str  # "as" in the config: the key of this source's data in the response
+    upstream: Upstream
+    path: str  # backend path; may contain {params}, filled from the request's path params
+    required: bool = False
+
+
+class _SourceResult(NamedTuple):
+    data: Any = None
+    ok: bool = False
+    response: Any = None  # a 4xx backend response
+    error: Optional[Exception] = None  # UpstreamError or CircuitOpenError
+
+
+def _parse_body(response: Any, service: str) -> Any:
+    """A backend's successful response body: JSON for JSON content types, otherwise text"""
+    if response.status_code in NO_BODY_STATUSES or not response.content:
+        return None
+    if not _JSON_CONTENT_TYPE.search(response.headers.get("content-type", "")):
+        return response.text
+    try:
+        return json.loads(response.content)
+    except ValueError as error:
+        raise UpstreamError(
+            "UPSTREAM_ERROR", f"{service} returned invalid JSON", service, upstream_status=response.status_code
+        ) from error
+
+
+async def _call_source(source: Source, params: Mapping[str, Any], headers: Mapping[str, str]) -> _SourceResult:
+    upstream = source.upstream
+    path = build_path(source.path, params)
+    try:
+        response = await upstream.send(path, "GET", headers, None)
+        if response.status_code >= 400:
+            logger.warning(f"GET {upstream.name}{path} answered {response.status_code}")
+            return _SourceResult(response=response)
+        return _SourceResult(data=_parse_body(response, upstream.name), ok=True)
+    except (UpstreamError, CircuitOpenError) as error:
+        log = logger.debug if isinstance(error, CircuitOpenError) else logger.warning
+        log(f"GET {upstream.name}{path} failed: {error.code} ({error.message})")
+        return _SourceResult(error=error)
+
+
+async def aggregate(request: Request, sources: Sequence[Source]) -> Response:
+    """
+    Call several backends in parallel and answer with their combined responses (see the top
+    of this file for the response format).
+    """
+    headers = _request_headers(request)
+    for name in CONDITIONAL_REQUEST_HEADERS:
+        headers.pop(name, None)
+    headers["accept"] = "application/json"
+
+    results = await asyncio.gather(*(_call_source(source, request.path_params, headers) for source in sources))
+
+    all_failed = not any(result.ok for result in results)
+    for source, result in zip(sources, results):
+        if not result.ok and (source.required or all_failed):
+            if result.error is not None:
+                return error_response(result.error)
+            return _pass_through(result.response, request.method)
+
+    content: Dict[str, Any] = {"data": {}, "sources": {}}
+    for source, result in zip(sources, results):
+        content["data"][source.key] = result.data if result.ok else None
+        if result.ok:
+            status = "ok"
+        elif result.error is not None:
+            status = result.error.code
+        else:
+            status = "UPSTREAM_CLIENT_ERROR"
+        content["sources"][source.key] = status
+    # A partial response must not be cached as if it were complete
+    response_headers = {} if all(result.ok for result in results) else {"cache-control": "no-store"}
+    return JSONResponse(content=content, headers=response_headers)
 
 
 def create_upstream(name: str, **options: Any) -> Upstream:

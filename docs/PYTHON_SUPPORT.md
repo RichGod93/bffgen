@@ -298,6 +298,28 @@ They behave the same as generated Express and Fastify routes
 One difference from Express and Fastify: Starlette decodes the URL path before routing, so a
 path parameter can't contain an encoded slash (`%2F`); such requests get 404.
 
+### Aggregates
+
+`"aggregates"` in `bffgen.config.py.json` generate `GET` routes in `routers/aggregates_router.py`
+that call several backends in parallel and answer `{"data": {...}, "sources": {...}}`, with
+partial responses when an optional backend fails. The format and behaviour are the same as for
+Node.js; see [Aggregates](NODEJS_ROUTES.md#aggregates). The exposed path can be given as
+`exposeAs` or `path`:
+
+```json
+"aggregates": [
+  {
+    "name": "dashboard",
+    "path": "/api/dashboard/{id}",
+    "requiresAuth": true,
+    "sources": [
+      {"backend": "users", "path": "/users/{id}", "as": "user", "required": true},
+      {"backend": "orders", "path": "/orders?userId={id}", "as": "orders"}
+    ]
+  }
+]
+```
+
 ### Generated Service Example
 
 ```python

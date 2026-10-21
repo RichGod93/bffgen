@@ -6,7 +6,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 const projectDir = process.argv[2];
-const { createUpstream, buildPath, queryStringOf } = require(path.join(projectDir, 'src/utils/upstream'));
+const { createUpstream, aggregate, buildPath, queryStringOf } = require(path.join(projectDir, 'src/utils/upstream'));
 
 // Minimal stand-in for an Express response / Fastify reply
 function fakeReply() {
@@ -42,6 +42,72 @@ const json = (res, status, obj, headers = {}) => {
 let counter = 0;
 const upstreamFor = (baseURL, options = {}) =>
   createUpstream(`svc${++counter}`, { envKey: `SVC${counter}`, baseURL, ...options });
+
+test('aggregate combines sources and degrades', async () => {
+  const b = await backend((req, res) => {
+    if (req.url === '/users/42') return json(res, 200, { id: '42' });
+    if (req.url === '/text') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('hello'); }
+    if (req.url === '/empty') { res.writeHead(204); return res.end(); }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end('{not json');
+  });
+  try {
+    const up = upstreamFor(b.url);
+    const reply = fakeReply();
+    await aggregate(fakeRequest({ params: { id: '42' }, headers: { 'if-none-match': '"v1"', accept: 'text/html' } }), reply, [
+      { as: 'user', upstream: up, path: '/users/:id', required: true },
+      { as: 'text', upstream: up, path: '/text', required: false },
+      { as: 'empty', upstream: up, path: '/empty', required: false },
+      { as: 'bad', upstream: up, path: '/bad', required: false }
+    ]);
+    assert.strictEqual(reply.statusCode, 200);
+    assert.deepStrictEqual(reply.body, {
+      data: { user: { id: '42' }, text: 'hello', empty: null, bad: null },
+      sources: { user: 'ok', text: 'ok', empty: 'ok', bad: 'UPSTREAM_ERROR' }
+    });
+    assert.strictEqual(reply.headers['cache-control'], 'no-store');
+    // Conditional headers apply to one resource; sources are asked for JSON
+    assert.strictEqual(b.calls[0].headers['if-none-match'], undefined);
+    assert.strictEqual(b.calls[0].headers.accept, 'application/json');
+  } finally {
+    b.close();
+  }
+});
+
+test('aggregate: a failed required source decides, optional 4xx degrades', async () => {
+  const b = await backend((req, res) => req.url.startsWith('/users') ? json(res, 404, { error: 'no such user' }) : json(res, 200, {}));
+  try {
+    const up = upstreamFor(b.url);
+    let reply = fakeReply();
+    await aggregate(fakeRequest({ params: { id: '7' } }), reply, [
+      { as: 'orders', upstream: up, path: '/orders', required: false },
+      { as: 'user', upstream: up, path: '/users/:id', required: true }
+    ]);
+    assert.strictEqual(reply.statusCode, 404);
+    assert.strictEqual(reply.body.toString(), '{"error":"no such user"}');
+
+    reply = fakeReply();
+    await aggregate(fakeRequest({ params: { id: '7' } }), reply, [
+      { as: 'orders', upstream: up, path: '/orders', required: false },
+      { as: 'user', upstream: up, path: '/users/:id', required: false }
+    ]);
+    assert.strictEqual(reply.statusCode, 200);
+    assert.deepStrictEqual(reply.body.sources, { orders: 'ok', user: 'UPSTREAM_CLIENT_ERROR' });
+  } finally {
+    b.close();
+  }
+});
+
+test('aggregate: every source failing fails the aggregate', async () => {
+  const down = upstreamFor('http://127.0.0.1:9', { retries: 0 });
+  const reply = fakeReply();
+  await aggregate(fakeRequest(), reply, [
+    { as: 'a', upstream: down, path: '/a', required: false },
+    { as: 'b', upstream: down, path: '/b', required: false }
+  ]);
+  assert.strictEqual(reply.statusCode, 503);
+  assert.strictEqual(reply.body.code, 'UPSTREAM_UNAVAILABLE');
+});
 
 test('buildPath substitutes and encodes params', () => {
   assert.strictEqual(buildPath('/users/:id/orders/:orderId', { id: '42', orderId: '7' }), '/users/42/orders/7');

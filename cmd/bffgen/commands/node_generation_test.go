@@ -176,8 +176,8 @@ func TestEnsureNodeRuntimeFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtimeVersionOf(created) != nodeRuntimeVersion {
-		t.Fatalf("created file has runtime version %d, want %d", runtimeVersionOf(created), nodeRuntimeVersion)
+	if runtimeVersionOf(created) != nodeRuntimeFiles[0].version {
+		t.Fatalf("created file has runtime version %d, want %d", runtimeVersionOf(created), nodeRuntimeFiles[0].version)
 	}
 
 	// Current files are left alone, local edits included

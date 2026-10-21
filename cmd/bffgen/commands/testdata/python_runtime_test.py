@@ -20,7 +20,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 
 from services.http_client import HttpClient, HttpError, UpstreamError  # noqa: E402
 from utils.circuit_breaker import CircuitBreaker, CircuitOpenError  # noqa: E402
-from utils.upstream import build_path, create_upstream  # noqa: E402
+from utils.upstream import Source, aggregate, build_path, create_upstream  # noqa: E402
 from fastapi import Depends  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from middleware.auth import require_authentication  # noqa: E402
@@ -52,7 +52,12 @@ class Backend:
                 self.send_response(status)
                 for name, value in headers.items():
                     self.send_header(name, value)
-                data = b"" if payload is None else json.dumps(payload).encode()
+                if payload is None:
+                    data = b""
+                elif isinstance(payload, bytes):
+                    data = payload
+                else:
+                    data = json.dumps(payload).encode()
                 self.send_header("content-length", str(len(data)))
                 self.end_headers()
                 if self.command != "HEAD":
@@ -200,6 +205,72 @@ class ProxyTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await bff.get("/proxy/1")).status_code, 200)
         finally:
             healthy.close()
+
+
+def aggregate_app(sources, route="/agg/{id}"):
+    """A FastAPI app with one aggregate route, like a generated aggregates router"""
+    app = FastAPI()
+
+    @app.api_route(route, methods=["GET", "HEAD"])
+    async def handler(request: Request):
+        return await aggregate(request, sources)
+
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://bff")
+
+
+class AggregateTest(unittest.IsolatedAsyncioTestCase):
+    async def test_combines_sources_and_degrades(self):
+        backend = Backend(lambda c: {
+            "/users/42": json_response(200, {"id": "42"}),
+            "/text": (200, {"content-type": "text/plain"}, b"hello"),
+            "/empty": (204, {}, None),
+            "/bad": (200, {"content-type": "application/json"}, b"{not json"),
+        }[c["url"]])
+        try:
+            up = upstream_for(backend.url)
+            sources = [
+                Source("user", up, "/users/{id}", required=True),
+                Source("text", up, "/text"),
+                Source("empty", up, "/empty"),
+                Source("bad", up, "/bad"),
+            ]
+            async with aggregate_app(sources) as bff:
+                r = await bff.get("/agg/42", headers={"if-none-match": '"v1"', "accept": "text/html"})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json(), {
+                "data": {"user": {"id": "42"}, "text": "hello", "empty": None, "bad": None},
+                "sources": {"user": "ok", "text": "ok", "empty": "ok", "bad": "UPSTREAM_ERROR"},
+            })
+            self.assertEqual(r.headers["cache-control"], "no-store")
+            # Conditional headers apply to one resource; sources are asked for JSON
+            self.assertNotIn("if-none-match", backend.calls[0]["headers"])
+            self.assertEqual(backend.calls[0]["headers"]["accept"], "application/json")
+        finally:
+            backend.close()
+
+    async def test_required_source_decides(self):
+        backend = Backend(lambda c: json_response(404, {"error": "no such user"}) if "users" in c["url"] else json_response(200, {}))
+        try:
+            up = upstream_for(backend.url)
+            async with aggregate_app([Source("orders", up, "/orders"), Source("user", up, "/users/{id}", required=True)]) as bff:
+                r = await bff.get("/agg/7")
+            self.assertEqual(r.status_code, 404)
+            self.assertEqual(r.json(), {"error": "no such user"})
+
+            # Optional 4xx: partial response
+            async with aggregate_app([Source("orders", up, "/orders"), Source("user", up, "/users/{id}")]) as bff:
+                r = await bff.get("/agg/7")
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()["sources"], {"orders": "ok", "user": "UPSTREAM_CLIENT_ERROR"})
+        finally:
+            backend.close()
+
+    async def test_every_source_failing_fails_the_aggregate(self):
+        down = upstream_for("http://127.0.0.1:9", retries=0)
+        async with aggregate_app([Source("a", down, "/a"), Source("b", down, "/b")], route="/agg") as bff:
+            r = await bff.get("/agg")
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.json()["code"], "UPSTREAM_UNAVAILABLE")
 
 
 class HttpClientTest(unittest.IsolatedAsyncioTestCase):
