@@ -1,368 +1,119 @@
 # bffgen
 
-**Backend-for-Frontend (BFF) generator** - Scaffold secure, production-ready BFF services in **Go**, **Node.js (Express)**, **Node.js (Fastify)**, or **Python (FastAPI)** with JWT auth, rate limiting, CORS, and comprehensive logging.
+**Backend-for-Frontend (BFF) generator.** Scaffold a BFF service in **Node.js (Express or Fastify)**,
+**Python (FastAPI)** or **Go (Chi, Echo, Fiber)**, then generate its routes from a config file
+listing your backend services.
 
 [![npm version](https://img.shields.io/npm/v/bffgen.svg)](https://www.npmjs.com/package/bffgen)
-[![Downloads](https://img.shields.io/npm/dm/bffgen.svg)](https://www.npmjs.com/package/bffgen)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml/badge.svg)](https://github.com/RichGod93/bffgen/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/RichGod93/bffgen/blob/master/LICENSE)
 
----
-
-## ⚡ Quick Start
-
-### Using npx (No Installation)
+## Quick start
 
 ```bash
-# Create Express BFF
-npx bffgen init my-express-bff --lang nodejs-express
-cd my-express-bff
-npm install && npm run dev
+# Node.js (Express or Fastify)
+npx bffgen init my-bff --lang nodejs-express      # or --lang nodejs-fastify
+cd my-bff && npm install && npm run dev
 
-# Create Fastify BFF
-npx bffgen init my-fastify-bff --lang nodejs-fastify
-cd my-fastify-bff
-npm install && npm run dev
+# Python (FastAPI, Python 3.10+)
+npx bffgen init my-bff --lang python-fastapi
+cd my-bff && ./setup.sh && source venv/bin/activate && uvicorn main:app --reload
 
-# Create FastAPI BFF (Python)
-npx bffgen init my-python-bff --lang python-fastapi
-cd my-python-bff
-./setup.sh && source venv/bin/activate
-uvicorn main:app --reload
-
-# Create Go BFF
-npx bffgen init my-go-bff --lang go --framework chi
-cd my-go-bff
-go run main.go
+# Go (Chi, Echo or Fiber)
+npx bffgen init my-bff --lang go --framework chi
+cd my-bff && go run main.go
 ```
 
-### Global Installation
+Or install it globally: `npm install -g bffgen`, then run `bffgen init …`.
 
-```bash
-# Install globally
-npm install -g bffgen
+## Generating routes
 
-# Use anywhere
-bffgen init my-project --lang nodejs-express
-cd my-project && npm run dev
-```
+List your backends in the project config (`bffgen.config.json` for Node.js,
+`bffgen.config.py.json` for Python, `bff.config.yaml` for Go) and run `bffgen generate`:
 
----
-
-## ✨ Features
-
-### 🌐 **Multi-Runtime Support**
-
-- **Node.js Express** - Popular, flexible web framework
-- **Node.js Fastify** - Fast, schema-based framework
-- **Python FastAPI** - Modern, async-first web framework with automatic OpenAPI docs
-- **Go (Chi/Echo/Fiber)** - High-performance, compiled servers
-
-### 🚀 **Production-Ready Aggregation**
-
-- **Parallel Service Calls** - Fetch from multiple backends simultaneously
-- **Redis Caching** - Built-in caching with automatic fallback
-- **Circuit Breakers** - Prevent cascade failures
-- **Request Batching** - Avoid N+1 queries
-- **Response Transformation** - Filter and optimize API responses
-- **Field Selection** - GraphQL-like field filtering for REST
-- **Go & Node.js Parity** - Same utilities available in both runtimes (v2.0+)
-
-### 🔒 **Security Features**
-
-- **JWT Authentication** - Token validation with user context
-- **Rate Limiting** - Built-in for all runtimes
-- **Security Headers** - Helmet, CSP, HSTS, XSS protection
-- **CORS Configuration** - Restrictive origins, credentials support
-
-### 🎨 **Developer Experience**
-
-- **Interactive CLI** - Guided project setup
-- **Template System** - Pre-built templates (auth, ecommerce, content)
-- **Code Generation** - Auto-generate routes, controllers, services
-- **Hot Reload** - Development mode with auto-restart
-- **Comprehensive Tests** - Jest setup with sample tests
-
-### ⚡ **v2.2 Enhancements** (NEW - Python Support!)
-
-- **Python FastAPI Support** - Full async/await support with Pydantic validation
-- **Type-Safe Python Models** - Pydantic models for request/response validation
-- **Idempotent Generation** - Safe to run `generate` multiple times
-- **Config Validation** - `bffgen config validate` catches errors pre-generation
-- **Colorized Diffs** - Preview changes with `--dry-run`
-- **Progress Indicators** - Visual feedback during operations
-- **Auto-Route Registration** - Routes automatically imported
-- **Runtime Override** - `--runtime` flag for explicit control
-- **Transaction Rollback** - Failed operations automatically rollback
-- **Smart Tool Detection** - Auto-detects missing dependencies
-- **Memory Safety CI** - Automated leak detection and security scanning
-
----
-
-## 🛠️ Commands
-
-```bash
-# Initialize new BFF project
-bffgen init my-bff --lang nodejs-express
-
-# Add route interactively
-bffgen add-route
-
-# Add template (auth, ecommerce, content)
-bffgen add-template auth
-
-# Generate routes, controllers, and services
-bffgen generate
-
-# Generate with preview (v2.0)
-bffgen generate --dry-run
-
-# Force regeneration (v2.0)
-bffgen generate --force
-
-# Validate configuration (v2.0)
-bffgen config validate
-
-# Convert config formats (v2.0)
-bffgen convert --from yaml --to json
-
-# Add infrastructure (v2.0)
-bffgen add-infra --ci --docker --compose
-
-# Generate API documentation
-bffgen generate-docs
-
-# Create Postman collection
-bffgen postman
-
-# Health check
-bffgen doctor
-
-# Run development server (Go only)
-bffgen dev
-
-# Show version
-bffgen version
-```
-
----
-
-## 📚 Examples
-
-### Python FastAPI Example (NEW!)
-
-```bash
-# Create project
-npx bffgen init my-python-bff --lang python-fastapi
-
-# Project structure:
-my-python-bff/
-├── main.py                 # FastAPI application
-├── config.py               # Settings and configuration
-├── dependencies.py         # FastAPI dependency injection
-├── routers/                # API route handlers (auto-generated)
-├── services/               # Backend service clients (auto-generated)
-├── models/                 # Pydantic data models
-├── middleware/             # Auth, logging middleware
-├── utils/                  # Utilities (logger, cache, circuit breaker)
-├── tests/                  # Pytest configuration and tests
-├── .env                    # Environment variables
-├── requirements.txt        # Python dependencies
-├── bffgen.config.py.json   # BFF configuration
-└── setup.sh               # Setup script
-```
-
-**Quick Start:**
-```bash
-cd my-python-bff
-./setup.sh                  # Create venv and install deps
-source venv/bin/activate
-uvicorn main:app --reload
-# Visit http://localhost:8000/docs for Swagger UI
-```
-
-### Node.js Express Example
-
-```bash
-# Create project
-npx bffgen init my-express-bff --lang nodejs-express
-
-# Project structure:
-my-express-bff/
-├── src/
-│   ├── index.js              # Express server
-│   ├── routes/               # Route handlers
-│   ├── controllers/          # Business logic with aggregation
-│   ├── services/             # HTTP clients
-│   ├── middleware/           # Auth, validation, logging
-│   ├── utils/                # Aggregation utilities
-│   │   ├── aggregator.js     # Parallel requests
-│   │   ├── cache-manager.js  # Redis caching
-│   │   ├── circuit-breaker.js # Fault tolerance
-│   │   ├── response-transformer.js # Data transformation (v2.0)
-│   │   ├── request-batcher.js     # Request batching (v2.0)
-│   │   └── ...
-│   └── examples/             # Working aggregation examples
-├── tests/                    # Jest tests
-├── docker-compose.yml        # Redis setup
-├── package.json
-└── bffgen.config.json        # BFF configuration
-```
-
-### Aggregation Example - Python FastAPI (v2.2)
-
-```python
-from fastapi import APIRouter, Depends
-from services.tmdb_service import TMDBService
-from services.users_service import UsersService
-
-router = APIRouter()
-tmdb = TMDBService()
-users = UsersService()
-
-@router.get("/api/dashboard/feed")
-async def get_personalized_feed(user_id: str):
-    """Aggregate popular movies with user favorites and watchlist"""
-    # Fetch from multiple services in parallel
-    popular_movies = await tmdb.get_popular_movies()
-    favorites = await users.get_favorites(user_id)
-    watchlist = await users.get_watchlist(user_id)
-
-    # Enrich movie data with user context
-    for movie in popular_movies:
-        movie["is_favorite"] = movie["id"] in favorites
-        movie["is_in_watchlist"] = movie["id"] in watchlist
-
-    return {
-        "movies": popular_movies,
-        "favorites_count": len(favorites),
-        "watchlist_count": len(watchlist)
+```json
+{
+  "backends": [
+    {
+      "name": "users",
+      "baseUrl": "http://localhost:4001/api",
+      "timeout": 5000,
+      "retries": 2,
+      "endpoints": [
+        { "name": "getUser", "method": "GET", "path": "/users/:id", "exposeAs": "/api/users/:id", "requiresAuth": true }
+      ]
     }
+  ]
+}
 ```
 
-### Aggregation Example - Node.js (v2.0)
+Generated Express, Fastify and FastAPI routes:
 
-```javascript
-const ParallelAggregator = require("./utils/aggregator");
-const CacheManager = require("./utils/cache-manager");
-const CircuitBreaker = require("./utils/circuit-breaker");
-const ResponseTransformer = require("./utils/response-transformer");
+- forward path parameters, query strings and safe headers to the backend
+- use a per-backend timeout, retries for `GET`/`HEAD`/`OPTIONS`, and a circuit breaker
+- answer **504** when a backend times out, **503** when it is unreachable or its circuit is open
+  (with `Retry-After` while the circuit is open), and **502** when it returns a 5xx; backend 4xx
+  responses are passed through
 
-const aggregator = new ParallelAggregator({ timeout: 5000 });
-const cache = new CacheManager({ ttl: 300 });
-const breaker = new CircuitBreaker({ failureThreshold: 5 });
-const transformer = new ResponseTransformer();
+Re-running `bffgen generate` is safe: files you edited are kept (`--force` regenerates them and
+saves your version as `<file>.bak`), the same config always gives the same output, `--dry-run`
+writes nothing, and `--check` exits 1 in CI when generated code is out of date.
+See [Generated routes](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_ROUTES.md).
 
-// Fetch from multiple services in parallel with circuit breaker
-const results = await aggregator.fetchParallel([
-  {
-    name: "user",
-    fetch: () => breaker.execute(() => UserService.getProfile(userId)),
-  },
-  { name: "orders", fetch: () => OrdersService.getOrders(userId) },
-  { name: "preferences", fetch: () => PreferencesService.get(userId) },
-]);
+## What a new Node.js project includes
 
-// Transform and sanitize responses
-const dashboard = {
-  user: transformer.sanitize(
-    results.find((r) => r.service === "user" && r.success)?.data
-  ),
-  orders: results.find((r) => r.service === "orders" && r.success)?.data || [],
-  preferences:
-    results.find((r) => r.service === "preferences" && r.success)?.data || {},
-};
-```
+- JWT authentication middleware, rate limiting, CORS and Helmet security headers
+- `/health` endpoint and graceful shutdown
+- Structured logging (Winston for Express, Pino for Fastify)
+- Swagger UI at `/api-docs`
+- ESLint 9 and Jest set up: a fresh project passes `npm run lint` and `npm test`
+- Dependencies with no known production vulnerabilities at release time (`npm audit --omit=dev`)
+- A parallel aggregation helper (`src/utils/aggregator.js`) and an example aggregator controller
+  for combining several backends in one endpoint
 
----
+## Commands
 
-## 🔧 Programmatic API
+| Command | Description |
+|---|---|
+| `bffgen init <name>` | Create a project (`--lang nodejs-express \| nodejs-fastify \| python-fastapi \| go`) |
+| `bffgen generate` | Generate routes, controllers and services from the config (`--dry-run`, `--check`, `--force`) |
+| `bffgen add-route` | Add a backend endpoint interactively |
+| `bffgen add-template` | Add a predefined template (auth, ecommerce, content, mobile-api, gateway) |
+| `bffgen add-infra` | Add CI, Docker, docker-compose or health-check files to a project |
+| `bffgen config validate` | Check the project config |
+| `bffgen convert` | Convert a config between YAML and JSON |
+| `bffgen generate-docs` | Generate OpenAPI documentation from the config |
+| `bffgen postman` | Generate a Postman collection |
+| `bffgen doctor` | Diagnose common project problems |
+| `bffgen version` | Print the version |
+
+Run `bffgen <command> --help` for all options.
+
+## Programmatic API
 
 ```javascript
 const bffgen = require("bffgen");
 
-// Initialize project programmatically
-await bffgen.init({
-  name: "my-project",
-  lang: "nodejs-express",
-  framework: "express",
-  skipTests: false,
-});
-
-// Generate code
-await bffgen.generate();
-
-// Get version
-const version = bffgen.getVersion();
+await bffgen.init({ name: "my-bff", lang: "nodejs-express" });
+await bffgen.generate({ dryRun: true }); // or { check: true }
+console.log(bffgen.getVersion());
 ```
 
----
+## Installation details
 
-## 📖 Documentation
+The package downloads the prebuilt `bffgen` binary for your platform from the matching
+[GitHub release](https://github.com/RichGod93/bffgen/releases) and verifies its SHA-256 checksum.
+Supported: macOS, Linux and Windows, each on x64 and arm64. Node.js 18+ is required.
 
-- [Full Documentation](https://github.com/RichGod93/bffgen)
-- [Node.js Aggregation Guide](https://github.com/RichGod93/bffgen/blob/main/docs/NODEJS_AGGREGATION.md)
-- [Quick Reference](https://github.com/RichGod93/bffgen/blob/main/docs/QUICK_REFERENCE.md)
-- [Examples](https://github.com/RichGod93/bffgen/tree/main/examples)
+If the download fails (for example behind a proxy), download the binary from the release page, or
+install with Go: `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest`.
 
----
+## Links
 
-## 🌍 Platform Support
+- [Documentation and full README](https://github.com/RichGod93/bffgen#readme)
+- [Changelog](https://github.com/RichGod93/bffgen/blob/master/CHANGELOG.md)
+- [Python (FastAPI) guide](https://github.com/RichGod93/bffgen/blob/master/docs/PYTHON_SUPPORT.md)
+- [Aggregation guide](https://github.com/RichGod93/bffgen/blob/master/docs/NODEJS_AGGREGATION.md)
+- [Issues](https://github.com/RichGod93/bffgen/issues)
 
-Supported platforms:
-
-- ✅ macOS (Intel & Apple Silicon)
-- ✅ Linux (x64 & ARM64)
-- ✅ Windows (x64)
-
-The appropriate binary for your platform is automatically downloaded during installation.
-
----
-
-## 🐛 Troubleshooting
-
-### Installation Issues
-
-If installation fails:
-
-1. **Check your internet connection**
-2. **Clear npm cache:**
-
-   ```bash
-   npm cache clean --force
-   npm install -g bffgen
-   ```
-
-3. **Manual installation:**
-   Download from [GitHub Releases](https://github.com/RichGod93/bffgen/releases)
-
-### Platform Not Supported
-
-If your platform isn't supported, you can:
-
-- Install via Go: `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest`
-- Build from source: Clone the repo and run `make build`
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please see the [Contributing Guide](https://github.com/RichGod93/bffgen/blob/main/CONTRIBUTING.md).
-
----
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🔗 Links
-
-- [GitHub Repository](https://github.com/RichGod93/bffgen)
-- [Documentation](https://github.com/RichGod93/bffgen#readme)
-- [Issue Tracker](https://github.com/RichGod93/bffgen/issues)
-- [npm Package](https://www.npmjs.com/package/bffgen)
-
----
-
-**Made with ❤️ for the Backend-for-Frontend pattern**
+MIT License
