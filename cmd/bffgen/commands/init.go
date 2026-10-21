@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -157,7 +157,7 @@ var initCmd = &cobra.Command{
 
 		fmt.Println()
 		fmt.Println("💡 To make bffgen available globally:")
-		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/cmd/bffgen")
+		fmt.Println("   Or use: go install github.com/RichGod93/bffgen/v3/cmd/bffgen")
 
 		fmt.Println()
 		fmt.Println("🔍 Run 'bffgen doctor' to check your project health")

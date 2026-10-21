@@ -75,12 +75,12 @@ func TestGenerateGoMod(t *testing.T) {
 			framework:   "chi",
 			expected: `module test-project
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},
@@ -90,11 +90,11 @@ require (
 			framework:   "echo",
 			expected: `module test-project
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/labstack/echo/v4 v4.11.4
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/labstack/echo/v4 v4.16.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},
@@ -104,11 +104,11 @@ require (
 			framework:   "fiber",
 			expected: `module test-project
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.9
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/gofiber/fiber/v2 v2.52.15
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`,
 		},

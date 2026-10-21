@@ -15,8 +15,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // pythonConfigFile is the bffgen config file of Python projects

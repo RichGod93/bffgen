@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/aggregators"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/aggregators"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 	"github.com/spf13/cobra"
 )
 

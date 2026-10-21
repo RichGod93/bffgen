@@ -371,7 +371,7 @@ app.add_middleware(TimingMiddleware)
 ```python
 # dependencies.py
 from fastapi import Header, HTTPException, Depends
-from jose import jwt
+import jwt  # PyJWT
 from config import settings
 
 async def get_current_user(authorization: str = Header(None)) -> str:

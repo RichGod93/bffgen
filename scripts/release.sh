@@ -1,113 +1,57 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Start (or prepare) a release branch.
+#
+#   scripts/release.sh 3.6.0
+#
+# Creates release/v3.6.0 from origin/master (or reuses it if it is the current branch) and sets
+# the version in every place it lives: npm/package.json, internal/registry/versions.yaml and a
+# CHANGELOG.md section (an existing "## [Unreleased]" section is renamed). Commit your work on
+# that branch and open a PR to master; merging it publishes the release (see docs/RELEASING.md).
+set -euo pipefail
 
-# bffgen Release Script
-# Usage: ./scripts/release.sh v0.1.0
+die() { echo "error: $*" >&2; exit 1; }
 
-set -e
+version="${1:-}"
+version="${version#v}"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: $0 X.Y.Z"
+branch="release/v$version"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+cd "$(git rev-parse --show-toplevel)"
+git fetch origin --tags --quiet
+git rev-parse --quiet --verify "refs/tags/v$version" >/dev/null && die "tag v$version already exists"
 
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if version is provided
-if [ -z "$1" ]; then
-    print_error "Version is required!"
-    echo "Usage: $0 v0.1.0"
-    exit 1
+latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
+if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "${latest#v}" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+  die "v$version is not newer than the latest release $latest"
 fi
 
-VERSION=$1
-
-# Validate version format
-if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    print_error "Invalid version format: $VERSION"
-    echo "Expected format: v0.1.0"
-    exit 1
+if [ "$(git branch --show-current)" != "$branch" ]; then
+  if ! git diff --quiet || ! git diff --cached --quiet; then die "working tree has uncommitted changes"; fi
+  git switch --create "$branch" origin/master
 fi
 
-print_status "Starting release process for $VERSION"
+today="$(date -u +%Y-%m-%d)"
 
-# Check if we're on main branch
-CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-    print_warning "Not on main branch (current: $CURRENT_BRANCH)"
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_error "Release cancelled"
-        exit 1
-    fi
+# npm/package.json
+node -e '
+  const fs = require("fs"); const f = "npm/package.json";
+  const pkg = JSON.parse(fs.readFileSync(f, "utf8")); pkg.version = process.argv[1];
+  fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + "\n");
+' "$version"
+
+# internal/registry/versions.yaml metadata
+perl -0pi -e "s/(metadata:\n  version: )\"[^\"]*\"/\${1}\"$version\"/; s/(  last_updated: )\"[^\"]*\"/\${1}\"${today}T00:00:00Z\"/; s/(  bffgen_version: )\"[^\"]*\"/\${1}\"$version\"/" internal/registry/versions.yaml
+
+# CHANGELOG.md section
+if grep -q "^## \[$version\]" CHANGELOG.md; then
+  :
+elif grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+  perl -pi -e "s/^## \[Unreleased\].*/## [$version] - $today/" CHANGELOG.md
+else
+  perl -0pi -e "s/\n## \[/\n## [$version] - $today\n\n### Changed\n- TODO: describe the user-facing change\n\n## [/" CHANGELOG.md
 fi
 
-# Check if working directory is clean
-if [ -n "$(git status --porcelain)" ]; then
-    print_error "Working directory is not clean!"
-    git status --short
-    exit 1
-fi
-
-# Check if tag already exists
-if git rev-parse "$VERSION" >/dev/null 2>&1; then
-    print_error "Tag $VERSION already exists!"
-    exit 1
-fi
-
-print_status "Running tests..."
-if ! make test; then
-    print_error "Tests failed!"
-    exit 1
-fi
-
-print_status "Running linter..."
-if ! make lint; then
-    print_error "Linting failed!"
-    exit 1
-fi
-
-print_status "Building for all platforms..."
-if ! make build-all VERSION="$VERSION"; then
-    print_error "Build failed!"
-    exit 1
-fi
-
-print_status "Creating tag $VERSION..."
-git tag -a "$VERSION" -m "Release $VERSION"
-
-print_status "Pushing tag to remote..."
-git push origin "$VERSION"
-
-print_success "Release $VERSION created successfully!"
-print_status "GitHub Actions will now build and publish the release"
-print_status "View release: https://github.com/RichGod93/bffgen/releases/tag/$VERSION"
-
-# Optional: Create a release branch for hotfixes
-read -p "Create release branch 'release/$VERSION' for hotfixes? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    git checkout -b "release/$VERSION"
-    git push origin "release/$VERSION"
-    git checkout main
-    print_success "Release branch 'release/$VERSION' created"
-fi
-
-print_success "Release process completed!"
+echo "On $branch, version set to $version. Next:"
+echo "  1. edit the CHANGELOG.md section for $version"
+echo "  2. scripts/check-release.sh        # what CI checks on the PR"
+echo "  3. git push -u origin $branch && gh pr create --base master"

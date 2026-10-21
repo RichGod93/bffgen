@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
 )
 
 func TestNodeHandlerName(t *testing.T) {

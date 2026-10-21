@@ -2,22 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
   pull_request:
-    branches: [main, master]
+    branches: [master, "release/**"]
+
+permissions:
+  contents: read
 
 jobs:
+  # Pull requests to master must come from release/vX.Y.Z with the version set everywhere;
+  # merging one publishes that release (docs/RELEASING.md). Dependabot PRs are exempt.
+  release-branch:
+    if: github.event_name == 'pull_request' && github.base_ref == 'master' && !startsWith(github.head_ref, 'dependabot/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check release branch
+        run: scripts/check-release.sh "$GITHUB_HEAD_REF"
+
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.23", "1.24"]
+        # minimum supported (go.mod) and newest
+        go-version: ["1.24", "stable"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -26,85 +42,109 @@ jobs:
 
       # Runtime dependencies of generated FastAPI projects, for TestPythonRuntime
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Install Python runtime test dependencies
-        run: python -m pip install "fastapi>=0.115,<0.120" "httpx>=0.27,<0.28" "python-dotenv>=1.0,<2"
+        run: python -m pip install "fastapi>=0.150,<1" "httpx>=0.28,<0.29" "python-dotenv>=1.0,<2"
 
       - name: Run tests with race detector
         run: go test -race -v -coverprofile=coverage.out ./...
 
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      - name: Build
+        run: make build
 
       - name: Check code formatting
+        if: matrix.go-version == '1.24'
         run: |
-          # Exclude template directories which contain Go template syntax
-          UNFORMATTED=$(find . -name '*.go' -not -path './templates/*' -not -path './examples/*' -not -path './vendor/*' | xargs gofmt -s -l 2>/dev/null || true)
+          UNFORMATTED=$(gofmt -s -l cmd internal)
           if [ -n "$UNFORMATTED" ]; then
             echo "❌ Code is not formatted:"
             echo "$UNFORMATTED"
             exit 1
           fi
-          echo "✅ Code formatting is correct"
 
+      # golangci-lint v1.64.8 only supports Go <= 1.24
       - name: Run linter
-        run: golangci-lint run --timeout=5m ./...
-
-      - name: Security scan
+        if: matrix.go-version == '1.24'
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.64.8/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+          "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m ./...
+
+      - name: Security scan (gosec)
+        if: matrix.go-version == '1.24'
+        run: |
+          # gosec v2.29 needs Go 1.25 to build; setup-go sets GOTOOLCHAIN=local
+          GOTOOLCHAIN=auto go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
           # G703/G704 are the taint-analysis variants of G304/G107: bffgen writes to user-chosen
           # project paths and proxies to user-configured backend URLs by design
           gosec -quiet -exclude=G104,G304,G306,G301,G114,G107,G703,G704 -exclude-dir=test-project -exclude-dir=templates ./...
 
-      - name: Build
-        run: make build
+      # Known vulnerabilities in bffgen's dependencies and in the Go release used for binaries
+      - name: Vulnerability scan (govulncheck)
+        if: matrix.go-version == 'stable'
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        if: matrix.go-version == 'stable'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage.out
+
+  # Generate real projects and check them end to end: lint, their own tests, a dependency
+  # audit, and the HTTP/fault-tolerance checks in test/e2e/checks.js against mock backends
+  generated-projects:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [nodejs-express, nodejs-fastify, python-fastapi]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: matrix.lang == 'python-fastapi'
+        with:
+          python-version: "3.12"
+
+      - name: Build bffgen
+        run: go build -o "$RUNNER_TEMP/bffgen" ./cmd/bffgen
+
+      - name: End-to-end
+        env:
+          BFFGEN: ${{ runner.temp }}/bffgen
+        run: test/e2e/run.sh "${{ matrix.lang }}" "$RUNNER_TEMP/e2e"
 
   integration:
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24"
+          go-version: stable
 
       - name: Build bffgen
         run: make build
 
-      - name: Verify binary works
+      - name: Verify binary and commands
         run: |
           ./bffgen --version
           ./bffgen --help
-
-      - name: Test doctor command
-        run: |
           ./bffgen doctor || echo "Doctor command completed"
-
-      - name: Verify commands are available
-        run: |
-          ./bffgen generate --help
-          ./bffgen init --help
-          ./bffgen add-route --help
-          ./bffgen config --help
-          ./bffgen postman --help
-
-      - name: CI/CD Summary
-        if: success()
-        run: |
-          echo "✅ All CI/CD checks passed!"
-          echo "📊 Status: Tests, Linting, Security Scan, and Integration Tests successful"
-          echo "🚀 Ready for release or merge"
+          for cmd in generate init add-route config postman; do ./bffgen "$cmd" --help >/dev/null; done

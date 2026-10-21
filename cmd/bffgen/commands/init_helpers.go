@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/types"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // createProjectDirectories creates directories based on language type
@@ -64,7 +64,8 @@ func createDependencyFilesWithOptions(projectName string, langType scaffolding.L
 	case scaffolding.LanguageGo:
 		return createGoModFile(projectName, framework)
 	case scaffolding.LanguageNodeExpress, scaffolding.LanguageNodeFastify:
-		return createPackageJsonFile(projectName, langType, framework)
+		// package.json is rendered from package.json.tmpl together with the main file
+		return nil
 	case scaffolding.LanguagePythonFastAPI:
 		return createPythonDependencyFiles(projectName, opts)
 	default:

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
 	"github.com/spf13/cobra"
 )
 

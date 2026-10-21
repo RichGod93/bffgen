@@ -1,217 +1,221 @@
 name: Release
 
+# Releases are cut by merging a release/vX.Y.Z branch into master (see docs/RELEASING.md).
+# On every push to master this workflow reads the version from npm/package.json; if v<version>
+# is not released yet it tests, builds, tags, creates the GitHub release with binaries, publishes
+# to npm, and smoke-tests the published package. Every step is idempotent, so a failed run can be
+# re-run (or started by hand with workflow_dispatch) without deleting anything. Tags and
+# releases are never moved or recreated.
+
 on:
   push:
-    tags:
-      - "v*"
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g., v0.1.0)"
-        required: true
-        default: "v0.1.0"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  release:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      github_release: ${{ steps.plan.outputs.github_release }}
+      npm_publish: ${{ steps.plan.outputs.npm_publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Decide what needs releasing
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'require("./npm/package.json").version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::invalid version '$version'"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A published (non-draft) release with checksums.txt counts as done
+          if gh release view "v$version" --json isDraft,assets \
+               --jq 'select(.isDraft == false) | .assets[].name' 2>/dev/null | grep -qx checksums.txt; then
+            echo "github_release=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub release v$version already published"
+          else
+            echo "github_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          if npm view "bffgen@$version" version >/dev/null 2>&1; then
+            echo "npm_publish=false" >> "$GITHUB_OUTPUT"
+            echo "bffgen@$version already on npm"
+          else
+            echo "npm_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  github-release:
+    needs: plan
+    if: needs.plan.outputs.github_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
-
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      # Release binaries are built with the newest supported Go so they carry current stdlib fixes
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24"
-          cache: true
+          go-version: stable
 
-      - name: Get version
-        id: version
+      - name: Check the tag, if it exists, points at this commit
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          git fetch --tags --quiet
+          if tag_commit="$(git rev-parse --quiet --verify "refs/tags/v$VERSION^{commit}")"; then
+            [ "$tag_commit" = "$GITHUB_SHA" ] || {
+              echo "::error::tag v$VERSION exists at $tag_commit, not $GITHUB_SHA. Bump the version."; exit 1; }
           fi
-          echo "Releasing version: ${{ steps.version.outputs.version }}"
 
-      - name: Verify version format
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid version format: $VERSION"
-            echo "Expected format: v0.1.0"
-            exit 1
-          fi
-          echo "✅ Version format is valid: $VERSION"
+      - name: Test
+        run: go test -race ./...
 
       - name: Build binaries
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          COMMIT_SHA=$(git rev-parse --short HEAD)
-
-          # Build for multiple platforms
-          platforms=(
-            "linux/amd64"
-            "linux/arm64"
-            "darwin/amd64"
-            "darwin/arm64"
-            "windows/amd64"
-            "windows/arm64"
-          )
-
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          commit="$(git rev-parse --short HEAD)"
           mkdir -p dist
-
-          for platform in "${platforms[@]}"; do
-            IFS='/' read -r os arch <<< "$platform"
-            output_name="bffgen"
-            if [ "$os" = "windows" ]; then
-              output_name="bffgen.exe"
-            fi
-            
-            echo "Building for $os/$arch..."
-            GOOS=$os GOARCH=$arch go build \
-              -ldflags="-X main.version=$VERSION -X main.buildTime=$BUILD_TIME -X main.commit=$COMMIT_SHA" \
-              -o "dist/bffgen-$os-$arch$([ "$os" = "windows" ] && echo ".exe")" \
-              ./cmd/bffgen
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${platform%/*}"; arch="${platform#*/}"
+            ext=""; [ "$os" = windows ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags="-s -w -X main.version=v$VERSION -X main.buildTime=$build_time -X main.commit=$commit" \
+              -o "dist/bffgen-$os-$arch$ext" ./cmd/bffgen
           done
+          (cd dist && sha256sum bffgen-* > checksums.txt && cat checksums.txt)
+          [ "$(./dist/bffgen-linux-amd64 --version | grep -o "v$VERSION")" = "v$VERSION" ]
 
-          # Create checksums
-          cd dist
-          sha256sum * > checksums.txt
-          cd ..
+      - name: Release notes
+        run: scripts/release-notes.sh "$VERSION" > release-notes.md
 
-          echo "✅ Build completed"
-          ls -la dist/
-
-      - name: Run tests
+      - name: Tag
         run: |
-          go test -v ./...
-          go test -race ./...
-
-      - name: Run linter
-        run: |
-          go vet ./...
-          go fmt ./...
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "❌ Code is not formatted"
-            gofmt -s -l .
-            exit 1
-          fi
-          echo "✅ Code formatting is correct"
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Get previous tag (excluding the current one)
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^$VERSION$" | head -n 1)
-
-          if [ -n "$PREVIOUS_TAG" ]; then
-            echo "Generating release notes from $PREVIOUS_TAG to $VERSION"
-            CHANGELOG=$(git log --pretty=format:"- %s" "$PREVIOUS_TAG..HEAD")
-          else
-            echo "Generating initial release notes"
-            CHANGELOG=$(git log --pretty=format:"- %s" --reverse | head -n 20)
+          if ! git rev-parse --quiet --verify "refs/tags/v$VERSION" >/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$VERSION" -m "Release v$VERSION" "$GITHUB_SHA"
+            git push origin "refs/tags/v$VERSION"
           fi
 
-          # Create release notes
-          cat > release_notes.md << EOF
-          ## 🚀 What's New in $VERSION
-
-          ### ✨ Features
-          $CHANGELOG
-
-          ### 📦 Installation
-
-          **Quick Install:**
-          \`\`\`bash
-          go install github.com/RichGod93/bffgen/cmd/bffgen@$VERSION
-          \`\`\`
-
-          **Manual Download:**
-          Download the appropriate binary for your platform from the assets below.
-
-          ### 🔧 Usage
-
-          \`\`\`bash
-          # Initialize a new BFF project
-          bffgen init my-awesome-bff
-
-          # Add authentication template
-          bffgen add-template auth
-
-          # Generate Go code
-          bffgen generate
-
-          # Run development server
-          bffgen dev
-          \`\`\`
-
-          ### 📋 Checksums
-
-          Verify your download with the checksums file included in the release assets.
-
-          ### 🐛 Bug Reports
-
-          Found a bug? Please report it on [GitHub Issues](https://github.com/RichGod93/bffgen/issues).
-
-          ### 🤝 Contributing
-
-          Want to contribute? Check out our [Contributing Guide](https://github.com/RichGod93/bffgen/blob/main/CONTRIBUTING.md).
-          EOF
-
-          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
-          cat release_notes.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
+      # Assets are uploaded to a draft first, so the release only becomes visible (and the npm
+      # postinstall can only find it) once every binary and checksums.txt is in place
+      - name: Create or complete the GitHub release
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Check if release already exists
-          if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "⚠️  Release $VERSION already exists, deleting and recreating..."
-            gh release delete "$VERSION" --yes
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release create "v$VERSION" --verify-tag --draft \
+              --title "v$VERSION" --notes-file release-notes.md
           fi
-
-          # Create release using GitHub CLI
-          gh release create "$VERSION" \
-            --title "Release $VERSION" \
-            --notes-file release_notes.md \
-            --draft=false
-
-          echo "✅ Release $VERSION created"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Assets
-        run: |
-          # Upload each binary individually using GitHub CLI
-          for file in ./dist/bffgen-*; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              gh release upload ${{ steps.version.outputs.version }} "$file"
-            fi
+          existing="$(gh release view "v$VERSION" --json assets --jq '.assets[].name')"
+          for file in dist/*; do
+            grep -qx "$(basename "$file")" <<<"$existing" || gh release upload "v$VERSION" "$file"
           done
-          # Upload checksums
-          gh release upload ${{ steps.version.outputs.version }} ./dist/checksums.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          gh release edit "v$VERSION" --draft=false --latest
 
-      - name: Notify Success
+  # Opt-in: runs only when npm trusted publishing is configured for the package and the
+  # repository variable NPM_TRUSTED_PUBLISHING is "true". Otherwise publish by hand
+  # (docs/RELEASING.md); no long-lived npm token is used.
+  npm-publish:
+    needs: [plan, github-release]
+    if: >-
+      always() && needs.plan.outputs.npm_publish == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' &&
+      (needs.github-release.result == 'success' || needs.github-release.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing + provenance
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1
+      - run: npm install -g npm@11
+
+      - name: Publish
+        working-directory: npm
         run: |
-          echo "🎉 Release ${{ steps.version.outputs.version }} created successfully!"
-          echo "📦 Assets uploaded to GitHub Releases"
-          echo "🔗 View release: https://github.com/RichGod93/bffgen/releases/tag/${{ steps.version.outputs.version }}"
-          echo ""
-          echo "📝 Note: npm publishing is managed separately and not automated in CI/CD"
-          echo "To publish to npm, use: cd npm && npm publish --access public"
+          [ "$(node -p 'require("./package.json").version')" = "$VERSION" ]
+          npm publish --provenance --access public
+
+  # Tell the maintainer to publish by hand when the npm job is not enabled
+  npm-manual:
+    needs: [plan, github-release]
+    if: >-
+      always() && needs.plan.outputs.npm_publish == 'true' && vars.NPM_TRUSTED_PUBLISHING != 'true' &&
+      (needs.github-release.result == 'success' || needs.github-release.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish to npm by hand
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          {
+            echo "### npm publish needed for bffgen@$VERSION"
+            echo
+            echo "The GitHub release v$VERSION is published. Publish the npm package from the tag:"
+            echo
+            echo '```bash'
+            echo "git fetch --tags && git switch --detach v$VERSION"
+            echo "cd npm && npm publish --access public"
+            echo '```'
+            echo
+            echo "Then re-run this workflow (Actions → Release → Run workflow) to smoke-test it."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::bffgen@$VERSION is not on npm yet; publish it by hand (see the run summary)"
+
+  # Runs after the npm job, or on a later run once the version is on npm (e.g. published by hand)
+  smoke:
+    needs: [plan, npm-publish]
+    if: >-
+      always() && (needs.npm-publish.result == 'success' ||
+      (needs.npm-publish.result == 'skipped' && needs.plan.outputs.npm_publish == 'false'))
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: npx bffgen@<version> --version
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            out="$(npx --yes "bffgen@$VERSION" --version 2>&1)" && grep -q "v$VERSION" <<<"$out" && { echo "$out"; exit 0; }
+            echo "attempt $attempt: $out"; sleep 20
+          done
+          exit 1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+
+      - name: go install …/v3/cmd/bffgen@v<version>
+        shell: bash
+        run: |
+          go install "github.com/${GITHUB_REPOSITORY}/v3/cmd/bffgen@v$VERSION"
+          "$(go env GOPATH)/bin/bffgen" --version | grep "v$VERSION"

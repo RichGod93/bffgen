@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 	"gopkg.in/yaml.v3"
 )
 

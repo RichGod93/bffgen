@@ -23,7 +23,7 @@ if (!fs.existsSync(binaryPath)) {
   console.error("Try reinstalling:");
   console.error("  npm install -g bffgen");
   console.error("\nOr install via Go:");
-  console.error("  go install github.com/RichGod93/bffgen/cmd/bffgen@latest");
+  console.error("  go install github.com/RichGod93/bffgen/v3/cmd/bffgen@latest");
   process.exit(1);
 }
 

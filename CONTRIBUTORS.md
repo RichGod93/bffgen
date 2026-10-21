@@ -16,9 +16,16 @@ cd bffgen
 
 ### 2. Create a Branch
 
+Work for the next release lives on `release/vX.Y.Z`, named after the version it will publish
+(see [docs/RELEASING.md](docs/RELEASING.md)). Branch from it, and open your pull request against it:
+
 ```bash
-git checkout -b feature/my-feature
+git fetch origin
+git checkout -b my-feature origin/release/v3.6.0   # the current release/v* branch
 ```
+
+If there is no open `release/v*` branch, branch from `master` and open the PR against `master`;
+a maintainer will retarget it.
 
 ### 3. Make Changes
 
@@ -30,13 +37,15 @@ git checkout -b feature/my-feature
 
 ```bash
 go test ./...
+go build -o /tmp/bffgen ./cmd/bffgen
+BFFGEN=/tmp/bffgen test/e2e/run.sh nodejs-express /tmp/e2e   # also nodejs-fastify, python-fastapi
 ```
 
 ### 5. Commit & Push
 
 ```bash
 git commit -m "feat: add my feature"
-git push origin feature/my-feature
+git push origin my-feature
 ```
 
 ### 6. Open a Pull Request

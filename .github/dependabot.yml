@@ -1,0 +1,20 @@
+# Weekly updates for bffgen's own Go modules and the GitHub Actions used in CI and releases.
+# Dependabot PRs are exempt from the release-branch naming check; they ship with the next release.
+# Versions in *generated* projects live in internal/registry/versions.yaml (bffgen update-deps).
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

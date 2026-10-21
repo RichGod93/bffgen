@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
 )
 
 func TestInstaller_NormalizeGitHubURL(t *testing.T) {

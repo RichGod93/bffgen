@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // createGoModFile creates go.mod file for Go projects
@@ -27,7 +27,7 @@ func generateGoMod(projectName, framework string) string {
 func generateGoModContent(projectName, framework string) string {
 	baseContent := `module ` + projectName + `
 
-go 1.21
+go 1.25.0
 
 require (
 	gopkg.in/yaml.v3 v3.0.1
@@ -37,32 +37,32 @@ require (
 	case "chi":
 		return `module ` + projectName + `
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "echo":
 		return `module ` + projectName + `
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/labstack/echo/v4 v4.11.4
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/labstack/echo/v4 v4.16.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	case "fiber":
 		return `module ` + projectName + `
 
-go 1.21
+go 1.25.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.9
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/gofiber/fiber/v2 v2.52.15
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )`
 	default:

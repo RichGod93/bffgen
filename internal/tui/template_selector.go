@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

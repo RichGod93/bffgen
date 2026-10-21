@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
 )
 
 func TestParseOrigins(t *testing.T) {
