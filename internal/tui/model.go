@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )

@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/RichGod93/bffgen/internal/registry"
+	"github.com/RichGod93/bffgen/v3/internal/registry"
 	"github.com/spf13/cobra"
 )
 

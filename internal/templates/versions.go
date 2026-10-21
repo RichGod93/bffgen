@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/registry"
+	"github.com/RichGod93/bffgen/v3/internal/registry"
 )
 
 // LoadVersions returns the dependency versions from the embedded manifest for the given runtime

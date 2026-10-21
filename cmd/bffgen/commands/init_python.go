@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // createPythonDependencyFiles creates dependency files for Python projects
@@ -22,10 +22,22 @@ func createPythonDependencyFiles(projectName string, opts ProjectOptions) error 
 		pkgManager = "pip" // default
 	}
 
+	if err := createRuffConfig(projectName); err != nil {
+		return err
+	}
 	if pkgManager == "poetry" {
 		return createPyprojectToml(projectName, opts)
 	}
 	return createRequirementsTxt(projectName, opts)
+}
+
+// createRuffConfig writes ruff.toml with a pinned rule set, so lint results don't change with Ruff releases
+func createRuffConfig(projectName string) error {
+	content, err := templates.TemplateFS.ReadFile("python/common/ruff.toml.tmpl")
+	if err != nil {
+		return fmt.Errorf("failed to read ruff.toml template: %w", err)
+	}
+	return os.WriteFile(filepath.Join(projectName, "ruff.toml"), content, utils.ProjectFilePerm)
 }
 
 // createRequirementsTxt creates requirements.txt for pip
@@ -70,7 +82,12 @@ func createPyprojectToml(projectName string, opts ProjectOptions) error {
 		return fmt.Errorf("failed to read pyproject template: %w", err)
 	}
 
-	tmpl, err := template.New("pyproject").Parse(string(tmplContent))
+	versions, err := templates.LoadVersions("python-fastapi")
+	if err != nil {
+		return err
+	}
+
+	tmpl, err := template.New("pyproject").Funcs(templates.VersionFuncMap(versions)).Parse(string(tmplContent))
 	if err != nil {
 		return fmt.Errorf("failed to parse pyproject template: %w", err)
 	}
@@ -364,6 +381,7 @@ echo "📝 Activate environment with: poetry shell"
 echo "🚀 Run with: poetry run uvicorn main:app --reload"`
 	} else {
 		installCmd = `# Install dependencies with pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 
 echo "✅ Dependencies installed successfully"
@@ -377,10 +395,10 @@ echo "🔧 Setting up Python BFF project: ` + projectName + `"
 
 # Check Python version
 python_version=$(python3 --version 2>&1 | awk '{print $2}')
-required_version="3.9"
+required_version="3.10"
 
-if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 9) else 1)"; then
-    echo "❌ Error: Python 3.9+ required (found $python_version)"
+if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)"; then
+    echo "❌ Error: Python 3.10+ required (found $python_version)"
     exit 1
 fi
 

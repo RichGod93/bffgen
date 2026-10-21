@@ -15,9 +15,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // generateNodeJS generates code for Node.js projects

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/types"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // InfraTemplateData holds data for infrastructure templates

@@ -199,7 +199,7 @@ async function install() {
     log(`   3. Add to your PATH`, "yellow");
     log("\n💡 Or install via Go:", "yellow");
     log(
-      `   go install github.com/RichGod93/bffgen/cmd/bffgen@v${PACKAGE_VERSION}`,
+      `   go install github.com/RichGod93/bffgen/v3/cmd/bffgen@v${PACKAGE_VERSION}`,
       "yellow"
     );
 

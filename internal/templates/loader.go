@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
 )
 
 //go:embed node/**/*

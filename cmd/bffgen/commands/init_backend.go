@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/types"
-	"github.com/RichGod93/bffgen/internal/utils"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/utils"
 )
 
 // ProjectOptions holds options for project initialization

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
 )
 
 // RouteConfig represents a single API route for testing

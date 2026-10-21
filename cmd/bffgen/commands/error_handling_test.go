@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/templates"
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/templates"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 )
 
 // Error handling tests for edge cases
@@ -67,17 +67,8 @@ func TestGenerateGoModContent_EmptyProjectName(t *testing.T) {
 	}
 
 	// Should contain go version
-	if !strings.Contains(result, "go 1.21") {
+	if !strings.Contains(result, "go 1.25.0") {
 		t.Error("Expected go version even with empty project name")
-	}
-}
-
-func TestGeneratePackageJsonContent_EmptyProjectName(t *testing.T) {
-	result := generatePackageJsonContent("", scaffolding.LanguageNodeExpress, "express")
-
-	// Should still generate structure with empty name
-	if !strings.Contains(result, `"name"`) {
-		t.Error("Expected name field even with empty project name")
 	}
 }
 
@@ -240,23 +231,6 @@ func TestConvertToEndpointData_MixedTypes(t *testing.T) {
 	// Second should have empty path (type mismatch)
 	if result[1].Path != "" {
 		t.Error("Second endpoint should have empty path due to type mismatch")
-	}
-}
-
-func TestGeneratePackageJsonContent_UnsupportedFramework(t *testing.T) {
-	frameworks := []string{
-		"unknown",
-		"koa",
-		"hapi",
-		"",
-	}
-
-	for _, fw := range frameworks {
-		result := generatePackageJsonContent("test", scaffolding.LanguageNodeExpress, fw)
-		// Unknown frameworks return empty string
-		if fw != "express" && fw != "fastify" && result != "" {
-			t.Errorf("Expected empty result for unsupported framework %q", fw)
-		}
 	}
 }
 

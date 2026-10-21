@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
 )
 
 func TestNewGenerator(t *testing.T) {

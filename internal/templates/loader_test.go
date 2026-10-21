@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
 )
 
 func TestNewTemplateLoader(t *testing.T) {
@@ -168,7 +168,7 @@ func TestRenderTemplate(t *testing.T) {
 				Versions:    mustLoadVersions("nodejs-express"),
 			},
 			wantErr:  false,
-			contains: []string{"my-bff", `"express": "^`, "nodemon"},
+			contains: []string{"my-bff", `"express": "^`, "node --watch"},
 		},
 	}
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 )
 
 func TestSchemaValidator_ValidateConfig(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RichGod93/bffgen/internal/scaffolding"
-	"github.com/RichGod93/bffgen/internal/types"
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
+	"github.com/RichGod93/bffgen/v3/internal/types"
 )
 
 // Integration tests that test actual file operations
@@ -41,37 +41,6 @@ func TestCreateGoModFile_Integration(t *testing.T) {
 	}
 	if !strings.Contains(contentStr, "github.com/go-chi/chi/v5") {
 		t.Error("go.mod should contain chi dependency")
-	}
-}
-
-func TestCreatePackageJsonFile_Integration(t *testing.T) {
-	tempDir := t.TempDir()
-	projectName := filepath.Join(tempDir, "test-node-project")
-
-	err := os.MkdirAll(projectName, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create project dir: %v", err)
-	}
-
-	// Create package.json file
-	err = createPackageJsonFile(projectName, scaffolding.LanguageNodeExpress, "express")
-	if err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
-
-	// Verify file exists
-	packagePath := filepath.Join(projectName, "package.json")
-	content, err := os.ReadFile(packagePath)
-	if err != nil {
-		t.Fatalf("Failed to read package.json: %v", err)
-	}
-
-	contentStr := string(content)
-	if !strings.Contains(contentStr, `"express"`) {
-		t.Error("package.json should contain express dependency")
-	}
-	if !strings.Contains(contentStr, `"name"`) {
-		t.Error("package.json should have name field")
 	}
 }
 
@@ -195,27 +164,6 @@ func TestCreateDependencyFiles_Go(t *testing.T) {
 	}
 }
 
-func TestCreateDependencyFiles_NodeJS(t *testing.T) {
-	tempDir := t.TempDir()
-	projectName := filepath.Join(tempDir, "test-project")
-
-	err := os.MkdirAll(projectName, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create project dir: %v", err)
-	}
-
-	err = createDependencyFiles(projectName, scaffolding.LanguageNodeExpress, "express")
-	if err != nil {
-		t.Fatalf("createDependencyFiles failed: %v", err)
-	}
-
-	// Verify package.json was created
-	packagePath := filepath.Join(projectName, "package.json")
-	if _, err := os.Stat(packagePath); os.IsNotExist(err) {
-		t.Error("package.json should have been created")
-	}
-}
-
 func TestGenerateGoModContent_AllFrameworks(t *testing.T) {
 	frameworks := []string{"chi", "echo", "fiber", "unknown"}
 
@@ -227,7 +175,7 @@ func TestGenerateGoModContent_AllFrameworks(t *testing.T) {
 			if !strings.Contains(result, "module test-project") {
 				t.Error("Should contain module directive")
 			}
-			if !strings.Contains(result, "go 1.21") {
+			if !strings.Contains(result, "go 1.25.0") {
 				t.Error("Should contain go version")
 			}
 
@@ -244,45 +192,6 @@ func TestGenerateGoModContent_AllFrameworks(t *testing.T) {
 			case "fiber":
 				if !strings.Contains(result, "github.com/gofiber/fiber/v2") {
 					t.Error("Fiber should have fiber dependency")
-				}
-			}
-		})
-	}
-}
-
-func TestGeneratePackageJsonContent_AllFrameworks(t *testing.T) {
-	frameworks := []struct {
-		name     string
-		langType scaffolding.LanguageType
-	}{
-		{"express", scaffolding.LanguageNodeExpress},
-		{"fastify", scaffolding.LanguageNodeFastify},
-	}
-
-	for _, fw := range frameworks {
-		t.Run(fw.name, func(t *testing.T) {
-			result := generatePackageJsonContent("test-project", fw.langType, fw.name)
-
-			// Basic structure
-			if !strings.Contains(result, `"name"`) {
-				t.Error("Should have name field")
-			}
-			if !strings.Contains(result, `"version"`) {
-				t.Error("Should have version field")
-			}
-			if !strings.Contains(result, `"scripts"`) {
-				t.Error("Should have scripts")
-			}
-
-			// Framework-specific
-			switch fw.name {
-			case "express":
-				if !strings.Contains(result, `"express"`) {
-					t.Error("Express should have express dependency")
-				}
-			case "fastify":
-				if !strings.Contains(result, `"fastify"`) {
-					t.Error("Fastify should have fastify dependency")
 				}
 			}
 		})

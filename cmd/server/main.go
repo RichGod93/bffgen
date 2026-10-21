@@ -18,7 +18,8 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// No middleware.RealIP: it trusts client-supplied X-Forwarded-For / X-Real-IP headers
+	// (IP spoofing). Behind a trusted proxy, derive the client IP from that proxy's header only.
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	// Security headers middleware

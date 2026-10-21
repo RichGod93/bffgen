@@ -17,7 +17,7 @@ endpoints and expose them in a frontend-friendly way, with minimal setup.
 Global Installation:
   macOS/Linux: sudo cp bffgen /usr/local/bin/
   Windows: Add the bffgen directory to your PATH
-  Or use: go install github.com/RichGod93/bffgen/cmd/bffgen`,
+  Or use: go install github.com/RichGod93/bffgen/v3/cmd/bffgen`,
 	Version: "dev", // This will be set during build
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize global configuration

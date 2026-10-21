@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/RichGod93/bffgen/internal/watcher"
+	"github.com/RichGod93/bffgen/v3/internal/watcher"
 	"github.com/spf13/cobra"
 )
 
