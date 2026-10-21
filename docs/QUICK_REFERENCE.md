@@ -12,7 +12,7 @@ bffgen convert config --from yaml --to json
 # Preview changes before applying
 bffgen generate --dry-run
 
-# Force regeneration
+# Regenerate files you edited too (your versions are kept as .bak)
 bffgen generate --force
 
 # Override runtime detection
@@ -92,9 +92,9 @@ bffgen doctor
 ## Generate Flags (v2.0)
 
 ```bash
---dry-run           Show colorized diff without applying changes
---check             Check mode (alias for --dry-run)
---force             Force overwrite existing files (ignore state tracking)
+--dry-run           List what would change; write nothing
+--check             Like --dry-run, but exit 1 if generated code is out of date (for CI)
+--force             Also regenerate files you edited (your versions are kept as <file>.bak)
 --verbose           Show detailed generation steps
 ```
 

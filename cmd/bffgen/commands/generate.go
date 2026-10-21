@@ -29,10 +29,10 @@ var (
 )
 
 func init() {
-	generateCmd.Flags().BoolVar(&checkMode, "check", false, "Check mode: show what would be changed without making changes")
-	generateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Dry run: show what would be changed without making changes")
+	generateCmd.Flags().BoolVar(&checkMode, "check", false, "Show what would change and exit non-zero if generated code is out of date; writes nothing")
+	generateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would change without writing anything")
 	generateCmd.Flags().BoolVar(&verbose, "verbose", false, "Verbose output")
-	generateCmd.Flags().BoolVar(&forceMode, "force", false, "Force overwrite of existing files without markers")
+	generateCmd.Flags().BoolVar(&forceMode, "force", false, "Regenerate code you have edited (Node.js/Python: your versions are kept as <file>.bak; Go: regenerate existing routes)")
 }
 
 func generate() error {

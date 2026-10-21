@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"text/template"
 
@@ -103,36 +102,27 @@ func generatePython() error {
 		if err != nil {
 			return err
 		}
-		files[filepath.Join("routers", data.Module+"_router.py")] = router
-		files[filepath.Join("services", data.Module+"_service.py")] = service
+		files["routers/"+data.Module+"_router.py"] = router
+		files["services/"+data.Module+"_service.py"] = service
 		modules = append(modules, data.Module)
 	}
 	registry, err := renderPythonTemplate("python/fastapi/routers_init.py.tmpl", map[string]interface{}{"Modules": modules})
 	if err != nil {
 		return err
 	}
-	files[filepath.Join("routers", "__init__.py")] = registry
+	files["routers/__init__.py"] = registry
 
-	paths := make([]string, 0, len(files))
-	for path := range files {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	for _, path := range paths {
-		if !write {
-			fmt.Printf("🔍 Would write %s\n", path)
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(path), utils.ProjectDirPerm); err != nil {
-			return err
-		}
-		if err := os.WriteFile(path, []byte(files[path]), utils.ProjectFilePerm); err != nil {
-			return err
-		}
-		LogVerboseCommand("Wrote %s", path)
+	fileActions, err := writeGeneratedFiles(".", files, write, forceMode)
+	if err != nil {
+		return err
 	}
 
 	if !write {
+		if checkMode && (len(actions) > 0 || generatedChangesPending(fileActions)) {
+			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
+		}
+		fmt.Println()
+		fmt.Println("🔍 Nothing was written.")
 		return nil
 	}
 
@@ -153,6 +143,8 @@ func generatePython() error {
 	fmt.Println("   1. Review generated files")
 	fmt.Println("   2. Run: uvicorn main:app --reload")
 	fmt.Println("   3. Visit: http://localhost:8080/docs")
+	fmt.Println()
+	fmt.Println("   Files you edit are kept on the next 'bffgen generate' (see .bffgen/generated.json).")
 
 	return nil
 }

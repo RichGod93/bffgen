@@ -38,6 +38,7 @@ case "$lang" in
   nodejs-express|nodejs-fastify)
     python3 -I "$here/fixtures.py" node bffgen.config.json
     step "bffgen generate" "$bffgen" generate
+    step "bffgen generate --check (idempotent)" "$bffgen" generate --check
     [ -d node_modules ] || step "npm install" npm install --no-audit --no-fund
     step "npm run lint" npm run lint
     step "npm test" npx jest --silent
@@ -47,6 +48,7 @@ case "$lang" in
   python-fastapi)
     python3 -I "$here/fixtures.py" python bffgen.config.py.json
     step "bffgen generate" "$bffgen" generate
+    step "bffgen generate --check (idempotent)" "$bffgen" generate --check
     step "pip install" sh -c "'$python' -m venv .venv && .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q -r requirements.txt"
     step "ruff check" .venv/bin/ruff check .
     step "pytest" .venv/bin/pytest -q -p no:cacheprovider --no-cov

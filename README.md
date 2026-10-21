@@ -138,11 +138,11 @@ uvicorn main:app --reload
 - **Hot Reload** - Development mode with auto-restart (`node --watch` for Node.js)
 - **Professional Structure** - `src/` directory, tests, middleware
 - **Comprehensive Scripts** - `npm run dev`, `npm test`, `npm run lint`
-- **Idempotent Generation** - Safely run `generate` multiple times with `--force` flag
+- **Regeneration-Safe** - Re-run `generate` any time: files you edited are kept, the same config gives byte-identical output
 - **Config Validation** - `bffgen config validate` catches errors before generation
 - **Smart Tool Detection** - Auto-detects missing tools with install instructions
 - **Auto npm install** - Optionally runs dependency installation after init
-- **Colorized Diffs** - Preview changes with `--dry-run` before applying
+- **Dry Run and Check** - `generate --dry-run` lists changes without writing; `--check` fails CI when generated code is stale
 - **Progress Indicators** - Visual feedback during multi-step operations
 - **Runtime Override** - `--runtime` flag to override automatic detection
 - **Auto-Route Registration** - Routes automatically imported in index files
@@ -698,7 +698,7 @@ bffgen config validate
 # Preview changes before applying
 bffgen generate --dry-run
 
-# Force regeneration of all files
+# Also regenerate files you edited (your versions are kept as .bak)
 bffgen generate --force
 
 # Convert config formats

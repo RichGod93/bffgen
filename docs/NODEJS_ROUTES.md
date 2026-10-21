@@ -126,4 +126,31 @@ replaced, and your previous copy is kept next to it as `<file>.bak`. Files with 
 marker are never touched, so local edits survive until bffgen ships a new runtime version.
 `--dry-run` and `--check` only report what would change.
 
-Route files themselves are regenerated on every `bffgen generate`; don't edit them by hand.
+## Regenerating
+
+`bffgen generate` owns the files it generates for each backend: `src/routes/<backend>.js`,
+`src/controllers/<backend>.controller.js`, `src/controllers/<backend>.controller.basic.js` and
+`src/services/<backend>.service.js` (Python: `routers/<backend>_router.py`,
+`services/<backend>_service.py` and `routers/__init__.py`). You can edit any of them:
+
+- A file that still has the content bffgen last wrote is regenerated with your config changes.
+- A file you edited is **kept** and reported (`✋ Kept …`). It no longer receives config changes.
+  `bffgen generate --force` regenerates it and saves your version as `<file>.bak`.
+- A file for a backend you removed from the config is reported, never deleted.
+- An invalid config writes nothing.
+
+bffgen records what it wrote (a SHA-256 per file) in `.bffgen/generated.json`. Commit that file;
+it contains no timestamps, so the same config always produces the same output. Projects created
+before v3.7.0 don't have it yet: on the first run, files identical to the new output are recorded,
+and files that differ are kept in case you edited them (run `--force` once if you didn't).
+
+The route block between `// bffgen:begin:routes` and `// bffgen:end:routes` in `src/index.js` is
+always rewritten; the rest of `src/index.js` is yours.
+
+| Command | Writes | Exit code |
+|---|---|---|
+| `bffgen generate` | regenerates unedited files | 0 |
+| `bffgen generate --dry-run` | nothing; lists what would change | 0 |
+| `bffgen generate --check` | nothing; lists what would change | 1 if anything would change (for CI) |
+| `bffgen generate --force` | also regenerates edited files (`.bak` copies) | 0 |
+
