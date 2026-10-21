@@ -125,10 +125,13 @@ jobs:
           done
           gh release edit "v$VERSION" --draft=false --latest
 
+  # Opt-in: runs only when npm trusted publishing is configured for the package and the
+  # repository variable NPM_TRUSTED_PUBLISHING is "true". Otherwise publish by hand
+  # (docs/RELEASING.md); no long-lived npm token is used.
   npm-publish:
     needs: [plan, github-release]
     if: >-
-      always() && needs.plan.outputs.npm_publish == 'true' &&
+      always() && needs.plan.outputs.npm_publish == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' &&
       (needs.github-release.result == 'success' || needs.github-release.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -149,16 +152,42 @@ jobs:
 
       - name: Publish
         working-directory: npm
-        env:
-          # Only used if trusted publishing is not configured for the package on npmjs.com
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           [ "$(node -p 'require("./package.json").version')" = "$VERSION" ]
           npm publish --provenance --access public
 
+  # Tell the maintainer to publish by hand when the npm job is not enabled
+  npm-manual:
+    needs: [plan, github-release]
+    if: >-
+      always() && needs.plan.outputs.npm_publish == 'true' && vars.NPM_TRUSTED_PUBLISHING != 'true' &&
+      (needs.github-release.result == 'success' || needs.github-release.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish to npm by hand
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          {
+            echo "### npm publish needed for bffgen@$VERSION"
+            echo
+            echo "The GitHub release v$VERSION is published. Publish the npm package from the tag:"
+            echo
+            echo '```bash'
+            echo "git fetch --tags && git switch --detach v$VERSION"
+            echo "cd npm && npm publish --access public"
+            echo '```'
+            echo
+            echo "Then re-run this workflow (Actions → Release → Run workflow) to smoke-test it."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::bffgen@$VERSION is not on npm yet; publish it by hand (see the run summary)"
+
+  # Runs after the npm job, or on a later run once the version is on npm (e.g. published by hand)
   smoke:
     needs: [plan, npm-publish]
-    if: always() && needs.npm-publish.result == 'success'
+    if: >-
+      always() && (needs.npm-publish.result == 'success' ||
+      (needs.npm-publish.result == 'skipped' && needs.plan.outputs.npm_publish == 'false'))
     strategy:
       fail-fast: false
       matrix:

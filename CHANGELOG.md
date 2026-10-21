@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.5.1] - 2026-10-21
+## [3.6.0] - 2026-10-21
 
 Security update. Newly generated projects no longer install dependencies with known
 vulnerabilities, and `go install` now gets the current release.
@@ -51,8 +51,8 @@ vulnerabilities, and `go install` now gets the current release.
 
 ### Project
 - Releases are now cut by merging a `release/vX.Y.Z` branch: CI checks the branch name and
-  version, and the merge tags the release, publishes the binaries and the npm package, and
-  smoke-tests them. See [Releasing](docs/RELEASING.md).
+  version, and the merge tags the release and publishes the binaries (and, once npm trusted
+  publishing is enabled, the npm package), then smoke-tests them. See [Releasing](docs/RELEASING.md).
 - CI generates Express, Fastify and FastAPI projects on every pull request and runs their lint,
   tests, a dependency audit and the end-to-end checks in `test/e2e/`. It also runs govulncheck.
 

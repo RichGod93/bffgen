@@ -55,10 +55,12 @@ CI (`.github/workflows/ci.yml`) then checks the pull request:
    stable Go, writes `checksums.txt`, tags `vX.Y.Z` (annotated) at the merge commit, creates a draft
    release with the notes from `scripts/release-notes.sh` (the CHANGELOG section plus install
    instructions), uploads the assets, then publishes the release.
-2. **npm-publish**: `npm publish --provenance` from `npm/`. This runs only after the GitHub release is
-   public, because the npm package's postinstall downloads the binary from it.
+2. **npm-publish** (if trusted publishing is enabled, see below): `npm publish --provenance` from
+   `npm/`. This runs only after the GitHub release is public, because the npm package's postinstall
+   downloads the binary from it. Otherwise **npm-manual** puts the publish commands in the run summary.
 3. **smoke**: on Linux, macOS and Windows, `npx bffgen@X.Y.Z --version` and
-   `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@vX.Y.Z` must report `vX.Y.Z`.
+   `go install github.com/RichGod93/bffgen/v3/cmd/bffgen@vX.Y.Z` must report `vX.Y.Z`. After a manual
+   npm publish, re-run the workflow (*Actions → Release → Run workflow*) to run it.
 
 If a run fails part-way, fix the cause and re-run it (or run the workflow by hand). Finished steps
 are skipped. Tags and releases are never deleted, moved or recreated; a broken release is fixed by
@@ -66,16 +68,19 @@ releasing the next patch version.
 
 ## One-time setup
 
-- **npm trusted publishing** (recommended): on npmjs.com, open the `bffgen` package →
-  *Settings* → *Trusted publishing* → GitHub Actions, repository `RichGod93/bffgen`, workflow
-  `release.yml`. No token is needed after that, and 2FA prompts don't apply.
-  Fallback: an automation token in the repository secret `NPM_TOKEN`.
+- **npm trusted publishing** (optional; until it's set up, publish by hand): on npmjs.com, open the
+  `bffgen` package → *Settings* → *Trusted publishing* → GitHub Actions, repository
+  `RichGod93/bffgen`, workflow `release.yml`. Then set the repository variable
+  `NPM_TRUSTED_PUBLISHING` to `true` (*Settings → Secrets and variables → Actions → Variables*).
+  The workflow never uses a long-lived npm token. While the variable is unset, the run summary
+  shows the manual publish commands.
 - **GitHub**: enable *Settings → General → Automatically delete head branches*, so merged release
   branches disappear.
 
-## Publishing by hand (fallback)
+## Publishing to npm by hand
 
-If the npm job can't authenticate, the GitHub release is still complete. Publish from a checkout of the tag:
+Until trusted publishing is enabled (or if the npm job fails), the GitHub release is still complete.
+Publish from a checkout of the tag:
 
 ```bash
 git switch --detach vX.Y.Z
