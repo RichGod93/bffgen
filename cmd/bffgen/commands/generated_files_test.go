@@ -336,3 +336,142 @@ func TestNodeGenerate_InvalidConfigWritesNothing(t *testing.T) {
 		t.Errorf("invalid config still wrote: %v", d)
 	}
 }
+
+func TestWriteGeneratedFiles_CRLFCheckoutIsNotAnEdit(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := writeGeneratedFiles(dir, map[string]string{"a.js": "line 1\nline 2\n"}, true, false); err != nil {
+		t.Fatal(err)
+	}
+	// What git with core.autocrlf=true checks out on Windows
+	writeFile(t, filepath.Join(dir, "a.js"), "line 1\r\nline 2\r\n")
+
+	actions, _ := writeGeneratedFiles(dir, map[string]string{"a.js": "line 1\nline 2\n"}, true, false)
+	if got := actionsByPath(actions)["a.js"]; got != genUnchanged {
+		t.Errorf("same content with CRLF: got %s, want %s", got, genUnchanged)
+	}
+	actions, _ = writeGeneratedFiles(dir, map[string]string{"a.js": "line 1\nline 3\n"}, true, false)
+	if got := actionsByPath(actions)["a.js"]; got != genUpdate {
+		t.Errorf("config change on a CRLF checkout: got %s, want %s", got, genUpdate)
+	}
+	if readFile(t, filepath.Join(dir, "a.js")) != "line 1\nline 3\n" {
+		t.Error("config change not applied")
+	}
+}
+
+func TestWriteGeneratedFiles_EmptiedFileIsAnEdit(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := writeGeneratedFiles(dir, map[string]string{"a.js": "a1\n"}, true, false); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "a.js"), "") // deliberately emptied
+	actions, _ := writeGeneratedFiles(dir, map[string]string{"a.js": "a2\n"}, true, false)
+	if got := actionsByPath(actions)["a.js"]; got != genKeep {
+		t.Errorf("emptied file: got %s, want %s", got, genKeep)
+	}
+	if readFile(t, filepath.Join(dir, "a.js")) != "" {
+		t.Error("emptied file was refilled without --force")
+	}
+}
+
+func TestWriteGeneratedFiles_ForceKeepsEarlierBackups(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.js")
+	if _, err := writeGeneratedFiles(dir, map[string]string{"a.js": "a1\n"}, true, false); err != nil {
+		t.Fatal(err)
+	}
+	for i, edit := range []string{"edit 1\n", "edit 2\n", "edit 3\n"} {
+		writeFile(t, path, edit)
+		actions, err := writeGeneratedFiles(dir, map[string]string{"a.js": "a1\n"}, true, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"a.js.bak", "a.js.bak.1", "a.js.bak.2"}[i]
+		if actions[0].Backup != want {
+			t.Errorf("force %d: backup %q, want %q", i+1, actions[0].Backup, want)
+		}
+	}
+	for backup, want := range map[string]string{"a.js.bak": "edit 1\n", "a.js.bak.1": "edit 2\n", "a.js.bak.2": "edit 3\n"} {
+		if got := readFile(t, filepath.Join(dir, backup)); got != want {
+			t.Errorf("%s = %q, want %q", backup, got, want)
+		}
+	}
+}
+
+func TestGeneratedChangesPending_KeptFiles(t *testing.T) {
+	dir := t.TempDir()
+	v1 := map[string]string{"a.js": "a1\n"}
+	if _, err := writeGeneratedFiles(dir, v1, true, false); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "a.js"), "a1 + custom\n")
+
+	// Edited, config unchanged: the edits sit on top of the current output, up to date
+	actions, _ := writeGeneratedFiles(dir, v1, false, false)
+	if generatedChangesPending(actions) {
+		t.Error("--check fails on an edited file whose config hasn't changed")
+	}
+	// Edited, and the config now generates something else: out of date
+	actions, _ = writeGeneratedFiles(dir, map[string]string{"a.js": "a2\n"}, false, false)
+	if actions[0].Action != genKeep || !generatedChangesPending(actions) {
+		t.Errorf("--check passes on a kept file that no longer matches the config: %+v", actions)
+	}
+}
+
+// nodeConfigWithBackends replaces the backends of a nodeTestProject config
+func nodeConfigWithBackends(t *testing.T, dir string, names ...string) {
+	t.Helper()
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(dir, "bffgen.config.json"))), &config); err != nil {
+		t.Fatal(err)
+	}
+	var backends []interface{}
+	for _, name := range names {
+		backends = append(backends, map[string]interface{}{"name": name, "baseUrl": "http://localhost:4001", "endpoints": []interface{}{
+			map[string]interface{}{"name": "e", "method": "GET", "path": "/x", "exposeAs": "/api/" + name},
+		}})
+	}
+	config["backends"] = backends
+	data, _ := json.MarshalIndent(config, "", "  ")
+	writeFile(t, filepath.Join(dir, "bffgen.config.json"), string(data))
+}
+
+func TestNodeGenerate_RejectsCollidingBackendNames(t *testing.T) {
+	for _, names := range [][]string{
+		{"users", "users"},               // duplicate
+		{"users", "Users"},               // same file on case-insensitive disks
+		{"user-service", "user_service"}, // same env var (USER_SERVICE_URL) and identifier
+	} {
+		t.Run(strings.Join(names, ","), func(t *testing.T) {
+			dir := nodeTestProject(t, "fastify")
+			nodeConfigWithBackends(t, dir, names...)
+			before := snapshot(t, dir)
+			err := inDir(t, dir, false, false, false, generateNodeJS)
+			if err == nil || !strings.Contains(err.Error(), names[1]) {
+				t.Errorf("colliding names %v: err = %v", names, err)
+			}
+			if d := diffSnapshots(before, snapshot(t, dir)); len(d) > 0 {
+				t.Errorf("rejected config still wrote: %v", d)
+			}
+		})
+	}
+}
+
+func TestNodeGenerate_CorruptManifestWritesNothing(t *testing.T) {
+	dir := nodeTestProject(t, "express")
+	if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+		t.Fatal(err)
+	}
+	// A merge conflict in the manifest, and a runtime file that generate would recreate
+	writeFile(t, filepath.Join(dir, generatedManifestPath), "<<<<<<< HEAD\n{}\n")
+	if err := os.Remove(filepath.Join(dir, "src", "utils", "upstream.js")); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, dir)
+
+	if err := inDir(t, dir, false, false, false, generateNodeJS); err == nil {
+		t.Error("corrupt manifest accepted")
+	}
+	if d := diffSnapshots(before, snapshot(t, dir)); len(d) > 0 {
+		t.Errorf("failed generate still wrote: %v", d)
+	}
+}

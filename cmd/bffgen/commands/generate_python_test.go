@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -257,7 +258,7 @@ func TestRegisterPythonRouters_Legacy(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		if err := registerPythonRouters(path); err != nil {
+		if _, err := registerPythonRouters(path, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -276,6 +277,9 @@ func TestGeneratePython_DryRunWritesNothing(t *testing.T) {
 	if err := os.WriteFile(pythonConfigFile, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile("main.py", []byte("include_routers(app)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	dryRun = true
 	defer func() { dryRun = false }()
@@ -283,7 +287,7 @@ func TestGeneratePython_DryRunWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
+	if len(entries) != 2 {
 		t.Errorf("dry run wrote files: %v", entries)
 	}
 }
@@ -326,3 +330,101 @@ func TestGeneratePython_Deterministic(t *testing.T) {
 }
 
 // Note: contains helper function is defined in init_python_test.go and shared across test files
+
+// pythonTestProject writes a config and main.py into a new directory and changes into it
+func pythonTestProject(t *testing.T, config, mainPy string) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile(pythonConfigFile, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("main.py", []byte(mainPy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+const pythonTestConfig = `{"backends": [{"name": "api", "baseUrl": "http://localhost:5000", "endpoints": [{"method": "GET", "path": "/api/x"}]}]}`
+
+func TestGeneratePython_RejectsCollidingBackendNames(t *testing.T) {
+	config := `{"backends": [
+		{"name": "user-service", "baseUrl": "http://localhost:4001", "endpoints": [{"method": "GET", "path": "/a"}]},
+		{"name": "user_service", "baseUrl": "http://localhost:4002", "endpoints": [{"method": "GET", "path": "/b"}]}]}`
+	dir := pythonTestProject(t, config, "include_routers(app)\n")
+	err := generatePython()
+	if err == nil || !strings.Contains(err.Error(), "user_service") {
+		t.Errorf("backends generating the same module accepted: %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Errorf("rejected config still wrote: %v", entries)
+	}
+}
+
+func TestGeneratePython_CorruptManifestWritesNothing(t *testing.T) {
+	dir := pythonTestProject(t, pythonTestConfig, "include_routers(app)\n")
+	if err := os.MkdirAll(".bffgen", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(generatedManifestPath, []byte("<<<<<<< HEAD\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := generatePython(); err == nil {
+		t.Error("corrupt manifest accepted")
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 3 {
+		t.Errorf("failed generate still wrote: %v", entries)
+	}
+}
+
+func TestGeneratePython_CheckIncludesMainPy(t *testing.T) {
+	pythonTestProject(t, pythonTestConfig, "include_routers(app)\n")
+	if err := generatePython(); err != nil {
+		t.Fatal(err)
+	}
+	checkMode = true
+	defer func() { checkMode = false }()
+	if err := generatePython(); err != nil {
+		t.Fatalf("--check failed on an up-to-date project: %v", err)
+	}
+
+	// main.py from an older project: generate would rewrite the router registration
+	legacy := "app = FastAPI()\n" + legacyImportMarker + "\nfrom routers.a_router import router\n" + legacyMarkerEnd +
+		"\n" + legacyIncludeMarker + "\napp.include_router(router)\n" + legacyMarkerEnd + "\n"
+	if err := os.WriteFile("main.py", []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := generatePython(); err == nil {
+		t.Error("--check passed although main.py would change")
+	}
+	if content, _ := os.ReadFile("main.py"); string(content) != legacy {
+		t.Error("--check wrote main.py")
+	}
+}
+
+func TestGeneratePython_MigratesLegacyGitignore(t *testing.T) {
+	pythonTestProject(t, pythonTestConfig, "include_routers(app)\n")
+	legacy := "__pycache__/\n\n# bffgen\n.bffgen/\n"
+	if err := os.WriteFile(".gitignore", []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dryRun = true
+	if err := generatePython(); err != nil {
+		t.Fatal(err)
+	}
+	dryRun = false
+	if content, _ := os.ReadFile(".gitignore"); string(content) != legacy {
+		t.Fatal("dry run changed .gitignore")
+	}
+
+	for i := 0; i < 2; i++ { // idempotent
+		if err := generatePython(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "__pycache__/\n\n# bffgen\n.bffgen/*\n!.bffgen/generated.json\n"
+	if content, _ := os.ReadFile(".gitignore"); string(content) != want {
+		t.Errorf(".gitignore = %q, want %q", content, want)
+	}
+}

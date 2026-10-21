@@ -237,7 +237,9 @@ saves your version as `<file>.bak`), and `--dry-run` / `--check` write nothing. 
 `bffgen generate` also creates or upgrades the runtime files the routers use:
 `utils/upstream.py`, `services/http_client.py` and `utils/circuit_breaker.py`. A file is
 replaced only if its `bffgen:runtime` marker is older than the current one, and your previous
-copy is kept as `<file>.bak`. `--dry-run` and `--check` only report what would change.
+copy is kept as `<file>.bak` (or `.bak.1`, `.bak.2`, … if earlier backups exist). `--dry-run`
+and `--check` only report what would change; `--check` also fails if `main.py` doesn't register
+the routers yet.
 
 ### Generated Router Example
 

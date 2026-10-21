@@ -75,6 +75,7 @@ func generateNodeJS() error {
 	// Render every file first, so an invalid config writes nothing
 	files := map[string]string{}
 	var services []string
+	names := backendNames{}
 	for _, backend := range backends {
 		backendMap, ok := backend.(map[string]interface{})
 		if !ok {
@@ -84,6 +85,9 @@ func generateNodeJS() error {
 		serviceName, _ := backendMap["name"].(string)
 		if serviceName == "" {
 			continue
+		}
+		if err := names.add(serviceName, "file:"+strings.ToLower(serviceName), "env:"+nodeEnvKey(serviceName), "id:"+nodeIdentifier(serviceName)); err != nil {
+			return err
 		}
 
 		// Skip backends with no endpoints
@@ -102,19 +106,33 @@ func generateNodeJS() error {
 
 	progress.Success("Configuration loaded")
 
-	// Generated routes require the runtime files; create or upgrade them first
+	// Plan every write before making any, so an error (e.g. a corrupt manifest) writes nothing
 	write := !checkMode && !dryRun
-	runtimeActions, err := ensureNodeRuntimeFiles(".", framework, write)
+	runtimeActions, err := ensureNodeRuntimeFiles(".", framework, false)
 	if err != nil {
-		return fmt.Errorf("failed to update runtime files: %w", err)
+		return fmt.Errorf("failed to check runtime files: %w", err)
+	}
+	plan, err := planGeneratedWrites(".", files, forceMode)
+	if err != nil {
+		return err
+	}
+
+	// Generated routes require the runtime files; create or upgrade them first
+	if write {
+		if runtimeActions, err = ensureNodeRuntimeFiles(".", framework, true); err != nil {
+			return fmt.Errorf("failed to update runtime files: %w", err)
+		}
 	}
 	printRuntimeActions(runtimeActions, write)
 
 	fmt.Printf("📝 Generating %s routes, controllers and services for %d backends\n", framework, len(services))
-	actions, err := writeGeneratedFiles(".", files, write, forceMode)
-	if err != nil {
-		return err
+	if write {
+		if err := plan.apply("."); err != nil {
+			return err
+		}
 	}
+	plan.print(write)
+	actions := plan.Actions
 
 	indexChanged, err := autoRegisterRoutes(framework, services, write)
 	switch {
@@ -153,6 +171,25 @@ func generateNodeJS() error {
 
 	LogVerboseCommand("Code generation completed successfully")
 
+	return nil
+}
+
+// backendNames rejects backends whose names collide: same name ignoring case (one file on
+// case-insensitive disks such as macOS and Windows), same env var, or same module/identifier
+type backendNames map[string]string
+
+func (b backendNames) add(name string, keys ...string) error {
+	for _, key := range keys {
+		if other, ok := b[key]; ok {
+			if other == name {
+				return fmt.Errorf("backend %q is defined twice; backend names must be unique", name)
+			}
+			return fmt.Errorf("backends %q and %q would generate the same files or variables; rename one", other, name)
+		}
+	}
+	for _, key := range keys {
+		b[key] = name
+	}
 	return nil
 }
 

@@ -69,6 +69,7 @@ func generatePython() error {
 
 	// Build all backends first so an invalid config writes nothing
 	var generated []*pythonBackendData
+	names := backendNames{}
 	for _, backend := range backends {
 		backendMap, ok := backend.(map[string]interface{})
 		if !ok {
@@ -81,15 +82,11 @@ func generatePython() error {
 		if data == nil {
 			continue
 		}
+		if err := names.add(data.ServiceName, "module:"+data.Module, "env:"+data.EnvKey); err != nil {
+			return err
+		}
 		generated = append(generated, data)
 	}
-
-	// Generated routers require the runtime files; create or upgrade them first
-	actions, err := ensurePythonRuntimeFiles(".", write)
-	if err != nil {
-		return fmt.Errorf("failed to update runtime files: %w", err)
-	}
-	printRuntimeActions(actions, write)
 
 	files := map[string]string{}
 	var modules []string
@@ -112,13 +109,47 @@ func generatePython() error {
 	}
 	files["routers/__init__.py"] = registry
 
-	fileActions, err := writeGeneratedFiles(".", files, write, forceMode)
+	// Plan every write before making any, so an error (e.g. a corrupt manifest) writes nothing
+	actions, err := ensurePythonRuntimeFiles(".", false)
+	if err != nil {
+		return fmt.Errorf("failed to check runtime files: %w", err)
+	}
+	plan, err := planGeneratedWrites(".", files, forceMode)
+	if err != nil {
+		return err
+	}
+	mainChanged, err := registerPythonRouters("main.py", false)
+	if err != nil {
+		return fmt.Errorf("failed to register routers: %w", err)
+	}
+	gitignoreChanged, err := migratePythonGitignore(".gitignore", false)
 	if err != nil {
 		return err
 	}
 
+	// Generated routers require the runtime files; create or upgrade them first
+	if write {
+		if actions, err = ensurePythonRuntimeFiles(".", true); err != nil {
+			return fmt.Errorf("failed to update runtime files: %w", err)
+		}
+	}
+	printRuntimeActions(actions, write)
+
+	if write {
+		if err := plan.apply("."); err != nil {
+			return err
+		}
+	}
+	plan.print(write)
+
 	if !write {
-		if checkMode && (len(actions) > 0 || generatedChangesPending(fileActions)) {
+		if mainChanged {
+			fmt.Println("🔍 Would register the routers in main.py")
+		}
+		if gitignoreChanged {
+			fmt.Println("🔍 Would update .gitignore so .bffgen/generated.json is committed")
+		}
+		if checkMode && (len(actions) > 0 || generatedChangesPending(plan.Actions) || mainChanged || gitignoreChanged) {
 			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
 		fmt.Println()
@@ -126,8 +157,11 @@ func generatePython() error {
 		return nil
 	}
 
-	if err := registerPythonRouters("main.py"); err != nil {
+	if _, err := registerPythonRouters("main.py", true); err != nil {
 		return fmt.Errorf("failed to register routers: %w", err)
+	}
+	if _, err := migratePythonGitignore(".gitignore", true); err != nil {
+		return err
 	}
 	warnStrictPythonSettings("config.py")
 
@@ -366,25 +400,61 @@ const (
 // call include_routers(app) from routers/__init__.py and need no change. In older projects
 // the lines between each legacy marker and its "Do not modify" line are replaced (not
 // appended to), so repeated runs don't duplicate imports.
-func registerPythonRouters(mainFile string) error {
+func registerPythonRouters(mainFile string, write bool) (bool, error) {
 	content, err := os.ReadFile(mainFile)
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", mainFile, err)
+		return false, fmt.Errorf("failed to read %s: %w", mainFile, err)
 	}
 	text := string(content)
 	if strings.Contains(text, "include_routers(app)") {
-		return nil
+		return false, nil
 	}
 
 	updated, okImports := replaceLegacyBlock(text, legacyImportMarker, "from routers import include_routers")
 	updated, okIncludes := replaceLegacyBlock(updated, legacyIncludeMarker, "include_routers(app)")
 	if !okImports || !okIncludes {
-		fmt.Printf("⚠️  %s doesn't register routers; add these lines to it:\n", mainFile)
-		fmt.Println("      from routers import include_routers")
-		fmt.Println("      include_routers(app)")
-		return nil
+		if !write { // generate checks before it writes; warn once
+			fmt.Printf("⚠️  %s doesn't register routers; add these lines to it:\n", mainFile)
+			fmt.Println("      from routers import include_routers")
+			fmt.Println("      include_routers(app)")
+		}
+		return false, nil
 	}
-	return os.WriteFile(mainFile, []byte(updated), utils.ProjectFilePerm)
+	if !write {
+		return true, nil
+	}
+	return true, os.WriteFile(mainFile, []byte(updated), utils.ProjectFilePerm)
+}
+
+// legacyBffgenIgnore matches the .gitignore line of Python projects made before bffgen 3.7,
+// which ignored all of .bffgen/ including the manifest that should be committed
+var legacyBffgenIgnore = regexp.MustCompile(`(?m)^/?\.bffgen/?[ \t]*\r?$`)
+
+const bffgenIgnoreRules = `.bffgen/*
+!.bffgen/generated.json`
+
+// migratePythonGitignore replaces that line so .bffgen/generated.json is committed. It reports
+// whether the file needs (or, with write, got) the change; a missing .gitignore is left alone.
+func migratePythonGitignore(path string, write bool) (bool, error) {
+	content, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !legacyBffgenIgnore.Match(content) {
+		return false, nil
+	}
+	if !write {
+		return true, nil
+	}
+	updated := legacyBffgenIgnore.ReplaceAllLiteral(content, []byte(bffgenIgnoreRules))
+	if err := os.WriteFile(path, updated, utils.ProjectFilePerm); err != nil {
+		return true, err
+	}
+	fmt.Println("♻️  Updated .gitignore so .bffgen/generated.json is committed")
+	return true, nil
 }
 
 var settingsIgnoresExtra = regexp.MustCompile(`extra\s*=\s*["']ignore["']`)

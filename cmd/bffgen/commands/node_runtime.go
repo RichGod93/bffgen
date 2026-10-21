@@ -78,23 +78,25 @@ func ensurePythonRuntimeFiles(projectDir string, write bool) ([]runtimeAction, e
 // Missing files are created. A file with an older (or no) runtime marker is replaced, and the
 // previous copy is kept as <file>.bak. Files that already carry the current marker are left
 // alone, including any local edits. With write=false nothing is written and the returned
-// actions describe what would happen.
+// actions describe what would happen; earlier backups are never overwritten (see backupPath).
 func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, render func(string) (string, error), write bool) ([]runtimeAction, error) {
 	var actions []runtimeAction
 	for _, file := range files {
 		path := filepath.Join(projectDir, file.path)
 
 		existing, err := os.ReadFile(path)
+		var action runtimeAction
 		switch {
 		case os.IsNotExist(err):
-			actions = append(actions, runtimeAction{Path: file.path, Action: "created"})
+			action = runtimeAction{Path: file.path, Action: "created"}
 		case err != nil:
 			return actions, err
 		case runtimeVersionOf(existing) == version:
 			continue
 		default:
-			actions = append(actions, runtimeAction{Path: file.path, Action: "updated", Backup: file.path + ".bak"})
+			action = runtimeAction{Path: file.path, Action: "updated", Backup: backupPath(projectDir, file.path)}
 		}
+		actions = append(actions, action)
 
 		if !write {
 			continue
@@ -105,7 +107,7 @@ func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, ren
 			return actions, fmt.Errorf("failed to render %s: %w", file.template, err)
 		}
 		if existing != nil {
-			if err := os.WriteFile(path+".bak", existing, utils.ProjectFilePerm); err != nil {
+			if err := os.WriteFile(filepath.Join(projectDir, action.Backup), existing, utils.ProjectFilePerm); err != nil {
 				return actions, err
 			}
 		}

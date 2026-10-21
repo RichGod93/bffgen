@@ -41,13 +41,33 @@ const (
 )
 
 type generatedAction struct {
-	Path   string // slash-separated, relative to the project
-	Action string
+	Path     string // slash-separated, relative to the project
+	Action   string
+	Backup   string // genReplace: where the edited version is saved
+	Outdated bool   // genKeep: the config now generates different content than the kept file was made from
 }
 
+// contentHash hashes content with CRLF line endings normalised to LF, so a checkout with
+// core.autocrlf=true doesn't make every generated file look edited
 func contentHash(content []byte) string {
-	sum := sha256.Sum256(content)
+	sum := sha256.Sum256(normalizeEOL(content))
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func normalizeEOL(content []byte) []byte {
+	return bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
+}
+
+// backupPath returns where to save the previous copy of path (relative to projectDir):
+// <path>.bak, or <path>.bak.1, <path>.bak.2, ... if earlier backups exist, so none is overwritten
+func backupPath(projectDir, path string) string {
+	backup := path + ".bak"
+	for n := 1; ; n++ {
+		if _, err := os.Lstat(filepath.Join(projectDir, filepath.FromSlash(backup))); os.IsNotExist(err) {
+			return backup
+		}
+		backup = fmt.Sprintf("%s.bak.%d", path, n)
+	}
 }
 
 func loadGeneratedManifest(projectDir string) (*generatedManifest, error) {
@@ -82,23 +102,26 @@ func planGeneratedFiles(projectDir string, files map[string]string, m *generated
 	var actions []generatedAction
 	for _, p := range paths {
 		existing, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(p)))
-		var action string
+		a := generatedAction{Path: p}
 		switch {
 		case os.IsNotExist(err):
-			action = genCreate
+			a.Action = genCreate
 		case err != nil:
 			return nil, err
-		case bytes.Equal(existing, []byte(files[p])):
-			action = genUnchanged
-		case m.Files[p] == contentHash(existing), len(bytes.TrimSpace(existing)) == 0:
-			// unchanged since bffgen wrote it, or an empty placeholder (e.g. from init)
-			action = genUpdate
+		case bytes.Equal(normalizeEOL(existing), []byte(files[p])):
+			a.Action = genUnchanged
+		case m.Files[p] == contentHash(existing):
+			a.Action = genUpdate // unchanged since bffgen wrote it
+		case m.Files[p] == "" && len(bytes.TrimSpace(existing)) == 0:
+			a.Action = genUpdate // empty placeholder from a project made before bffgen 3.7
 		case force:
-			action = genReplace
+			a.Action = genReplace
+			a.Backup = backupPath(projectDir, p)
 		default:
-			action = genKeep
+			a.Action = genKeep
+			a.Outdated = m.Files[p] != contentHash([]byte(files[p]))
 		}
-		actions = append(actions, generatedAction{Path: p, Action: action})
+		actions = append(actions, a)
 	}
 
 	var stale []string
@@ -128,7 +151,7 @@ func applyGeneratedFiles(projectDir string, files map[string]string, m *generate
 				if err != nil {
 					return err
 				}
-				if err := os.WriteFile(path+".bak", old, utils.ProjectFilePerm); err != nil {
+				if err := os.WriteFile(filepath.Join(projectDir, filepath.FromSlash(a.Backup)), old, utils.ProjectFilePerm); err != nil {
 					return err
 				}
 			}
@@ -176,9 +199,15 @@ func recordGeneratedFiles(projectDir string, files map[string]string) error {
 	return applyGeneratedFiles(projectDir, files, m, actions)
 }
 
-// writeGeneratedFiles plans and (when write is set) applies regeneration-safe writes, printing
-// what happened or would happen. It returns the plan.
-func writeGeneratedFiles(projectDir string, files map[string]string, write, force bool) ([]generatedAction, error) {
+// generatedPlan is what writeGeneratedFiles will do. Planning reads but never writes, so
+// generate can plan everything (and fail on a bad manifest or path) before writing anything.
+type generatedPlan struct {
+	files    map[string]string
+	manifest *generatedManifest
+	Actions  []generatedAction
+}
+
+func planGeneratedWrites(projectDir string, files map[string]string, force bool) (*generatedPlan, error) {
 	m, err := loadGeneratedManifest(projectDir)
 	if err != nil {
 		return nil, err
@@ -187,13 +216,31 @@ func writeGeneratedFiles(projectDir string, files map[string]string, write, forc
 	if err != nil {
 		return nil, err
 	}
+	return &generatedPlan{files: files, manifest: m, Actions: actions}, nil
+}
+
+func (p *generatedPlan) apply(projectDir string) error {
+	return applyGeneratedFiles(projectDir, p.files, p.manifest, p.Actions)
+}
+
+func (p *generatedPlan) print(write bool) {
+	printGeneratedActions(p.Actions, write, !p.manifest.existed)
+}
+
+// writeGeneratedFiles plans and (when write is set) applies regeneration-safe writes, printing
+// what happened or would happen. It returns the plan.
+func writeGeneratedFiles(projectDir string, files map[string]string, write, force bool) ([]generatedAction, error) {
+	plan, err := planGeneratedWrites(projectDir, files, force)
+	if err != nil {
+		return nil, err
+	}
 	if write {
-		if err := applyGeneratedFiles(projectDir, files, m, actions); err != nil {
-			return actions, err
+		if err := plan.apply(projectDir); err != nil {
+			return plan.Actions, err
 		}
 	}
-	printGeneratedActions(actions, write, !m.existed)
-	return actions, nil
+	plan.print(write)
+	return plan.Actions, nil
 }
 
 // printGeneratedActions reports a plan; unchanged files are only listed with --verbose.
@@ -207,12 +254,16 @@ func printGeneratedActions(actions []generatedAction, write, firstRun bool) {
 		case genUpdate:
 			fmt.Printf("%s %s\n", pick(write, "♻️  Updated", "🔍 Would update"), a.Path)
 		case genReplace:
-			fmt.Printf("%s %s (your version: %s.bak)\n", pick(write, "⚠️  Replaced", "🔍 Would replace"), a.Path, a.Path)
+			fmt.Printf("%s %s (your version: %s)\n", pick(write, "⚠️  Replaced", "🔍 Would replace"), a.Path, a.Backup)
 		case genUnchanged:
 			LogVerboseCommand("Unchanged %s", a.Path)
 		case genKeep:
 			kept = append(kept, a.Path)
-			fmt.Printf("✋ Kept %s: edited since bffgen generated it\n", a.Path)
+			if a.Outdated {
+				fmt.Printf("✋ Kept %s: edited since bffgen generated it, and the config has changed since\n", a.Path)
+			} else {
+				fmt.Printf("✋ Kept %s: edited since bffgen generated it\n", a.Path)
+			}
 		case genStale:
 			fmt.Printf("🗑️  %s is no longer generated by the config; delete it if you don't use it\n", a.Path)
 		}
@@ -235,11 +286,15 @@ func pick(cond bool, a, b string) string {
 	return b
 }
 
-// generatedChangesPending reports whether a plan would change any file (for --check)
+// generatedChangesPending reports whether a plan would change any file, or keeps an edited
+// file that no longer matches the config (for --check). An edited file whose generated
+// content is still current is up to date: your edits sit on top of the current output.
 func generatedChangesPending(actions []generatedAction) bool {
 	for _, a := range actions {
-		switch a.Action {
-		case genCreate, genUpdate, genReplace:
+		switch {
+		case a.Action == genCreate, a.Action == genUpdate, a.Action == genReplace:
+			return true
+		case a.Action == genKeep && a.Outdated:
 			return true
 		}
 	}
