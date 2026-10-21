@@ -1,5 +1,5 @@
 {
-  "$schema": "https://bffgen.dev/schema.json",
+  "$schema": "https://raw.githubusercontent.com/RichGod93/bffgen/master/schemas/bffgen-config.json",
   "project": {
     "name": "express-bff-example",
     "version": "1.0.0",

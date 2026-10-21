@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/RichGod93/bffgen/master/schemas/bffgen-config.json",
+  "title": "bffgen project config",
+  "description": "bffgen.config.json (Node.js: Express, Fastify) and bffgen.config.py.json (Python: FastAPI). `bffgen generate` reads the backends; the other sections are written by `bffgen init` and are informational. Go projects use bff.config.yaml (schemas/bffgen-v1.json).",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "project": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "runtime": { "type": "string" },
+        "framework": { "type": "string", "enum": ["express", "fastify", "fastapi", "apollo", "yoga"] },
+        "async": { "type": "boolean", "description": "Python only. Generated proxy routes are always async." }
+      }
+    },
+    "server": { "type": "object" },
+    "features": { "type": "object" },
+    "development": { "type": "object" },
+    "production": { "type": "object" },
+    "backends": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/backend" }
+    }
+  },
+  "required": ["backends"],
+  "definitions": {
+    "milliseconds": {
+      "description": "A time in milliseconds, or a duration string such as \"5s\", \"500ms\" or \"1m\"",
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h)$" }
+      ]
+    },
+    "backend": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique backend name. Node.js: letters, digits, '-' and '_' (it becomes file names and require() paths). Names may not differ only in case or in '-' vs '_'."
+        },
+        "baseUrl": { "type": "string", "format": "uri", "description": "Backend base URL; override with <NAME>_URL" },
+        "url": { "type": "string", "description": "Python: accepted instead of baseUrl" },
+        "timeout": { "$ref": "#/definitions/milliseconds", "description": "Per-attempt timeout (default 10000 ms)" },
+        "retries": { "type": "integer", "minimum": 0, "description": "Extra attempts for GET, HEAD and OPTIONS (default 2)" },
+        "circuitBreaker": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "failureThreshold": { "type": "integer", "minimum": 1, "default": 5 },
+            "resetTimeout": { "$ref": "#/definitions/milliseconds", "description": "How long the circuit stays open (default 30000 ms)" },
+            "recoveryTimeout": { "$ref": "#/definitions/milliseconds", "description": "Python: accepted instead of resetTimeout" }
+          }
+        },
+        "healthCheck": { "type": "object" },
+        "endpoints": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/endpoint" }
+        }
+      },
+      "required": ["name", "endpoints"]
+    },
+    "endpoint": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "get", "post", "put", "patch", "delete", "head", "options"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Node.js: the backend path. Python: the path the BFF exposes. Parameters as :id or {id}."
+        },
+        "exposeAs": { "type": "string", "pattern": "^/", "description": "Node.js: the path the BFF exposes" },
+        "upstreamPath": { "type": "string", "pattern": "^/", "description": "Python: the backend path (default: path)" },
+        "requiresAuth": { "type": "boolean", "default": false, "description": "Require a valid JWT; otherwise 401" },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[^\\s,]+$" },
+          "description": "Also require one of these roles (from the token's roles/role claim or JWT_ROLES_CLAIM); otherwise 403. Implies requiresAuth."
+        },
+        "timeout": { "$ref": "#/definitions/milliseconds" }
+      },
+      "required": ["method", "path"]
+    }
+  }
+}

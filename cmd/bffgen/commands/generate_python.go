@@ -114,6 +114,13 @@ func generatePython() error {
 	if err != nil {
 		return fmt.Errorf("failed to check runtime files: %w", err)
 	}
+	if conflict := runtimeConflict(actions, filepath.Join("utils", "authorize.py")); conflict != "" {
+		for _, data := range generated {
+			if data.AnyRoles {
+				return fmt.Errorf("endpoints use \"roles\", but %s is your own file (no bffgen:runtime marker); rename it and run 'bffgen generate' again", conflict)
+			}
+		}
+	}
 	plan, err := planGeneratedWrites(".", files, forceMode)
 	if err != nil {
 		return err
@@ -149,7 +156,7 @@ func generatePython() error {
 		if gitignoreChanged {
 			fmt.Println("🔍 Would update .gitignore so .bffgen/generated.json is committed")
 		}
-		if checkMode && (len(actions) > 0 || generatedChangesPending(plan.Actions) || mainChanged || gitignoreChanged) {
+		if checkMode && (runtimeChangesPending(actions) || generatedChangesPending(plan.Actions) || mainChanged || gitignoreChanged) {
 			return fmt.Errorf("generated code is out of date; run 'bffgen generate'")
 		}
 		fmt.Println()
@@ -190,7 +197,8 @@ type pythonBackendData struct {
 	ClassName   string // service class, e.g. UserServiceService
 	EnvKey      string
 	BaseURL     string
-	AnyAuth     bool
+	AnyAuth     bool // an endpoint requires authentication but no roles
+	AnyRoles    bool
 	Endpoints   []pythonEndpointData
 
 	Timeout          int
@@ -208,6 +216,8 @@ type pythonEndpointData struct {
 	Params       []string // path parameters, in order
 	HandlerName  string
 	RequiresAuth bool
+	Roles        []string // any one of these is required (implies RequiresAuth)
+	RolesArgs    string   // Roles as Python string arguments, e.g. "admin", "support"
 	HasBody      bool
 }
 
@@ -280,6 +290,11 @@ func buildPythonBackend(backend map[string]interface{}) (*pythonBackendData, err
 		if exposed == "" || method == "" {
 			continue
 		}
+		roles, err := endpointRoles(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("backend %s, endpoint %s %s: %w", name, method, exposed, err)
+		}
+		requiresAuth = requiresAuth || len(roles) > 0
 
 		method = strings.ToUpper(method)
 		if !nodeRouteMethods[method] {
@@ -310,7 +325,8 @@ func buildPythonBackend(backend map[string]interface{}) (*pythonBackendData, err
 		}
 		usedNames[handler] = true
 
-		data.AnyAuth = data.AnyAuth || requiresAuth
+		data.AnyAuth = data.AnyAuth || requiresAuth && len(roles) == 0
+		data.AnyRoles = data.AnyRoles || len(roles) > 0
 		data.Endpoints = append(data.Endpoints, pythonEndpointData{
 			Method:       method,
 			Path:         colonToBraceParam.ReplaceAllString(exposed, "{$1}"),
@@ -318,6 +334,8 @@ func buildPythonBackend(backend map[string]interface{}) (*pythonBackendData, err
 			Params:       params,
 			HandlerName:  handler,
 			RequiresAuth: requiresAuth,
+			Roles:        roles,
+			RolesArgs:    pythonStringArgs(roles),
 			HasBody:      method != "GET" && method != "HEAD",
 		})
 	}

@@ -186,13 +186,16 @@ async function buildApp() {
                     (request.headers.authorization && request.headers.authorization.split(' ')[1]);
       
       if (!token) {
+        reply.header('WWW-Authenticate', 'Bearer');
         return reply.status(401).send({ error: 'Authentication required' });
       }
       
       const decoded = jwt.verify(token, JWT_SECRET);
       request.user = decoded; // Attach user data to request
     } catch (error) {
-      return reply.status(403).send({ error: 'Invalid or expired token' });
+      // 401: the token is not valid. 403 is for valid users without a required role (authorize.js)
+      reply.header('WWW-Authenticate', 'Bearer error="invalid_token"');
+      return reply.status(401).send({ error: 'Invalid or expired token' });
     }
   });
 

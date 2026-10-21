@@ -1,0 +1,69 @@
+"""
+Role-based access control for generated routers
+Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+bffgen ships a newer version and keeps your previous copy as authorize.py.bak.
+
+Endpoints with "roles": ["admin", ...] in bffgen.config.py.json get
+Depends(require_roles(...)), which authenticates the request (middleware.auth) and then
+requires at least one of the listed roles:
+  401 Unauthorized  missing, invalid or expired token (from require_authentication)
+  403 Forbidden     authenticated, but none of the required roles ("Insufficient role";
+                    the required roles are not revealed)
+
+Roles are read from the verified JWT payload:
+  - JWT_ROLES_CLAIM unset: the "roles" claim, else the "role" claim
+  - JWT_ROLES_CLAIM set: that claim, e.g. "cognito:groups", or a dotted path into nested
+    claims, e.g. "realm_access.roles" (Keycloak). A claim whose name contains dots, such as
+    "https://example.com/roles", is matched by its full name first.
+A claim may be a list of strings or one string of space- or comma-separated roles.
+"""
+
+import os
+import re
+from typing import Any, Callable
+
+from fastapi import Depends, HTTPException
+
+from middleware.auth import require_authentication
+
+
+def _claim_value(user: dict, claim: str) -> Any:
+    if claim in user:
+        return user[claim]
+    value: Any = user
+    for key in claim.split("."):
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
+def user_roles(user: Any) -> list[str]:
+    """The roles in a verified JWT payload"""
+    if not isinstance(user, dict):
+        return []
+    claim = os.getenv("JWT_ROLES_CLAIM")
+    if claim:
+        value = _claim_value(user, claim)
+    else:
+        value = user["roles"] if "roles" in user else user.get("role")
+    if isinstance(value, list):
+        return [role for role in value if isinstance(role, str) and role]
+    if isinstance(value, str):
+        return [role for role in re.split(r"[\s,]+", value) if role]
+    return []
+
+
+def has_any_role(user: Any, roles: tuple[str, ...]) -> bool:
+    """Whether user has at least one of roles"""
+    granted = user_roles(user)
+    return any(role in granted for role in roles)
+
+
+def require_roles(*roles: str) -> Callable:
+    """Dependency that requires an authenticated user with one of roles"""
+
+    async def check_roles(user: dict = Depends(require_authentication)) -> dict:
+        if not has_any_role(user, roles):
+            raise HTTPException(status_code=403, detail="Insufficient role")
+        return user
+
+    return check_roles

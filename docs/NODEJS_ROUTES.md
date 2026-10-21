@@ -10,6 +10,11 @@ status codes clients see when a backend fails.
 
 ## Configuration
 
+The config format is described by the JSON Schema
+[`schemas/bffgen-config.json`](../schemas/bffgen-config.json), which new configs reference in
+`$schema` so editors can validate and autocomplete them. `bffgen config validate` checks a config
+with the same rules as `bffgen generate`.
+
 ```json
 {
   "backends": [
@@ -88,6 +93,48 @@ doesn't affect the others.
 - **Half-open:** after `resetTimeout`, one trial request is let through. If it succeeds the
   circuit closes; if it fails the circuit opens again.
 
+## Authentication and roles (RBAC)
+
+An endpoint with `"requiresAuth": true` needs a valid JWT (`Authorization: Bearer <token>`,
+signed with `JWT_SECRET`). An endpoint with `"roles"` also needs one of the listed roles;
+`roles` implies `requiresAuth`:
+
+```json
+{ "name": "deleteUser", "method": "DELETE", "path": "/users/:id", "exposeAs": "/api/users/:id", "roles": ["admin", "support"] }
+```
+
+| Request | Status | Body |
+|---|---|---|
+| No token, or an invalid or expired one | `401 Unauthorized` | `{ "error": "Invalid or expired token" }` (or `Authentication required`) |
+| Valid token without any of the roles | `403 Forbidden` | `{ "error": "Forbidden", "message": "Insufficient role", "code": "INSUFFICIENT_ROLE" }` |
+| Valid token with one of the roles | proxied to the backend | |
+
+The 403 response doesn't say which roles are required. Routes call `authorize([...])` from
+`src/middleware/authorize.js` after authentication (Express: route middleware, Fastify:
+`preHandler`); you can use it in your own routes too.
+
+Roles are read from the verified token:
+
+- By default from the `roles` claim (a list, as in RFC 9068), or from `role` if there is no `roles` claim.
+- With `JWT_ROLES_CLAIM` set, from that claim instead, e.g. `cognito:groups` (Amazon Cognito) or
+  a dotted path such as `realm_access.roles` (Keycloak). A claim whose name contains dots, such as an
+  Auth0 namespaced claim `https://example.com/roles`, is matched by its full name first.
+- A claim can be a list of strings or one string of space- or comma-separated roles, so role names
+  can't contain spaces or commas.
+
+The demo `/api/auth/login` issues tokens with `role: "user"`. Replace it with your identity
+provider, or issue tokens with the roles your endpoints need.
+
+Projects created before v3.8.0 answered an invalid or expired token with 403 in Fastify routes
+(the check in `src/index.js`). Once an endpoint has `roles`, `bffgen generate` changes that line
+to 401, so 403 always means a missing role; nothing else in `src/index.js` is changed, and the
+previous copy is saved as `src/index.js.bak`. If `src/middleware/authorize.js` is a file of your
+own (no `bffgen:runtime` marker), it is kept, and `generate` asks you to rename it before it
+generates endpoints with `roles`.
+
+401 responses carry `WWW-Authenticate: Bearer` (RFC 9110), with `error="invalid_token"` for an
+invalid, expired or not-yet-valid token.
+
 ## Error responses
 
 When a backend fails, the route answers with one of these statuses and a JSON body:
@@ -108,13 +155,14 @@ such as stack traces.
 
 ## Runtime files
 
-Generated routes use three files in your project:
+Generated routes use these files in your project:
 
 | File | Purpose |
 |---|---|
 | `src/utils/upstream.js` | Forwards requests and maps failures to responses |
 | `src/services/httpClient.js` | HTTP client with timeouts and retries |
 | `src/utils/circuit-breaker.js` | Circuit breaker |
+| `src/middleware/authorize.js` | Role checks for endpoints with `roles` |
 
 You can use `HttpClient` and `CircuitBreaker` in your own services and controllers too. Errors
 they throw (`UpstreamError`, `CircuitOpenError`) carry a `statusCode` of 502, 503 or 504, so

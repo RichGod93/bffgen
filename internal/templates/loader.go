@@ -61,6 +61,7 @@ type RouteTemplateData struct {
 	EnvKey       string // prefix of the backend's environment variables, e.g. USERS
 	BaseURL      string
 	AnyAuth      bool // at least one endpoint requires authentication
+	AnyRoles     bool // at least one endpoint requires roles
 	Endpoints    []RouteEndpointData
 
 	// Resilience settings, from the backend's timeout, retries and circuitBreaker config
@@ -78,6 +79,8 @@ type RouteEndpointData struct {
 	Path         string // path exposed by the BFF (exposeAs)
 	BackendPath  string // path on the backend service; :params are filled from Path at runtime
 	RequiresAuth bool
+	Roles        []string // any one of these is required (implies RequiresAuth)
+	RolesJS      string   // Roles as a JS array literal, e.g. ['admin', 'support']
 }
 
 // EndpointData represents an API endpoint
@@ -122,7 +125,7 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",
 		"response-transformer.js.tmpl", "request-batcher.js.tmpl", "field-selector.js.tmpl",
 		// Runtime used by generated routes
-		"upstream.js.tmpl",
+		"upstream.js.tmpl", "authorize.js.tmpl",
 		// GraphQL utilities
 		"graphql/rest-datasource.js.tmpl", "graphql/schema-stitching.js.tmpl",
 		// Docker and scripts

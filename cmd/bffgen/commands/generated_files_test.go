@@ -158,22 +158,7 @@ func TestRecordGeneratedFiles(t *testing.T) {
 // nodeTestProject creates a minimal Express or Fastify project (no npm install) with two backends
 func nodeTestProject(t *testing.T, framework string) string {
 	t.Helper()
-	parent := t.TempDir()
-	dir := filepath.Join(parent, "app")
-	create := createNodeExpressMainFileWithOptions
-	if framework == "fastify" {
-		create = createNodeFastifyMainFileWithOptions
-	}
-	// Like `bffgen init app`: run from the parent with a relative project name
-	err := inDir(t, parent, false, false, false, func() error {
-		if err := createProjectDirectories("app", scaffolding.LanguageNodeExpress); err != nil {
-			return err
-		}
-		return create("app", nil, ProjectOptions{SkipTests: true, SkipDocs: true, MiddlewareFlag: "none"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := nodeInitProject(t, framework)
 	endpoint := func(method, path, exposeAs string) map[string]interface{} {
 		return map[string]interface{}{"name": "e", "method": method, "path": path, "exposeAs": exposeAs, "requiresAuth": true}
 	}
@@ -190,6 +175,28 @@ func nodeTestProject(t *testing.T, framework string) string {
 	}
 	data, _ := json.MarshalIndent(config, "", "  ")
 	writeFile(t, filepath.Join(dir, "bffgen.config.json"), string(data))
+	return dir
+}
+
+// nodeInitProject creates an Express or Fastify project as `bffgen init` writes it (no npm install)
+func nodeInitProject(t *testing.T, framework string) string {
+	t.Helper()
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "app")
+	create := createNodeExpressMainFileWithOptions
+	if framework == "fastify" {
+		create = createNodeFastifyMainFileWithOptions
+	}
+	// Like `bffgen init app`: run from the parent with a relative project name
+	err := inDir(t, parent, false, false, false, func() error {
+		if err := createProjectDirectories("app", scaffolding.LanguageNodeExpress); err != nil {
+			return err
+		}
+		return create("app", nil, ProjectOptions{SkipTests: true, SkipDocs: true, MiddlewareFlag: "none"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return dir
 }
 
@@ -470,6 +477,94 @@ func TestNodeGenerate_CorruptManifestWritesNothing(t *testing.T) {
 
 	if err := inDir(t, dir, false, false, false, generateNodeJS); err == nil {
 		t.Error("corrupt manifest accepted")
+	}
+	if d := diffSnapshots(before, snapshot(t, dir)); len(d) > 0 {
+		t.Errorf("failed generate still wrote: %v", d)
+	}
+}
+
+// addRoles gives the first endpoint of the first backend in a nodeTestProject config roles
+func addRoles(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, "bffgen.config.json")
+	config := strings.Replace(readFile(t, path), `"requiresAuth": true`, `"requiresAuth": true, "roles": ["admin"]`, 1)
+	writeFile(t, path, config)
+}
+
+func TestNodeGenerate_FixesLegacyInvalidTokenStatus(t *testing.T) {
+	for _, framework := range []string{"express", "fastify"} {
+		t.Run(framework, func(t *testing.T) {
+			dir := nodeTestProject(t, framework)
+			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+				t.Fatal(err)
+			}
+			// What bffgen < 3.8 wrote in src/index.js
+			index := filepath.Join(dir, "src", "index.js")
+			current := readFile(t, index)
+			legacy := strings.NewReplacer(
+				".status(401).send({ error: 'Invalid or expired token' })", ".status(403).send({ error: 'Invalid or expired token' })",
+				".status(401).json({ error: 'Invalid or expired token' })", ".status(403).json({ error: 'Invalid or expired token' })",
+			).Replace(current)
+			if legacy == current || !legacyInvalidTokenStatus.MatchString(legacy) {
+				t.Fatal("test setup: invalid-token line not found in src/index.js")
+			}
+			legacy += "\n// my custom code\n"
+			writeFile(t, index, legacy)
+
+			// Without roles the user's src/index.js is left alone, and --check passes
+			if err := inDir(t, dir, false, true, false, generateNodeJS); err != nil {
+				t.Errorf("--check failed on a project without roles: %v", err)
+			}
+			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil || readFile(t, index) != legacy {
+				t.Fatalf("src/index.js changed although no endpoint has roles (err %v)", err)
+			}
+
+			// With roles: --check reports it, generate fixes the one line and keeps a backup
+			addRoles(t, dir)
+			if err := inDir(t, dir, false, true, false, generateNodeJS); err == nil {
+				t.Error("--check passed although src/index.js would change")
+			}
+			if readFile(t, index) != legacy {
+				t.Fatal("--check wrote src/index.js")
+			}
+			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := readFile(t, index), current+"\n// my custom code\n"; got != want {
+				t.Errorf("src/index.js not fixed (or more than the one line changed):\n%s", got)
+			}
+			if readFile(t, index+".bak") != legacy {
+				t.Error("no backup of the previous src/index.js")
+			}
+			if err := inDir(t, dir, false, true, false, generateNodeJS); err != nil {
+				t.Errorf("--check failed after the fix: %v", err)
+			}
+		})
+	}
+}
+
+func TestNodeGenerate_KeepsUserAuthorizeFile(t *testing.T) {
+	dir := nodeTestProject(t, "express")
+	own := "// my own RBAC helpers\nmodule.exports = { requireAdmin() {} };\n"
+	writeFile(t, filepath.Join(dir, "src", "middleware", "authorize.js"), own)
+
+	// No roles in the config: the user's file is kept and generate succeeds
+	if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
+		t.Fatal(err)
+	}
+	if readFile(t, filepath.Join(dir, "src", "middleware", "authorize.js")) != own {
+		t.Fatal("user's authorize.js was replaced")
+	}
+	if err := inDir(t, dir, false, true, false, generateNodeJS); err != nil {
+		t.Errorf("--check fails only because of the user's authorize.js: %v", err)
+	}
+
+	// Roles need bffgen's authorize.js: an error, and nothing is written
+	addRoles(t, dir)
+	before := snapshot(t, dir)
+	err := inDir(t, dir, false, false, false, generateNodeJS)
+	if err == nil || !strings.Contains(err.Error(), "authorize.js") {
+		t.Errorf("roles with the user's authorize.js in the way: err = %v", err)
 	}
 	if d := diffSnapshots(before, snapshot(t, dir)); len(d) > 0 {
 		t.Errorf("failed generate still wrote: %v", d)

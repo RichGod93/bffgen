@@ -29,27 +29,52 @@ var runtimeMarker = regexp.MustCompile(`bffgen:runtime (\d+)`)
 type runtimeFile struct {
 	template string
 	path     string
+	// userIfUnmarked: bffgen never wrote this file without a marker (it was added in 3.8), so an
+	// existing file without one is the user's own and is never replaced
+	userIfUnmarked bool
 }
 
 // nodeRuntimeFiles are written by init and kept current by generate
 var nodeRuntimeFiles = []runtimeFile{
-	{"upstream.js.tmpl", filepath.Join("src", "utils", "upstream.js")},
-	{"service-base.js.tmpl", filepath.Join("src", "services", "httpClient.js")},
-	{"circuit-breaker.js.tmpl", filepath.Join("src", "utils", "circuit-breaker.js")},
+	{template: "upstream.js.tmpl", path: filepath.Join("src", "utils", "upstream.js")},
+	{template: "service-base.js.tmpl", path: filepath.Join("src", "services", "httpClient.js")},
+	{template: "circuit-breaker.js.tmpl", path: filepath.Join("src", "utils", "circuit-breaker.js")},
+	{template: "authorize.js.tmpl", path: filepath.Join("src", "middleware", "authorize.js"), userIfUnmarked: true},
 }
 
 // pythonRuntimeFiles are written by init and kept current by generate (templates under python/common)
 var pythonRuntimeFiles = []runtimeFile{
-	{"upstream.py.tmpl", filepath.Join("utils", "upstream.py")},
-	{"http_client.py.tmpl", filepath.Join("services", "http_client.py")},
-	{"circuit_breaker.py.tmpl", filepath.Join("utils", "circuit_breaker.py")},
+	{template: "upstream.py.tmpl", path: filepath.Join("utils", "upstream.py")},
+	{template: "http_client.py.tmpl", path: filepath.Join("services", "http_client.py")},
+	{template: "circuit_breaker.py.tmpl", path: filepath.Join("utils", "circuit_breaker.py")},
+	{template: "authorize.py.tmpl", path: filepath.Join("utils", "authorize.py"), userIfUnmarked: true},
 }
 
 // runtimeAction describes what ensureRuntimeFiles did (or would do) to one file
 type runtimeAction struct {
 	Path   string
-	Action string // "created" or "updated"
+	Action string // "created", "updated", or "conflict" (a file of the user's is in the way; left alone)
 	Backup string // previous copy, for "updated"
+}
+
+// runtimeChangesPending reports whether ensureRuntimeFiles would write anything (for --check)
+func runtimeChangesPending(actions []runtimeAction) bool {
+	for _, a := range actions {
+		if a.Action != "conflict" {
+			return true
+		}
+	}
+	return false
+}
+
+// runtimeConflict returns the conflicting file for a runtime template, or ""
+func runtimeConflict(actions []runtimeAction, path string) string {
+	for _, a := range actions {
+		if a.Action == "conflict" && a.Path == path {
+			return a.Path
+		}
+	}
+	return ""
 }
 
 // ensureNodeRuntimeFiles keeps the Node.js runtime files in projectDir current (see ensureRuntimeFiles)
@@ -93,6 +118,9 @@ func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, ren
 			return actions, err
 		case runtimeVersionOf(existing) == version:
 			continue
+		case runtimeVersionOf(existing) == 0 && file.userIfUnmarked:
+			actions = append(actions, runtimeAction{Path: file.path, Action: "conflict"})
+			continue
 		default:
 			action = runtimeAction{Path: file.path, Action: "updated", Backup: backupPath(projectDir, file.path)}
 		}
@@ -126,6 +154,9 @@ func ensureRuntimeFiles(projectDir string, files []runtimeFile, version int, ren
 func printRuntimeActions(actions []runtimeAction, write bool) {
 	for _, a := range actions {
 		switch {
+		case a.Action == "conflict":
+			fmt.Printf("⚠️  %s wasn't written by bffgen, so it was kept. Endpoints with \"roles\" need bffgen's version:\n", a.Path)
+			fmt.Println("   rename yours and run 'bffgen generate' again")
 		case !write:
 			fmt.Printf("🔍 Would %s %s\n", map[string]string{"created": "create", "updated": "update"}[a.Action], a.Path)
 		case a.Backup != "":

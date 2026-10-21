@@ -187,6 +187,7 @@ Each backend lists the routes the BFF exposes (`path`) and where they go on the 
 | `circuitBreaker.failureThreshold` | Consecutive failures that open the circuit | `5` |
 | `circuitBreaker.resetTimeout` | Time in **ms** the circuit stays open before a trial request (`recoveryTimeout` is accepted too) | `30000` |
 | `endpoints[].requiresAuth` | Require a valid JWT (`Authorization: Bearer …`); otherwise 401 | `false` |
+| `endpoints[].roles` | Also require one of these roles, e.g. `["admin"]`; otherwise 403 (`{"detail": "Insufficient role"}`). Implies `requiresAuth`. Roles come from the `roles` (or `role`) claim, or the claim named by `JWT_ROLES_CLAIM`; see [Authentication and roles](NODEJS_ROUTES.md#authentication-and-roles-rbac) | none |
 
 Times are in milliseconds, as in Node.js projects. Earlier Python examples used seconds
 (`"timeout": 30`), so `bffgen generate` rejects times under 100 ms and suggests the intended value.
@@ -235,7 +236,8 @@ saves your version as `<file>.bak`), and `--dry-run` / `--check` write nothing. 
 [Regenerating](NODEJS_ROUTES.md#regenerating); Python projects behave the same way.
 
 `bffgen generate` also creates or upgrades the runtime files the routers use:
-`utils/upstream.py`, `services/http_client.py` and `utils/circuit_breaker.py`. A file is
+`utils/upstream.py`, `services/http_client.py`, `utils/circuit_breaker.py` and `utils/authorize.py`
+(`require_roles(...)`, used by endpoints with `roles`). A file is
 replaced only if its `bffgen:runtime` marker is older than the current one, and your previous
 copy is kept as `<file>.bak` (or `.bak.1`, `.bak.2`, … if earlier backups exist). `--dry-run`
 and `--check` only report what would change; `--check` also fails if `main.py` doesn't register

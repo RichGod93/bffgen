@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2026-10-21
+
+Role-based access control for generated routes (Express, Fastify and FastAPI). See
+[Authentication and roles](docs/NODEJS_ROUTES.md#authentication-and-roles-rbac).
+
+### Added
+- **`"roles"` on endpoints**: `"roles": ["admin", "support"]` requires a valid JWT with at least one
+  of the roles; other users get `403 Forbidden` (`INSUFFICIENT_ROLE`; the required roles aren't
+  revealed). `roles` implies `requiresAuth`. Roles are read from the `roles` claim (or `role`),
+  or from the claim named by `JWT_ROLES_CLAIM`, which also accepts dotted paths such as
+  `realm_access.roles`. Generated routes use the new runtime file `src/middleware/authorize.js`
+  (Python: `utils/authorize.py`, `require_roles(...)`), which `bffgen generate` adds to existing
+  projects. If you already have a file of your own at that path, it is kept; `generate` then
+  refuses to generate endpoints with `roles` until you rename it.
+- `bffgen config validate` checks `roles`; `generate-docs` adds a 403 response to endpoints with
+  roles; `convert` to Go warns that endpoints with `requiresAuth` or `roles` are unprotected in
+  the Go project (Go configs have neither).
+- **`schemas/bffgen-config.json`**: a JSON Schema for `bffgen.config.json` and
+  `bffgen.config.py.json`. New configs reference it in `$schema`, so editors validate and
+  autocomplete them.
+
+### Changed
+- **Invalid or expired tokens get `401` instead of `403`** in Fastify routes (and in Express's
+  `/api/auth/profile`), as RFC 9110 defines them: 401 = not authenticated, 403 = authenticated but
+  not allowed. New projects are generated that way. In existing projects that use `roles`,
+  `bffgen generate` changes that one line of `src/index.js`, saves the previous copy as
+  `src/index.js.bak` and reports it (`--check` lists it as pending); projects without `roles`
+  are left alone.
+- 401 responses in new Node.js projects include `WWW-Authenticate: Bearer`, which RFC 9110
+  requires (FastAPI projects already sent it). `authorize.js` sends it in existing projects too;
+  for the other 401s, add `reply.header('WWW-Authenticate', 'Bearer')` (Express:
+  `res.set(...)`) before them in `src/index.js` and `src/middleware/auth.js`.
+
+### Fixed
+- **Express returned 500 for a token that isn't valid yet** (`nbf` in the future); it now
+  returns 401, like any other invalid token. Existing projects: in `src/middleware/auth.js`,
+  replace the two `error.name === …` checks with `error instanceof jwt.JsonWebTokenError`.
+- **`bffgen config validate` didn't work in Python projects**: it validated them as Go projects
+  and failed looking for `bff.config.yaml`. It now checks `bffgen.config.py.json` with the same
+  rules as `bffgen generate`.
+- New Node.js configs referenced the schema `https://bffgen.dev/schema.json`, a domain that
+  doesn't exist; they now reference `schemas/bffgen-config.json` in this repository.
+
 ## [3.7.0] - 2026-10-21
 
 Regenerating is now safe: files you edit are kept, `--dry-run` writes nothing, and the same

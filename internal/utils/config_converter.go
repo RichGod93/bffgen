@@ -81,7 +81,37 @@ func ConvertJSONToYAML(outputPath string) error {
 	}
 
 	fmt.Printf("📄 Converted bffgen.config.json → %s\n", outputPath)
+	if n := countProtectedEndpoints(nodeConfig); n > 0 {
+		fmt.Printf("⚠️  %d converted endpoint(s) have \"requiresAuth\" or \"roles\". Go configs have no per-endpoint\n", n)
+		fmt.Println("   authentication or roles, so these endpoints are not protected in the Go project.")
+	}
 	return nil
+}
+
+// countProtectedEndpoints counts the endpoints convertNodeJSConfigToGo converts that set
+// requiresAuth or roles, which the Go config can't express
+func countProtectedEndpoints(nodeConfig map[string]interface{}) int {
+	n := 0
+	backends, _ := nodeConfig["backends"].([]interface{})
+	for _, b := range backends {
+		backend, _ := b.(map[string]interface{})
+		name, _ := backend["name"].(string)
+		baseURL, _ := backend["baseUrl"].(string)
+		if name == "" || baseURL == "" {
+			continue // not converted
+		}
+		endpoints, _ := backend["endpoints"].([]interface{})
+		for _, e := range endpoints {
+			endpoint, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if auth, _ := endpoint["requiresAuth"].(bool); auth || endpoint["roles"] != nil {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // convertGoConfigToNodeJS converts Go config structure to Node.js format

@@ -16,6 +16,7 @@ function authenticate(req, res, next) {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.set('WWW-Authenticate', 'Bearer');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'No token provided'
@@ -34,14 +35,17 @@ function authenticate(req, res, next) {
     
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
+    if (error instanceof jwt.TokenExpiredError) {
+      res.set('WWW-Authenticate', 'Bearer error="invalid_token"');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Token expired'
       });
     }
     
-    if (error.name === 'JsonWebTokenError') {
+    // JsonWebTokenError covers bad signatures, malformed tokens and NotBeforeError (nbf in the future)
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.set('WWW-Authenticate', 'Bearer error="invalid_token"');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid token'

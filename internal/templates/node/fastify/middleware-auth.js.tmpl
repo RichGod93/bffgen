@@ -20,6 +20,7 @@ async function authPlugin(fastify, options) {
       const authHeader = request.headers.authorization;
       
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        reply.header('WWW-Authenticate', 'Bearer');
         reply.code(401).send({
           error: 'Unauthorized',
           message: 'No token provided'
@@ -38,7 +39,8 @@ async function authPlugin(fastify, options) {
       request.userId = decoded.userId || decoded.sub;
       
     } catch (error) {
-      if (error.name === 'TokenExpiredError') {
+      if (error instanceof jwt.TokenExpiredError) {
+        reply.header('WWW-Authenticate', 'Bearer error="invalid_token"');
         reply.code(401).send({
           error: 'Unauthorized',
           message: 'Token expired'
@@ -46,7 +48,9 @@ async function authPlugin(fastify, options) {
         return;
       }
       
-      if (error.name === 'JsonWebTokenError') {
+      // JsonWebTokenError covers bad signatures, malformed tokens and NotBeforeError (nbf in the future)
+      if (error instanceof jwt.JsonWebTokenError) {
+        reply.header('WWW-Authenticate', 'Bearer error="invalid_token"');
         reply.code(401).send({
           error: 'Unauthorized',
           message: 'Invalid token'

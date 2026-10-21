@@ -221,3 +221,17 @@ func TestGetStringOrDefault(t *testing.T) {
 		}
 	})
 }
+
+func TestCountProtectedEndpoints(t *testing.T) {
+	var config map[string]interface{}
+	data := `{"backends": [
+		{"name": "a", "baseUrl": "http://a", "endpoints": [{"path": "/x", "roles": ["admin"]}, {"path": "/y"}, {"path": "/w", "requiresAuth": true}]},
+		{"name": "b", "baseUrl": "http://b", "endpoints": [{"path": "/z", "roles": ["ops", "admin"], "requiresAuth": true}]},
+		{"name": "skipped", "endpoints": [{"path": "/v", "roles": ["admin"]}]}]}`
+	if err := json.Unmarshal([]byte(data), &config); err != nil {
+		t.Fatal(err)
+	}
+	if n := countProtectedEndpoints(config); n != 3 {
+		t.Errorf("got %d protected endpoints, want 3 (the backend without baseUrl isn't converted)", n)
+	}
+}

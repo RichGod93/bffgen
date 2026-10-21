@@ -183,11 +183,87 @@ func validateProjectConfig() error {
 	fmt.Printf("🔍 Validating %s project configuration...\n", projectType)
 	fmt.Println()
 
-	if projectType == "nodejs" {
+	switch projectType {
+	case "nodejs":
 		return validateNodeJSConfig()
+	case "python":
+		return validatePythonConfig()
+	}
+	return validateGoConfig()
+}
+
+// validatePythonConfig validates bffgen.config.py.json with the same checks bffgen generate
+// applies, so a config that passes generates without errors
+func validatePythonConfig() error {
+	data, err := os.ReadFile(pythonConfigFile)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("%s not found", pythonConfigFile)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
 	}
 
-	return validateGoConfig()
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("invalid JSON syntax: %w", err)
+	}
+	fmt.Println("✅ JSON syntax is valid")
+
+	errors, backends, endpoints := validatePythonConfigStructure(config)
+	if len(errors) > 0 {
+		fmt.Println("❌ Configuration has errors:")
+		for _, err := range errors {
+			fmt.Printf("   - %s\n", err)
+		}
+		return fmt.Errorf("found %d validation errors", len(errors))
+	}
+
+	fmt.Println("✅ Configuration structure is valid")
+	fmt.Printf("   - %d backends configured\n", backends)
+	fmt.Printf("   - %d total endpoints\n", endpoints)
+	return nil
+}
+
+// validatePythonConfigStructure returns every problem in a Python config, and the number of
+// backends and endpoints that would be generated
+func validatePythonConfigStructure(config map[string]interface{}) (errors []string, backendCount, endpointCount int) {
+	backends, ok := config["backends"].([]interface{})
+	if !ok {
+		return []string{"Missing or invalid 'backends' section"}, 0, 0
+	}
+	if len(backends) == 0 {
+		errors = append(errors, "No backends configured")
+	}
+
+	names := backendNames{}
+	for i, b := range backends {
+		backend, ok := b.(map[string]interface{})
+		if !ok {
+			errors = append(errors, fmt.Sprintf("Backend %d: invalid structure", i))
+			continue
+		}
+		name, _ := backend["name"].(string)
+		if name == "" {
+			errors = append(errors, fmt.Sprintf("Backend %d: empty name", i))
+			continue
+		}
+		data, err := buildPythonBackend(backend)
+		if err != nil {
+			errors = append(errors, err.Error())
+			continue
+		}
+		if data == nil {
+			errors = append(errors, fmt.Sprintf("Backend '%s': no endpoints configured", name))
+			continue
+		}
+		if err := names.add(data.ServiceName, "module:"+data.Module, "env:"+data.EnvKey); err != nil {
+			errors = append(errors, err.Error())
+			continue
+		}
+		backendCount++
+		endpointCount += len(data.Endpoints)
+	}
+	return errors, backendCount, endpointCount
 }
 
 // validateGoConfig validates Go project configuration (bff.config.yaml)
@@ -377,8 +453,14 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 		errors = append(errors, "No backends configured")
 	}
 
+	framework := "express"
+	if fw, _ := project["framework"].(string); fw == "fastify" {
+		framework = "fastify"
+	}
+
 	// Validate each backend
 	seenEndpoints := make(map[string]bool)
+	names := backendNames{}
 	for i, b := range backends {
 		backend, ok := b.(map[string]interface{})
 		if !ok {
@@ -440,6 +522,14 @@ func validateNodeJSConfigStructure(config map[string]interface{}) []string {
 			if !validMethods[strings.ToUpper(method)] {
 				errors = append(errors, fmt.Sprintf("Backend '%s', endpoint %d: invalid HTTP method: %s", name, j, method))
 			}
+		}
+
+		// Everything else bffgen generate checks: name rules and collisions, route paths, resilience settings
+		if err := names.add(name, "file:"+strings.ToLower(name), "env:"+nodeEnvKey(name), "id:"+nodeIdentifier(name)); err != nil {
+			errors = append(errors, err.Error())
+		}
+		if err := renderNodeJSBackendFiles(map[string]string{}, name, backend, framework); err != nil {
+			errors = append(errors, fmt.Sprintf("Backend '%s': %v", name, err))
 		}
 	}
 

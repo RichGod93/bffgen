@@ -1,6 +1,6 @@
 """
 Behavioural tests for the Python runtime that generated FastAPI routes use
-(utils/upstream.py, services/http_client.py, utils/circuit_breaker.py).
+(utils/upstream.py, services/http_client.py, utils/circuit_breaker.py, utils/authorize.py).
 Run by TestPythonRuntime: python python_runtime_test.py <project-dir>
 """
 
@@ -21,6 +21,10 @@ from fastapi import FastAPI, Request  # noqa: E402
 from services.http_client import HttpClient, HttpError, UpstreamError  # noqa: E402
 from utils.circuit_breaker import CircuitBreaker, CircuitOpenError  # noqa: E402
 from utils.upstream import build_path, create_upstream  # noqa: E402
+from fastapi import Depends  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from middleware.auth import require_authentication  # noqa: E402
+from utils.authorize import has_any_role, require_roles, user_roles  # noqa: E402
 
 
 class Backend:
@@ -310,6 +314,59 @@ class CircuitBreakerTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UpstreamError):
             await breaker.call(self.fail)
         self.assertEqual(breaker.state.value, "open")
+
+
+class AuthorizeTest(unittest.TestCase):
+    def setUp(self):
+        self.old = os.environ.pop("JWT_ROLES_CLAIM", None)
+
+    def tearDown(self):
+        os.environ.pop("JWT_ROLES_CLAIM", None)
+        if self.old is not None:
+            os.environ["JWT_ROLES_CLAIM"] = self.old
+
+    def test_default_claims(self):
+        self.assertEqual(user_roles({"roles": ["admin", "editor"]}), ["admin", "editor"])
+        self.assertEqual(user_roles({"role": "user"}), ["user"])
+        self.assertEqual(user_roles({"roles": "admin editor,viewer"}), ["admin", "editor", "viewer"])
+        self.assertEqual(user_roles({"roles": ["admin", 7, "", None]}), ["admin"])
+        self.assertEqual(user_roles({"sub": "u1"}), [])
+        self.assertEqual(user_roles(None), [])
+
+    def test_custom_claim(self):
+        user = {
+            "cognito:groups": ["ops"],
+            "realm_access": {"roles": ["kc-admin"]},
+            "https://example.com/roles": ["auth0-admin"],
+            "roles": ["ignored"],
+        }
+        for claim, want in [
+            ("cognito:groups", ["ops"]),
+            ("realm_access.roles", ["kc-admin"]),
+            ("https://example.com/roles", ["auth0-admin"]),
+            ("missing.claim", []),
+        ]:
+            os.environ["JWT_ROLES_CLAIM"] = claim
+            self.assertEqual(user_roles(user), want, claim)
+
+    def test_has_any_role(self):
+        self.assertTrue(has_any_role({"roles": ["editor"]}, ("admin", "editor")))
+        self.assertFalse(has_any_role({"roles": ["viewer"]}, ("admin", "editor")))
+
+    def test_require_roles(self):
+        app = FastAPI()
+
+        @app.get("/admin", dependencies=[Depends(require_roles("admin"))])
+        async def admin():
+            return {"ok": True}
+
+        client = TestClient(app)
+        app.dependency_overrides[require_authentication] = lambda: {"roles": ["admin"]}
+        self.assertEqual(client.get("/admin").status_code, 200)
+        app.dependency_overrides[require_authentication] = lambda: {"role": "user"}
+        r = client.get("/admin")
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.json(), {"detail": "Insufficient role"})
 
 
 if __name__ == "__main__":
