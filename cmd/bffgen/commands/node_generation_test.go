@@ -71,7 +71,7 @@ func TestRenderNodeJSRouteFile(t *testing.T) {
 					t.Errorf("route file missing %q\n%s", want, content)
 				}
 			}
-			if strings.Count(content, "authenticate") != map[string]int{"express": 2, "fastify": 1}[framework] {
+			if strings.Count(content, "authenticate") != 2 {
 				t.Errorf("expected authentication on exactly one route\n%s", content)
 			}
 
@@ -338,7 +338,7 @@ func TestRenderNodeJSRouteFile_Roles(t *testing.T) {
 		},
 		"fastify": {
 			"const { authorize } = require('../middleware/authorize');\nconst { createUpstream }",
-			"    onRequest: [fastify.authenticate],\n    preHandler: [authorize(['admin', 'support'])],",
+			"    onRequest: [authenticate],\n    preHandler: [authorize(['admin', 'support'])],",
 		},
 	}
 	for framework, snippets := range want {

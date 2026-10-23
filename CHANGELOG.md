@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] - 2026-10-24
+
+One JWT authentication module for Express and Fastify, with no known secret and no production
+demo login. See [Tokens and JWT_SECRET](docs/NODEJS_ROUTES.md#tokens-and-jwt_secret).
+
+### Changed
+- **One auth module**: `src/middleware/auth.js` is now a bffgen runtime file shared by Express and
+  Fastify (`authenticate`, `optionalAuth`, `verifyToken`, `signToken`, `demoLoginEnabled`). Generated
+  routes, aggregates and `/api/auth/profile` all use it; the inline checks in `src/index.js` are gone.
+  Fastify routes use `onRequest: [authenticate]` (`fastify.authenticate` still exists). Express routes
+  now also accept the `access_token` cookie that the login route sets, so a login works end to end.
+- **No fallback secret**: with `NODE_ENV=production` (FastAPI: `ENVIRONMENT=production`) the server
+  refuses to start unless `JWT_SECRET` is set, at least 32 characters (RFC 7518 §3.2) and not one of
+  bffgen's placeholders. Elsewhere an unset secret becomes a random per-process one, with a warning.
+- **HS256 only**: tokens are verified with `algorithms: ['HS256']` (Node) and a fixed `HS256` (FastAPI;
+  `JWT_ALGORITHM` is ignored), so `alg: none` and other algorithms get 401.
+- **Demo login gated**: `POST /api/auth/login` (signs a token for any credentials) is not served when
+  `NODE_ENV=production`; `AUTH_DEMO_LOGIN=true|false` overrides.
+- 401 bodies are `{ error, message, code }` with `code` `UNAUTHENTICATED`, `TOKEN_EXPIRED` or
+  `INVALID_TOKEN`; the `Bearer` scheme is matched case-insensitively (RFC 9110 §11.1), FastAPI too.
+- Fastify: the unused `@fastify/jwt` dependency and its registration are removed; `COOKIE_SECRET`
+  has no fallback (only signed cookies need it); the login cookie's `maxAge` is 24 hours (it was
+  given in milliseconds where @fastify/cookie expects seconds).
+
+### Upgrading an existing project
+`bffgen generate` replaces `src/middleware/auth.js` (previous copy: `auth.js.bak`) and regenerates
+the routes, so every configured route and aggregate gets the new checks. `src/index.js` is yours and
+is not changed; `generate` warns while it still has the old auth code. To finish the upgrade there:
+1. Add `const { authenticate, signToken, demoLoginEnabled } = require('./middleware/auth');` near the top.
+2. Express: delete the `authenticateJWT` function and use `authenticate` on `/api/auth/profile`.
+   Fastify: delete the `fastify.decorate('authenticate', ...)` block and the `@fastify/jwt` registration,
+   add `fastify.decorate('authenticate', authenticate);`, and use `onRequest: [authenticate]` on the profile route.
+3. Wrap the login route in `if (demoLoginEnabled()) { ... }` and sign with `signToken({...})` instead of
+   `jwt.sign(..., JWT_SECRET, ...)`.
+4. Set a random `JWT_SECRET` (`openssl rand -base64 48`) wherever `NODE_ENV=production`.
+
 ## [3.9.1] - 2026-10-23
 
 ### Fixed

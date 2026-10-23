@@ -415,11 +415,11 @@ func TestMiddlewareTemplates(t *testing.T) {
 		contains  []string
 	}{
 		{
-			name:      "Express auth middleware",
+			name:      "Express auth middleware (common)",
 			langType:  scaffolding.LanguageNodeExpress,
 			framework: "express",
-			filename:  "middleware-auth.js.tmpl",
-			contains:  []string{"authenticate", "jwt", "Bearer", "req.user"},
+			filename:  "auth.js.tmpl",
+			contains:  []string{"authenticate", "algorithms: [ALGORITHM]", "Bearer", "req.user", "bffgen:runtime 1"},
 		},
 		{
 			name:      "Express error middleware",
@@ -429,11 +429,11 @@ func TestMiddlewareTemplates(t *testing.T) {
 			contains:  []string{"errorHandler", "notFoundHandler", "asyncHandler"},
 		},
 		{
-			name:      "Fastify auth plugin",
+			name:      "Fastify auth hook (common)",
 			langType:  scaffolding.LanguageNodeFastify,
 			framework: "fastify",
-			filename:  "middleware-auth.js.tmpl",
-			contains:  []string{"authPlugin", "fastify.decorate", "authenticate", "request.user"},
+			filename:  "auth.js.tmpl",
+			contains:  []string{"authenticate", "demoLoginEnabled", "signToken"},
 		},
 		{
 			name:      "Fastify error plugin",

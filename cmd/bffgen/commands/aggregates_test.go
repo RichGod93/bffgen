@@ -113,7 +113,7 @@ func TestRenderNodeAggregates(t *testing.T) {
 			"]).catch(next));",
 		},
 		"fastify": {
-			"onRequest: [fastify.authenticate],",
+			"onRequest: [authenticate],",
 			"preHandler: [authorize(['user'])],",
 			"fastify.get('/api/dashboard/:id', {",
 			"module.exports = aggregateRoutes;",

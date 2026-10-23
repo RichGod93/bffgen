@@ -566,7 +566,7 @@ npm install
 # 6. Start development server
 npm run dev
 
-# 7. Test auth endpoints
+# 7. Test auth endpoints (the demo login accepts any credentials and is off in production)
 curl http://localhost:8080/health
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
@@ -620,7 +620,8 @@ vim .env
 
 - `NODE_ENV` - Environment (development/production)
 - `PORT` - Server port (default: 8080)
-- `JWT_SECRET` - Secret for JWT tokens
+- `JWT_SECRET` - HS256 secret for JWT tokens; with `NODE_ENV=production` the server won't start without a random one of 32+ characters ([details](docs/NODEJS_ROUTES.md#tokens-and-jwt_secret))
+- `AUTH_DEMO_LOGIN` - Serve the demo `/api/auth/login` (accepts any credentials); default: everywhere except production
 - `CORS_ORIGINS` - Allowed CORS origins
 - `*_URL` - Backend service URLs
 - `*_TIMEOUT`, `*_RETRIES`, `*_CIRCUIT_*` - Per-backend resilience overrides ([details](docs/NODEJS_ROUTES.md#environment-overrides))

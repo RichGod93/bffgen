@@ -6,6 +6,9 @@
  * is not required leaves its data null. See aggregate() in src/utils/upstream.js.
  */
 
+{{if .AnyAuth -}}
+const { authenticate } = require('../middleware/auth');
+{{end -}}
 {{if .AnyRoles -}}
 const { authorize } = require('../middleware/authorize');
 {{end -}}
@@ -25,7 +28,7 @@ async function aggregateRoutes(fastify) {
   // GET {{.Path}}{{with .Name}} ({{.}}){{end}}
   fastify.get('{{js .Path}}', {
 {{- if .RequiresAuth}}
-    onRequest: [fastify.authenticate],
+    onRequest: [authenticate],
 {{- end}}
 {{- if .Roles}}
     preHandler: [authorize({{.RolesJS}})],

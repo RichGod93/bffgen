@@ -299,21 +299,12 @@ func createExpressMiddleware(projectName string, loader *templates.TemplateLoade
 	middlewareDir := filepath.Join(projectName, "src", "middleware")
 
 	// Render middleware templates
-	authContent, err := loader.RenderTemplate("express", "middleware-auth.js.tmpl", &templates.TemplateData{})
-	if err != nil {
-		return fmt.Errorf("failed to render auth middleware: %w", err)
-	}
-
 	errorContent, err := loader.RenderTemplate("express", "middleware-error.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render error middleware: %w", err)
 	}
 
 	// Write middleware files
-	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), utils.ProjectFilePerm); err != nil {
-		return err
-	}
-
 	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
@@ -327,21 +318,12 @@ func createFastifyMiddleware(projectName string, loader *templates.TemplateLoade
 	middlewareDir := filepath.Join(projectName, "src", "middleware")
 
 	// Render middleware templates
-	authContent, err := loader.RenderTemplate("fastify", "middleware-auth.js.tmpl", &templates.TemplateData{})
-	if err != nil {
-		return fmt.Errorf("failed to render auth middleware: %w", err)
-	}
-
 	errorContent, err := loader.RenderTemplate("fastify", "middleware-error.js.tmpl", &templates.TemplateData{})
 	if err != nil {
 		return fmt.Errorf("failed to render error middleware: %w", err)
 	}
 
 	// Write middleware files
-	if err := os.WriteFile(filepath.Join(middlewareDir, "auth.js"), []byte(authContent), utils.ProjectFilePerm); err != nil {
-		return err
-	}
-
 	if err := os.WriteFile(filepath.Join(middlewareDir, "errorHandler.js"), []byte(errorContent), utils.ProjectFilePerm); err != nil {
 		return err
 	}
