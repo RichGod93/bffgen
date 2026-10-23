@@ -4,10 +4,13 @@
 const crypto = require('crypto');
 const [base = 'http://localhost:8181'] = process.argv.slice(2);
 const b64 = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
-const sign = claims => {
-  const unsigned = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ userId: 'u1', sub: 'u1', exp: Math.floor(Date.now() / 1000) + 600, ...claims })}`;
-  return `${unsigned}.${crypto.createHmac('sha256', 'testsecret').update(unsigned).digest('base64url')}`;
+const signWith = (alg, hash, claims = {}) => {
+  const unsigned = `${b64({ alg, typ: 'JWT' })}.${b64({ userId: 'u1', sub: 'u1', exp: Math.floor(Date.now() / 1000) + 600, ...claims })}`;
+  return `${unsigned}.${hash ? crypto.createHmac(hash, 'testsecret').update(unsigned).digest('base64url') : ''}`;
 };
+const sign = claims => signWith('HS256', 'sha256', claims);
+// Node projects also serve the demo login (NODE_ENV=test) and answer 401s with a code
+const node = process.env.BFF_CHECKS === 'node';
 const token = sign({ role: 'user' });
 const auth = { authorization: `Bearer ${token}` };
 const bearer = t => ({ headers: { authorization: `Bearer ${t}` } });
@@ -70,6 +73,31 @@ const show = r => JSON.stringify({ status: r.status, body: r.body });
   check('tampered token -> 401', r.status === 401, show(r));
   r = await call('/api/users/42', bearer(sign({ exp: Math.floor(Date.now() / 1000) - 60 })));
   check('expired token -> 401', r.status === 401, show(r));
+  if (node) check('expired token: code TOKEN_EXPIRED', r.body.code === 'TOKEN_EXPIRED', show(r));
+  r = await call('/api/users/42', bearer(signWith('HS512', 'sha512')));
+  check('token signed with another algorithm (HS512, same secret) -> 401', r.status === 401, show(r));
+  if (node) check('other algorithm: code INVALID_TOKEN', r.body.code === 'INVALID_TOKEN', show(r));
+  r = await call('/api/users/42', bearer(signWith('none', null)));
+  check('unsigned token (alg none) -> 401', r.status === 401, show(r));
+  r = await call('/api/users/42', { headers: { authorization: `bearer ${token}` } });
+  check('auth scheme is case-insensitive (bearer) -> 200', r.status === 200, show(r));
+  r = await call('/api/users/42', { headers: { authorization: '', cookie: `access_token=${token}` } });
+  check('token in the access_token cookie -> 200', r.status === 200, show(r));
+
+  if (node) {
+    r = await call('/api/users/42', { headers: { authorization: '' } });
+    check('missing token: code UNAUTHENTICATED', r.status === 401 && r.body.code === 'UNAUTHENTICATED', show(r));
+    r = await call('/api/auth/login', { method: 'POST', headers: { authorization: '', 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'dev@example.com', password: 'secret12' }) });
+    check('demo login outside production -> token', r.status === 200 && typeof r.body.token === 'string', show(r));
+    const login = r.body && r.body.token;
+    r = await call('/api/auth/profile', bearer(login));
+    check('login token accepted by /api/auth/profile', r.status === 200 && r.body.user.email === 'dev@example.com', show(r));
+    r = await call('/api/users/42', bearer(login));
+    check('login token accepted by generated routes (one auth module)', r.status === 200, show(r));
+    r = await call('/api/auth/profile', bearer(signWith('HS512', 'sha512')));
+    check('/api/auth/profile rejects another algorithm -> 401', r.status === 401, show(r));
+  }
 
   // RBAC: /api/admin/users needs "admin" or "support"
   r = await call('/api/admin/users');

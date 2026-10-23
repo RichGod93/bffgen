@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -502,15 +503,17 @@ func TestNodeGenerate_FixesLegacyInvalidTokenStatus(t *testing.T) {
 			if err := inDir(t, dir, false, false, false, generateNodeJS); err != nil {
 				t.Fatal(err)
 			}
-			// What bffgen < 3.8 wrote in src/index.js
+			// The invalid-token check bffgen < 3.8 wrote in src/index.js (3.10 moved it to auth.js)
 			index := filepath.Join(dir, "src", "index.js")
-			current := readFile(t, index)
-			legacy := strings.NewReplacer(
-				".status(401).send({ error: 'Invalid or expired token' })", ".status(403).send({ error: 'Invalid or expired token' })",
-				".status(401).json({ error: 'Invalid or expired token' })", ".status(403).json({ error: 'Invalid or expired token' })",
-			).Replace(current)
-			if legacy == current || !legacyInvalidTokenStatus.MatchString(legacy) {
-				t.Fatal("test setup: invalid-token line not found in src/index.js")
+			reply := map[string]string{"express": "res", "fastify": "reply"}[framework]
+			send := map[string]string{"express": "json", "fastify": "send"}[framework]
+			check := func(status int) string {
+				return fmt.Sprintf("\nfunction legacyCheck(%s) {\n  return %s.status(%d).%s({ error: 'Invalid or expired token' });\n}\n", reply, reply, status, send)
+			}
+			current := readFile(t, index) + check(401)
+			legacy := readFile(t, index) + check(403)
+			if !legacyInvalidTokenStatus.MatchString(legacy) {
+				t.Fatal("test setup: legacy invalid-token line doesn't match")
 			}
 			legacy += "\n// my custom code\n"
 			writeFile(t, index, legacy)
@@ -572,5 +575,19 @@ func TestNodeGenerate_KeepsUserAuthorizeFile(t *testing.T) {
 	}
 	if d := diffSnapshots(before, snapshot(t, dir)); len(d) > 0 {
 		t.Errorf("failed generate still wrote: %v", d)
+	}
+}
+
+func TestLegacyIndexAuth(t *testing.T) {
+	for _, framework := range []string{"express", "fastify"} {
+		dir := nodeTestProject(t, framework)
+		index := filepath.Join(dir, "src", "index.js")
+		if legacyIndexAuth(index) {
+			t.Errorf("%s: a new src/index.js is reported as having legacy auth", framework)
+		}
+		writeFile(t, index, readFile(t, index)+"\nconst JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';\n")
+		if !legacyIndexAuth(index) {
+			t.Errorf("%s: the pre-3.10 fallback secret in src/index.js is not detected", framework)
+		}
 	}
 }

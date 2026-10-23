@@ -36,6 +36,8 @@ var nodeRuntimeFiles = []runtimeFile{
 	{template: "service-base.js.tmpl", version: 1, path: filepath.Join("src", "services", "httpClient.js")},
 	{template: "circuit-breaker.js.tmpl", version: 1, path: filepath.Join("src", "utils", "circuit-breaker.js")},
 	{template: "authorize.js.tmpl", version: 1, path: filepath.Join("src", "middleware", "authorize.js"), userIfUnmarked: true},
+	// Before 3.10 init wrote a framework-specific auth.js without a marker; it is replaced (with a backup)
+	{template: "auth.js.tmpl", version: 1, path: filepath.Join("src", "middleware", "auth.js")},
 }
 
 // pythonRuntimeFiles are written by init and kept current by generate (templates under python/common)

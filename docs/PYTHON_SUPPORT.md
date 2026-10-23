@@ -201,6 +201,12 @@ accepted too.
 Settings, read from environment variables and `.env`. Unknown keys in `.env` are ignored, so
 `.env` can also hold the backend overrides below.
 
+Tokens must be HS256 and signed with `JWT_SECRET`, read from `Authorization: Bearer <token>` or
+the `access_token` cookie. With `ENVIRONMENT=production` the app refuses to start unless
+`JWT_SECRET` is at least 32 characters and not the placeholder in the generated `.env`
+(`openssl rand -base64 48` makes one). Elsewhere an unset `JWT_SECRET` becomes a random secret
+for the process, with a warning. Since v3.10.0 the algorithm is fixed; `JWT_ALGORITHM` is ignored.
+
 ### Backend overrides
 
 Each backend's settings can be overridden with environment variables or `.env` entries. The
@@ -559,7 +565,7 @@ services:
 
 ### Production Checklist
 
-- [ ] Set strong `JWT_SECRET`
+- [ ] Set a random `JWT_SECRET` of at least 32 characters (required with `ENVIRONMENT=production`)
 - [ ] Enable HTTPS
 - [ ] Configure proper CORS origins
 - [ ] Enable caching (Redis)

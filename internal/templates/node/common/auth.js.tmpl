@@ -1,0 +1,152 @@
+/**
+ * JWT authentication for generated routes, aggregates and src/index.js
+ * Managed by bffgen (bffgen:runtime 1). `bffgen generate` replaces this file when
+ * bffgen ships a newer version and keeps your previous copy as auth.js.bak.
+ *
+ * authenticate works as Express middleware (req, res, next) and as a Fastify onRequest /
+ * preHandler hook (request, reply, done). The token is read from `Authorization: Bearer <token>`
+ * (RFC 6750), else from the httpOnly `access_token` cookie set by the login route. Tokens must be
+ * HS256 and signed with JWT_SECRET; exp and nbf are enforced. Failures are 401 with
+ * { error, message, code } and a WWW-Authenticate challenge:
+ *   UNAUTHENTICATED  no token
+ *   TOKEN_EXPIRED    exp is in the past
+ *   INVALID_TOKEN    bad signature, other algorithm, malformed, or nbf in the future
+ * The verified payload is set as req.user (request.user), and its userId or sub as req.userId.
+ *
+ * JWT_SECRET:
+ *   - NODE_ENV=production: required, at least 32 characters (RFC 7518 3.2) and not one of
+ *     bffgen's placeholders; otherwise requiring this file throws, so the server won't start
+ *   - otherwise, if unset: a random secret for this process, with a warning (tokens stop
+ *     working when the process restarts)
+ */
+
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+const ALGORITHM = 'HS256';
+const MIN_PRODUCTION_SECRET_LENGTH = 32;
+// Secrets bffgen has shipped as fallbacks or in generated .env files
+const PLACEHOLDER_SECRETS = [
+  'your-secret-key-change-in-production',
+  'change-this-secret-in-production-use-at-least-32-characters',
+  'your-secret-key-change-in-production-use-min-32-chars',
+  'test-secret-key-do-not-use-in-production'
+];
+
+function resolveSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret) {
+      throw new Error('JWT_SECRET must be set when NODE_ENV=production');
+    }
+    if (PLACEHOLDER_SECRETS.includes(secret)) {
+      throw new Error('JWT_SECRET is a bffgen placeholder; set a random secret, e.g. `openssl rand -base64 48`');
+    }
+    if (secret.length < MIN_PRODUCTION_SECRET_LENGTH) {
+      throw new Error(`JWT_SECRET must be at least ${MIN_PRODUCTION_SECRET_LENGTH} characters when NODE_ENV=production`);
+    }
+    return secret;
+  }
+  if (!secret) {
+    console.warn('JWT_SECRET is not set: using a random secret for this process. Tokens stop working on restart.');
+    return crypto.randomBytes(48).toString('base64');
+  }
+  return secret;
+}
+
+const secret = resolveSecret();
+
+/**
+ * The bearer token in a request, or undefined
+ * @param {Object} req - Express or Fastify request
+ * @returns {string|undefined}
+ */
+function tokenFrom(req) {
+  const match = /^Bearer[ ]+(\S+)\s*$/i.exec(req.headers.authorization || '');
+  if (match) {
+    return match[1];
+  }
+  return req.cookies ? req.cookies.access_token || undefined : undefined;
+}
+
+/**
+ * Verify a token and return its payload; throws jsonwebtoken's errors
+ * @param {string} token
+ * @returns {Object}
+ */
+function verifyToken(token) {
+  return jwt.verify(token, secret, { algorithms: [ALGORITHM] });
+}
+
+/**
+ * Sign a payload with JWT_SECRET
+ * @param {Object} payload - claims
+ * @param {Object} [options] - jsonwebtoken sign options, e.g. { expiresIn: '1h' }
+ * @returns {string}
+ */
+function signToken(payload, options = {}) {
+  return jwt.sign(payload, secret, { expiresIn: process.env.JWT_EXPIRES_IN || '24h', ...options, algorithm: ALGORITHM });
+}
+
+function reject(res, challenge, message, code) {
+  res.header('WWW-Authenticate', challenge);
+  res.status(401).send({ error: 'Unauthorized', message, code });
+}
+
+/**
+ * Middleware / hook that requires a valid token
+ */
+function authenticate(req, res, next) {
+  const token = tokenFrom(req);
+  if (!token) {
+    reject(res, 'Bearer', 'Authentication required', 'UNAUTHENTICATED');
+    return;
+  }
+  let payload;
+  try {
+    payload = verifyToken(token);
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      reject(res, 'Bearer error="invalid_token", error_description="The token expired"', 'Token expired', 'TOKEN_EXPIRED');
+      return;
+    }
+    reject(res, 'Bearer error="invalid_token"', 'Invalid token', 'INVALID_TOKEN');
+    return;
+  }
+  req.user = payload;
+  req.userId = payload.userId || payload.sub;
+  next();
+}
+
+/**
+ * Middleware / hook that sets req.user when the request has a valid token, and never rejects
+ */
+function optionalAuth(req, res, next) {
+  const token = tokenFrom(req);
+  if (token) {
+    try {
+      req.user = verifyToken(token);
+      req.userId = req.user.userId || req.user.sub;
+    } catch (error) {
+      // an invalid token is treated as no token
+    }
+  }
+  next();
+}
+
+/**
+ * Whether the demo login route (accepts any credentials) is served: AUTH_DEMO_LOGIN=true or
+ * false decides; otherwise only outside production
+ * @returns {boolean}
+ */
+function demoLoginEnabled() {
+  if (process.env.AUTH_DEMO_LOGIN === 'true') {
+    return true;
+  }
+  if (process.env.AUTH_DEMO_LOGIN === 'false') {
+    return false;
+  }
+  return process.env.NODE_ENV !== 'production';
+}
+
+module.exports = { authenticate, optionalAuth, verifyToken, signToken, demoLoginEnabled };

@@ -96,9 +96,8 @@ doesn't affect the others.
 
 ## Authentication and roles (RBAC)
 
-An endpoint with `"requiresAuth": true` needs a valid JWT (`Authorization: Bearer <token>`,
-signed with `JWT_SECRET`). An endpoint with `"roles"` also needs one of the listed roles;
-`roles` implies `requiresAuth`:
+An endpoint with `"requiresAuth": true` needs a valid JWT. An endpoint with `"roles"` also
+needs one of the listed roles; `roles` implies `requiresAuth`:
 
 ```json
 { "name": "deleteUser", "method": "DELETE", "path": "/users/:id", "exposeAs": "/api/users/:id", "roles": ["admin", "support"] }
@@ -106,9 +105,32 @@ signed with `JWT_SECRET`). An endpoint with `"roles"` also needs one of the list
 
 | Request | Status | Body |
 |---|---|---|
-| No token, or an invalid or expired one | `401 Unauthorized` | `{ "error": "Invalid or expired token" }` (or `Authentication required`) |
+| No token | `401 Unauthorized` | `{ "error": "Unauthorized", "message": "Authentication required", "code": "UNAUTHENTICATED" }` |
+| Expired token | `401 Unauthorized` | `{ ..., "code": "TOKEN_EXPIRED" }` |
+| Bad signature, other algorithm, malformed, or `nbf` in the future | `401 Unauthorized` | `{ ..., "code": "INVALID_TOKEN" }` |
 | Valid token without any of the roles | `403 Forbidden` | `{ "error": "Forbidden", "message": "Insufficient role", "code": "INSUFFICIENT_ROLE" }` |
 | Valid token with one of the roles | proxied to the backend | |
+
+### Tokens and `JWT_SECRET`
+
+One module, `src/middleware/auth.js`, checks tokens for generated routes, aggregates and
+`/api/auth/profile`. Use its `authenticate` in your own routes too (Express middleware, or a
+Fastify `onRequest` hook; Fastify projects also have it as `fastify.authenticate`).
+
+- The token is read from `Authorization: Bearer <token>` (the scheme is case-insensitive), else
+  from the httpOnly `access_token` cookie that the login route sets.
+- Only HS256 tokens signed with `JWT_SECRET` are accepted (`algorithms: ['HS256']`); `exp` and `nbf`
+  are checked. The verified payload is `req.user` (Fastify: `request.user`).
+- With `NODE_ENV=production` the server refuses to start unless `JWT_SECRET` is set to at least
+  32 characters (RFC 7518 §3.2) that are not one of bffgen's placeholders. Generate one with
+  `openssl rand -base64 48`.
+- Outside production an unset `JWT_SECRET` becomes a random secret for that process, with a
+  warning; tokens then stop working when the server restarts.
+- `POST /api/auth/login` is a demo that signs a token for any email and password. It is not
+  served when `NODE_ENV=production`; `AUTH_DEMO_LOGIN=true` or `false` overrides that.
+  `signToken(payload)` from `auth.js` signs tokens the same way for your own login.
+
+### Roles
 
 The 403 response doesn't say which roles are required. Routes call `authorize([...])` from
 `src/middleware/authorize.js` after authentication (Express: route middleware, Fastify:
@@ -125,6 +147,12 @@ Roles are read from the verified token:
 
 The demo `/api/auth/login` issues tokens with `role: "user"`. Replace it with your identity
 provider, or issue tokens with the roles your endpoints need.
+
+Projects created before v3.10.0 have a framework-specific `src/middleware/auth.js` without a
+`bffgen:runtime` marker; `bffgen generate` replaces it (previous copy: `auth.js.bak`), and
+regenerated Fastify routes use it instead of the check in `src/index.js`. `src/index.js` is
+yours, so its own login, profile check and fallback secret stay until you update them (the
+3.10.0 CHANGELOG lists the steps); `generate` warns while they are there.
 
 Projects created before v3.8.0 answered an invalid or expired token with 403 in Fastify routes
 (the check in `src/index.js`). Once an endpoint has `roles`, `bffgen generate` changes that line
@@ -235,6 +263,7 @@ Generated routes use these files in your project:
 | `src/utils/upstream.js` | Forwards requests, runs aggregates and maps failures to responses |
 | `src/services/httpClient.js` | HTTP client with timeouts and retries |
 | `src/utils/circuit-breaker.js` | Circuit breaker |
+| `src/middleware/auth.js` | JWT authentication (since v3.10.0) |
 | `src/middleware/authorize.js` | Role checks for endpoints with `roles` |
 
 You can use `HttpClient` and `CircuitBreaker` in your own services and controllers too. Errors

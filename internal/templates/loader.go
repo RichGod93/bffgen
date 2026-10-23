@@ -125,7 +125,7 @@ func (tl *TemplateLoader) LoadTemplate(framework, filename string) (string, erro
 		"aggregator.js.tmpl", "cache-manager.js.tmpl", "circuit-breaker.js.tmpl",
 		"response-transformer.js.tmpl", "request-batcher.js.tmpl", "field-selector.js.tmpl",
 		// Runtime used by generated routes
-		"upstream.js.tmpl", "authorize.js.tmpl",
+		"upstream.js.tmpl", "authorize.js.tmpl", "auth.js.tmpl",
 		// GraphQL utilities
 		"graphql/rest-datasource.js.tmpl", "graphql/schema-stitching.js.tmpl",
 		// Docker and scripts

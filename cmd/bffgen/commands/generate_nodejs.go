@@ -183,6 +183,11 @@ func generateNodeJS() error {
 		fmt.Printf(" (previous copy: %s)\n", indexFix.backup)
 	}
 
+	if legacyIndexAuth(indexPath) {
+		fmt.Printf("⚠️  %s still has the auth code bffgen wrote before 3.10 (a fallback JWT secret, and a demo login that is\n", indexPath)
+		fmt.Println("   served in production). Generated routes now use src/middleware/auth.js; see the 3.10.0 CHANGELOG to update index.js")
+	}
+
 	indexChanged, err := autoRegisterRoutes(framework, services, write)
 	switch {
 	case err != nil:
@@ -242,9 +247,17 @@ func pythonStringArgs(values []string) string {
 }
 
 // legacyInvalidTokenStatus matches the line projects made before bffgen 3.8 used to answer an
-// invalid or expired token with 403 (in src/index.js; generated Fastify routes use that check).
+// invalid or expired token with 403 (in src/index.js; Fastify routes generated before 3.10 used
+// that check, and /api/auth/profile still does).
 // RFC 9110: 401 means not authenticated, 403 authenticated but not allowed (a missing role).
 var legacyInvalidTokenStatus = regexp.MustCompile(`(return (?:reply|res)\.status\()403(\)\.(?:send|json)\(\{ error: 'Invalid or expired token' \}\);)`)
+
+// legacyIndexAuth reports whether src/index.js still verifies tokens itself, as projects made
+// before bffgen 3.10 do. That file is the user's, so generate only warns about it.
+func legacyIndexAuth(path string) bool {
+	content, err := os.ReadFile(path)
+	return err == nil && bytes.Contains(content, []byte("'your-secret-key-change-in-production'"))
+}
 
 // legacyFix is a planned one-line change to a file the user owns; apply saves the old copy first
 type legacyFix struct {
