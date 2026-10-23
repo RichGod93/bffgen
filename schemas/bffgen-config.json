@@ -12,7 +12,7 @@
         "name": { "type": "string" },
         "version": { "type": "string" },
         "runtime": { "type": "string" },
-        "framework": { "type": "string", "enum": ["express", "fastify", "fastapi", "apollo", "yoga"] },
+        "framework": { "type": "string", "enum": ["express", "fastify", "fastapi", "apollo"] },
         "async": { "type": "boolean", "description": "Python only. Generated proxy routes are always async." }
       }
     },

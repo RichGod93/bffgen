@@ -215,7 +215,7 @@ func (i *Installer) validateTemplate(template *Template) error {
 	}
 
 	// Validate language
-	validLanguages := []string{"nodejs-express", "nodejs-fastify", "go", "python-fastapi", "go-graphql", "nodejs-apollo", "nodejs-yoga"}
+	validLanguages := []string{"nodejs-express", "nodejs-fastify", "go", "python-fastapi", "go-graphql", "nodejs-apollo"}
 	langValid := false
 	for _, lang := range validLanguages {
 		if template.Language == lang {

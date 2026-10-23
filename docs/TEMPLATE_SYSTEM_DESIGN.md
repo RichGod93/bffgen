@@ -127,7 +127,6 @@ Templates are validated before installation:
    - `python-fastapi` - Python with FastAPI
    - `go-graphql` - Go with gqlgen
    - `nodejs-apollo` - Node.js with Apollo Server
-   - `nodejs-yoga` - Node.js with GraphQL Yoga
 
 4. **Variable Validation:**
    - Names must be alphanumeric + underscore

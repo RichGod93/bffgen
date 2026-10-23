@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.1] - 2026-10-23
+
+### Fixed
+- `bffgen init --help` and the "invalid language" error listed `nodejs-yoga` (and `--framework yoga`)
+  as supported although init has rejected it since 3.1.0. The help text, the error message, the
+  `graphql-api`/`mobile-api` template metadata, the config JSON Schema (`framework` enum) and
+  docs/GRAPHQL_SUPPORT.md no longer mention it, and the unused `node/yoga` templates are deleted.
+  A test now checks that every language the help text lists is accepted, and the other way round.
+
+### Added
+- `.github/FUNDING.yml`: a Sponsor button on the repository, linking to GitHub Sponsors.
+
 ## [3.9.0] - 2026-10-21
 
 Config-driven aggregation routes for Express, Fastify and FastAPI. See
@@ -344,6 +356,8 @@ Generated Express and Fastify projects now pass `npm run lint` and `npm test` ou
 - ~850 lines of new code
 
 ## [3.1.0] - 2026-01-10
+
+_Never tagged or published; these changes first shipped in 3.2.0._
 
 ### Fixed
 - **CI/CD Version Mismatch** - Updated release workflow to use Go 1.24 (matching go.mod)

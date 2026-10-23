@@ -13,7 +13,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init [project-name]",
 	Short: "Initialize a new BFF project",
-	Long:  `Initialize a new BFF project with support for Go, Node.js (Express/Fastify/Apollo/Yoga), Python (FastAPI), and GraphQL.`,
+	Long:  `Initialize a new BFF project with support for Go, Node.js (Express/Fastify/Apollo), Python (FastAPI), and GraphQL.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
@@ -84,14 +84,14 @@ var initCmd = &cobra.Command{
 		if !useTUI {
 			if langFlag != "" {
 				if !scaffolding.IsValidLanguage(langFlag) {
-					HandleError(fmt.Errorf("invalid language '%s'. Supported: go, nodejs-express, nodejs-fastify, nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql", langFlag), "language validation")
+					HandleError(fmt.Errorf("invalid language '%s'. Supported: go, nodejs-express, nodejs-fastify, nodejs-apollo, python-fastapi, go-graphql", langFlag), "language validation")
 				}
 				languageType = scaffolding.LanguageType(langFlag)
 				config := scaffolding.GetLanguageConfig(languageType)
 				framework = config.Framework
 			} else if runtimeFlag != "" {
 				if !scaffolding.IsValidLanguage(runtimeFlag) {
-					HandleError(fmt.Errorf("invalid runtime '%s'. Supported: go, nodejs-express, nodejs-fastify, nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql", runtimeFlag), "runtime validation")
+					HandleError(fmt.Errorf("invalid runtime '%s'. Supported: go, nodejs-express, nodejs-fastify, nodejs-apollo, python-fastapi, go-graphql", runtimeFlag), "runtime validation")
 				}
 				languageType = scaffolding.LanguageType(runtimeFlag)
 				config := scaffolding.GetLanguageConfig(languageType)
@@ -165,9 +165,9 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().StringP("lang", "l", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql)")
-	initCmd.Flags().StringP("runtime", "r", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql) - alias for --lang")
-	initCmd.Flags().StringP("framework", "f", "", "Framework (chi, echo, fiber for Go; express, fastify, apollo, yoga for Node.js; fastapi for Python; gqlgen for Go GraphQL)")
+	initCmd.Flags().StringP("lang", "l", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, nodejs-apollo, python-fastapi, go-graphql)")
+	initCmd.Flags().StringP("runtime", "r", "", "Programming language/runtime (go, nodejs-express, nodejs-fastify, nodejs-apollo, python-fastapi, go-graphql) - alias for --lang")
+	initCmd.Flags().StringP("framework", "f", "", "Framework (chi, echo, fiber for Go; express, fastify, apollo for Node.js; fastapi for Python; gqlgen for Go GraphQL)")
 	initCmd.Flags().String("middleware", "", "Comma-separated list of middleware to include (validation,logger,requestId,all,none)")
 	initCmd.Flags().String("controller-type", "both", "Controller type for Node.js projects (basic,aggregator,both)")
 	initCmd.Flags().Bool("skip-tests", false, "Skip test file generation")

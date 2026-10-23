@@ -5,10 +5,10 @@ author: bffgen
 category: api
 
 # Supported languages for this template
-language: nodejs-apollo # Can be: nodejs-apollo, nodejs-yoga, go-graphql
+language: nodejs-apollo # Can be: nodejs-apollo, go-graphql
 
 features:
-  - GraphQL API with Apollo Server / GraphQL Yoga
+  - GraphQL API with Apollo Server
   - REST-to-GraphQL data source aggregation
   - Schema stitching for microservices
   - TypeScript type generation with GraphQL Code Generator

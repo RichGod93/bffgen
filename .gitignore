@@ -178,3 +178,6 @@ CLAUDE.MD
 .github/README.md
 scripts/README.md
 internal/aggregation/README.md
+
+# graphify knowledge-graph output (local analysis)
+graphify-out/

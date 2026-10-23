@@ -35,15 +35,9 @@ GraphQL BFF services act as an aggregation layer between your frontend applicati
    - Advanced features like Apollo Federation
    - Best for: Large-scale applications, federation needs
 
-2. **GraphQL Yoga** (`nodejs-yoga`)
-   - Lightweight and modern
-   - Built-in subscriptions
-   - Better performance than Apollo
-   - Best for: New projects, performance-critical applications
-
 ### Go Framework
 
-3. **gqlgen** (`go-graphql`)
+2. **gqlgen** (`go-graphql`)
    - Type-safe Go GraphQL library
    - Schema-first approach
    - High performance
@@ -56,14 +50,6 @@ GraphQL BFF services act as an aggregation layer between your frontend applicati
 **Using Apollo Server:**
 ```bash
 bffgen init my-graphql-bff --lang nodejs-apollo
-cd my-graphql-bff
-npm install
-npm run dev
-```
-
-**Using GraphQL Yoga:**
-```bash
-bffgen init my-graphql-bff --lang nodejs-yoga
 cd my-graphql-bff
 npm install
 npm run dev
@@ -89,7 +75,6 @@ npm run dev
 
 Once your server is running, open your browser to:
 - **Apollo Server**: http://localhost:4000/graphql
-- **GraphQL Yoga**: http://localhost:4000/graphql
 - **gqlgen**: http://localhost:8080/graphql
 
 ## Features
@@ -248,17 +233,6 @@ export type UserDashboard = {
     "@apollo/server": "^4.9.5",
     "@apollo/datasource-rest": "^6.2.2",
     "graphql": "^16.8.1"
-  }
-}
-```
-
-**GraphQL Yoga** (`package.json`):
-```json
-{
-  "dependencies": {
-    "graphql": "^16.8.1",
-    "graphql-yoga": "^5.1.0",
-    "@graphql-yoga/plugin-response-cache": "^3.2.0"
   }
 }
 ```
@@ -459,9 +433,6 @@ Protect against malicious deeply nested queries:
 plugins: [
   useDepthLimit({ maxDepth: 10 })
 ]
-
-// GraphQL Yoga
-useDepthLimit({ maxDepth: 10 })
 ```
 
 ### 2. Response Caching
@@ -599,7 +570,6 @@ describe('GraphQL API', () => {
 ## Resources
 
 - [Apollo Server Documentation](https://www.apollographql.com/docs/apollo-server/)
-- [GraphQL Yoga Documentation](https://the-guild.dev/graphql/yoga-server)
 - [gqlgen Documentation](https://gqlgen.com/)
 - [GraphQL Best Practices](https://graphql.org/learn/best-practices/)
 - [bffgen GitHub Repository](https://github.com/RichGod93/bffgen)

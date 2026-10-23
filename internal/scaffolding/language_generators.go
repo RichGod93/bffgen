@@ -14,8 +14,7 @@ const (
 	LanguageNodeFastify   LanguageType = "nodejs-fastify"
 	LanguagePythonFastAPI LanguageType = "python-fastapi"
 	LanguageNodeApollo    LanguageType = "nodejs-apollo" // GraphQL Apollo Server
-	// LanguageNodeYoga   LanguageType = "nodejs-yoga"   // GraphQL Yoga - REMOVED: Incomplete implementation
-	LanguageGoGqlgen LanguageType = "go-graphql" // GraphQL gqlgen
+	LanguageGoGqlgen      LanguageType = "go-graphql"    // GraphQL gqlgen
 )
 
 // LanguageConfig holds configuration for different languages
@@ -76,15 +75,6 @@ func GetLanguageConfig(langType LanguageType) LanguageConfig {
 			MainFile:     "index.js",
 			TemplatePath: "node/apollo",
 		}
-	// case LanguageNodeYoga: // REMOVED - incomplete implementation
-	//	return LanguageConfig{
-	//		Type:         LanguageNodeYoga,
-	//		Name:         "Node.js (GraphQL Yoga)",
-	//		Framework:    "yoga",
-	//		DepsPath:     "package.json",
-	//		MainFile:     "index.js",
-	//		TemplatePath: "node/yoga",
-	//	}
 	case LanguageGoGqlgen:
 		return LanguageConfig{
 			Type:         LanguageGoGqlgen,
@@ -114,7 +104,6 @@ func GetSupportedLanguages() []LanguageConfig {
 		GetLanguageConfig(LanguageNodeFastify),
 		GetLanguageConfig(LanguagePythonFastAPI),
 		GetLanguageConfig(LanguageNodeApollo),
-		// GetLanguageConfig(LanguageNodeYoga), // REMOVED - incomplete
 		GetLanguageConfig(LanguageGoGqlgen),
 	}
 }
@@ -141,8 +130,6 @@ func GetLanguageFromFramework(framework string) LanguageType {
 		return LanguageNodeFastify
 	case "apollo":
 		return LanguageNodeApollo
-	// case "yoga": // REMOVED - incomplete implementation
-	//	return LanguageNodeYoga
 	case "gqlgen":
 		return LanguageGoGqlgen
 	case "python-fastapi", "fastapi":
