@@ -1,7 +1,10 @@
 package commands
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/RichGod93/bffgen/v3/internal/scaffolding"
 )
 
 func TestGenerateCORSConfig(t *testing.T) {
@@ -121,5 +124,24 @@ require (
 				t.Errorf("generateGoMod() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestInitAdvertisedLanguagesAreSupported keeps the --lang/--runtime help text in step with
+// scaffolding.GetSupportedLanguages (nodejs-yoga was listed for years after its removal).
+func TestInitAdvertisedLanguagesAreSupported(t *testing.T) {
+	for _, flag := range []string{"lang", "runtime"} {
+		usage := initCmd.Flags().Lookup(flag).Usage
+		list := usage[strings.Index(usage, "(")+1 : strings.Index(usage, ")")]
+		for _, lang := range strings.Split(list, ", ") {
+			if !scaffolding.IsValidLanguage(lang) {
+				t.Errorf("--%s advertises %q, which init rejects", flag, lang)
+			}
+		}
+	}
+	for _, cfg := range scaffolding.GetSupportedLanguages() {
+		if !strings.Contains(initCmd.Flags().Lookup("lang").Usage, string(cfg.Type)) {
+			t.Errorf("--lang help omits supported language %q", cfg.Type)
+		}
 	}
 }

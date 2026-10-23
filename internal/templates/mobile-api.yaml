@@ -5,7 +5,7 @@ author: bffgen
 category: mobile
 
 # Supported languages for this template
-language: multi # Supports: nodejs-apollo, nodejs-yoga, python-fastapi, go-graphql
+language: multi # Supports: nodejs-apollo, python-fastapi, go-graphql
 
 features:
   - Mobile-optimized GraphQL API with data aggregation
